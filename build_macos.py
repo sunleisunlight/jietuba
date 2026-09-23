@@ -64,19 +64,28 @@ for s in (16, 32, 64, 128, 256, 512, 1024):
 
 
 def sign_app():
-    """签名：优先 Developer ID Application，否则 ad-hoc（"-"）。"""
+    """签名：优先 Developer ID Application，其次 Apple Development（本机固定
+    cdhash，TCC 权限持久），最后 ad-hoc。"""
     identities = subprocess.run(
         ["security", "find-identity", "-v", "-p", "codesigning"],
         capture_output=True, text=True,
     ).stdout
     ident = None
+    # 1. Developer ID Application（分发用）
     for line in identities.splitlines():
         if "Developer ID Application" in line:
             ident = line.split('"')[1] if '"' in line else line.split()[1]
             break
+    # 2. Apple Development（本机开发，cdhash 固定）
+    if ident is None:
+        for line in identities.splitlines():
+            if "Apple Development" in line:
+                ident = line.split('"')[1] if '"' in line else line.split()[1]
+                break
     if ident is None:
         ident = "-"
-        print("未找到 Developer ID Application，使用 ad-hoc 签名 (-)")
+        print("未找到可用签名证书，使用 ad-hoc (-)")
+    print("使用签名身份:", ident)
     # 先清掉 PyInstaller 自带签名，再按顺序签：内部二进制 → 主可执行 → bundle
     run(["codesign", "--force", "--deep", "--sign", ident,
          "--options", "runtime",
