@@ -290,7 +290,8 @@ class TestShortcutConflictDetection:
             edits, {"inapp_undo": "shot", "inapp_redo": "shot"},
             stored={"inapp_redo": "ctrl+shift+y"})
         page_hotkey._on_shortcut_changed(dialog, "inapp_redo", "ctrl+z", "")
-        assert edits["inapp_redo"].set_texts == ["ctrl+shift+y"]
+        from core.shortcut_manager import display_hotkey_str
+        assert edits["inapp_redo"].set_texts == [display_hotkey_str("ctrl+shift+y")]
         assert edits["inapp_undo"].set_texts == []
 
     def test_declining_without_a_stored_value_restores_the_factory_default(self, monkeypatch):
@@ -299,8 +300,9 @@ class TestShortcutConflictDetection:
         edits = {"inapp_undo": _Edit("ctrl+z"), "inapp_redo": _Edit("ctrl+z")}
         dialog = _hotkey_dialog(edits, {"inapp_undo": "shot", "inapp_redo": "shot"})
         page_hotkey._on_shortcut_changed(dialog, "inapp_redo", "ctrl+z", "")
-        # 表里 inapp_redo 的默认值
-        assert edits["inapp_redo"].set_texts == ["ctrl+y"]
+        # 表里 inapp_redo 的默认值（macOS 按平台习惯显示修饰键）
+        from core.shortcut_manager import display_hotkey_str
+        assert edits["inapp_redo"].set_texts == [display_hotkey_str("ctrl+y")]
 
     def test_signals_are_blocked_and_released_around_the_prompt(self, monkeypatch):
         """回填文本会再次触发 textChanged，必须先屏蔽信号否则递归"""

@@ -3,6 +3,7 @@
 
 import sys
 import threading
+import pytest
 
 from unittest.mock import MagicMock
 
@@ -243,6 +244,7 @@ def test_copy_win32_omits_hdrop_without_file_reference(monkeypatch):
     assert formats_set == [49999, 17]
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="CF_HDROP/win32clipboard 为 Windows 专属")
 def test_build_hdrop_round_trips_via_win32clipboard():
     import win32clipboard
     from core import clipboard_utils

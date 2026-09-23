@@ -11,6 +11,7 @@
 
 import json
 import os
+import sys
 
 import pytest
 from PySide6.QtCore import QObject, Signal, QUrl
@@ -421,8 +422,12 @@ class TestManageDialog:
         file_group = Group(id=3, name="快速启动", icon="⚡", group_type=GroupType.FILE)
         manager.groups.append(file_group)
         dlg.selected_group_id = file_group.id
-        first_path = os.path.normpath(r"C:\Temp\first.txt")
-        second_path = os.path.normpath(r"C:\Temp\second.txt")
+        # QUrl.fromLocalFile 对 Windows 盘符路径的往返在 POSIX 上不一致，
+        # 测试路径按平台构造（Windows 保留反斜杠语义，macOS 用本地路径）
+        first_path = os.path.normpath(
+            r"C:\Temp\first.txt" if sys.platform == "win32" else "/Users/test/first.txt")
+        second_path = os.path.normpath(
+            r"C:\Temp\second.txt" if sys.platform == "win32" else "/Users/test/second.txt")
 
         dlg._show_new_content_form()
         dropped = dlg.file_drop_zone._apply_dropped_urls(

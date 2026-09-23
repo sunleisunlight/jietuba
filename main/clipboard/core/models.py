@@ -8,6 +8,7 @@
 """
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
@@ -71,12 +72,20 @@ class ClipboardItem:
             try:
                 import os
 
+                def _base(path: str) -> str:
+                    # Windows 反斜杠路径在 POSIX 上 os.path.basename 不识别，
+                    # 跨平台统一按 ntpath 提取（与 file_payload_service 同口径）
+                    if "\\" in path or re.match(r"^[A-Za-z]:[\\/]", path):
+                        import ntpath
+                        return ntpath.basename(path)
+                    return os.path.basename(path)
+
                 data = json.loads(self.content)
                 files = data.get("files", [])
                 if len(files) == 1:
-                    return os.path.basename(files[0])
+                    return _base(files[0])
                 if len(files) > 1:
-                    return ", ".join(os.path.basename(file_path) for file_path in files)
+                    return ", ".join(_base(file_path) for file_path in files)
                 return "文件"
             except Exception as e:
                 log_exception(e, T("解析文件类型显示文本"))
