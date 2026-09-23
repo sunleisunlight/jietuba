@@ -15,7 +15,6 @@ block_cipher = None
 datas = [
     ("svg", "svg"),
     ("main/translations", "translations"),
-    ("models", "models"),            # OCR 模型（随包，Resources/ 下）
 ]
 
 # PySide6 插件：cocoa 平台、SVG 与图片格式
@@ -32,7 +31,6 @@ hiddenimports = [
     "pyclipboard",
     "longstitch",
     "gifrecorder",
-    "ppocr_rust",
     "zxingcpp",
     "PIL",
     "PIL.Image",
@@ -45,7 +43,6 @@ hiddenimports = [
     "mss.tools",
     "pynput",
     "darkdetect",
-    "av",
     "platforms",
 ]
 hiddenimports += collect_submodules("pynput")
@@ -53,6 +50,8 @@ hiddenimports += collect_submodules("mss")
 
 # ── 排除（Windows 专用/无关大包）──
 excludes = [
+    "av",
+    "ppocr_rust",
     "matplotlib",
     "scipy",
     "pandas",

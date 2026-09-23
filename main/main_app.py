@@ -456,7 +456,24 @@ class MainApp(QObject):
         # 新截图窗口的输入。此时不创建截图层，转而把现有模态窗口提到前面。
         if self._activate_blocking_modal():
             return
-        
+
+        # macOS：截图前主动检查/请求屏幕录制权限。
+        # mss 在无权限时返回黑屏而不抛异常，所以必须先预检并主动请求——
+        # CGRequestScreenCaptureAccess() 会弹系统授权框；用户未授予时给出引导。
+        if sys.platform == "darwin":
+            try:
+                from platforms import get_platform_backend
+                from platforms.base.permissions import PermissionStatus
+                perm = get_platform_backend().permissions
+                if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                    perm.request_screen_capture()
+                    # request 立即返回，不等待用户操作；此时仍未授权就弹引导框
+                    if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                        self._on_capture_failed("屏幕录制")
+                        return
+            except Exception as e:
+                log_exception(e, T("检查屏幕录制权限"))
+
         # 后台截图线程正在运行时也忽略重复触发
         if getattr(self, '_capture_thread', None) and self._capture_thread.isRunning():
             log_debug(T("后台截图线程进行中，忽略重复触发"), "MainApp")

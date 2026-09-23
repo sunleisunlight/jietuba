@@ -151,15 +151,29 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
                         _event_ref, kEventParamDirectObject, typeEventHotKeyID,
                         None, sizeof(_EventHotKeyID), None, byref(hid),
                     )
+                    try:
+                        from core.logger import log_info, log_exception
+                        log_info("Carbon 热键事件到达, hid.id=%s, getparam=%s" % (hid.id, result), "Hotkey")
+                    except Exception:
+                        pass
                     if result == noErr:
                         cb = self._id_to_callback.get(hid.id)
                         if cb:
                             try:
                                 cb()
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                try:
+                                    from core.logger import log_exception
+                                    log_exception(e, "热键回调")
+                                except Exception:
+                                    pass
                     return noErr
-                except Exception:
+                except Exception as e:
+                    try:
+                        from core.logger import log_exception
+                        log_exception(e, "Carbon 热键 handler")
+                    except Exception:
+                        pass
                     return noErr
 
             self._handler_callback = _EventHandlerProcPtr(_handler)

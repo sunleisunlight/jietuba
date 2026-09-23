@@ -97,7 +97,10 @@ def sign_app():
 
 
 def ensure_resources():
-    """OCR 模型双位置（Resources/models + MacOS/models），兼容 _MEIPASS 两种布局。"""
+    """OCR 模型双位置（可选）。仓库 models/ 存在才拷贝；否则构建不带 OCR。"""
+    if not (REPO / "models").exists():
+        print("models/ 不存在，跳过 OCR（构建为无 OCR 版本）")
+        return
     for rel in ("Contents/Resources/models", "Contents/MacOS/models"):
         dst = APP / rel
         dst.mkdir(parents=True, exist_ok=True)
@@ -113,15 +116,19 @@ def verify_app():
     checks = [
         ("executable", APP / "Contents/MacOS/Jietuba"),
         ("icon", APP / "Contents/Resources/Jietuba.icns"),
-        ("det model", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
-        ("rec model", APP / "Contents/Resources/models/PP-OCRv6_rec_small.onnx"),
         ("svg", APP / "Contents/Resources/svg/托盘.svg"),
         ("qm", APP / "Contents/Resources/translations/app_zh.qm"),
+    ]
+    optional_models = [
+        ("det model", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
+        ("rec model", APP / "Contents/Resources/models/PP-OCRv6_rec_small.onnx"),
     ]
     for name, p in checks:
         exists = p.exists()
         ok = ok and exists
         print(f"  [{'OK' if exists else 'MISSING'}] {name}: {p}")
+    for name, p in optional_models:
+        print(f"  [{'OK' if p.exists() else 'SKIP(无OCR)'}] {name}: {p}")
     # Info.plist 关键键
     plist = APP / "Contents/Info.plist"
     if plist.exists():
@@ -136,11 +143,14 @@ def verify_app():
     else:
         ok = False
     # Rust 扩展与关键 dylib
-    for so in ("gifrecorder", "longstitch", "pyclipboard", "ppocr_rust"):
+    for so, required in (("gifrecorder", True), ("longstitch", True),
+                          ("pyclipboard", True), ("ppocr_rust", False)):
         found = list((APP / "Contents/Frameworks").rglob(f"{so}*.so"))
         found += list((APP / "Contents/Resources").rglob(f"{so}*.so"))
-        print(f"  [{'OK' if found else 'MISSING'}] rust ext {so}: {found[0].name if found else ''}")
-        ok = ok and bool(found)
+        tag = "OK" if found else ("MISSING" if required else "SKIP(无OCR)")
+        print(f"  [{tag}] rust ext {so}: {found[0].name if found else ''}")
+        if required:
+            ok = ok and bool(found)
     return ok
 
 
