@@ -8,12 +8,25 @@ JSON payload 构建，以及兼容旧格式内容时的首个文件路径提取�
 
 import json
 import os
+import re
 from typing import Optional
+
+#: Windows 盘符路径（如 C:\Users\... 或 C:/Users/...）
+_WIN_DRIVE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def normalize_file_path(path: str) -> str:
-    """规范化文件路径。"""
-    return os.path.normpath(path.strip())
+    """规范化文件路径（跨平台一致）。
+
+    Windows 盘符/反斜杠路径在 POSIX 上会被 os.path.normpath 当成普通字符
+    （双反斜杠不折叠、正反斜杠不统一），导致剪贴板数据库跨平台读到不同的
+    字符串；此类路径统一用 ntpath 按 Windows 语义归一化，其余用本平台语义。
+    """
+    s = path.strip()
+    if "\\" in s or _WIN_DRIVE_RE.match(s):
+        import ntpath
+        return ntpath.normpath(s)
+    return os.path.normpath(s)
 
 
 def build_file_payload(path: str) -> str:

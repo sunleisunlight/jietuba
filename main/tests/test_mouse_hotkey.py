@@ -1,6 +1,14 @@
 # -*- coding: utf-8 -*-
 """鼠标侧键快捷键：登记表、低级钩子的启停与独占、派发链、录入框捕获"""
+import sys
+
 import pytest
+
+# Windows 专用（WM_* 常量与 WH_MOUSE_LL 钩子）；macOS 上侧键监听走
+# pynput 的通用路径，不涉及 Win32 消息。
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32", reason="WM_ 消息/低级鼠标钩子为 Windows 专用"
+)
 
 from pynput import mouse as _pynput_mouse
 
@@ -12,11 +20,16 @@ from core.shortcut_manager import (
 
 # 在任何 monkeypatch 之前抓住真实的 Listener：下面的替身会把
 # pynput.mouse.Listener 整个顶替掉，届时再去读这些常量读到的就是替身自己。
+# WM_* 常量仅 Windows 存在（WH_MOUSE_LL）；其他平台顶层访问会直接
+# AttributeError，因此只在 win32 读取。
 _REAL_LISTENER = _pynput_mouse.Listener
-WM_XBUTTONDOWN = _REAL_LISTENER.WM_XBUTTONDOWN
-WM_XBUTTONUP = _REAL_LISTENER.WM_XBUTTONUP
-WM_MOUSEMOVE = _REAL_LISTENER.WM_MOUSEMOVE
-WM_LBUTTONDOWN = _REAL_LISTENER.WM_LBUTTONDOWN
+if sys.platform == "win32":
+    WM_XBUTTONDOWN = _REAL_LISTENER.WM_XBUTTONDOWN
+    WM_XBUTTONUP = _REAL_LISTENER.WM_XBUTTONUP
+    WM_MOUSEMOVE = _REAL_LISTENER.WM_MOUSEMOVE
+    WM_LBUTTONDOWN = _REAL_LISTENER.WM_LBUTTONDOWN
+else:
+    WM_XBUTTONDOWN = WM_XBUTTONUP = WM_MOUSEMOVE = WM_LBUTTONDOWN = None
 
 
 # ============================================================================

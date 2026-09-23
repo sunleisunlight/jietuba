@@ -702,10 +702,10 @@ class SettingsDialog(FrostedFramelessDialog):
             self.translation_hotkey_edit.setText(display_hotkey_str(defaults["translation_hotkey"]))
         if hasattr(self, 'translation_hotkey_edit_2'):
             self.translation_hotkey_edit_2.setText(display_hotkey_str(defaults["translation_hotkey_2"]))
-        # 应用内快捷键
+        # 应用内快捷键（macOS 按平台习惯显示修饰键，存储格式不变）
         if hasattr(self, '_inapp_edits'):
             for cfg_key, edit in self._inapp_edits.items():
-                edit.setText(defaults.get(cfg_key, ""))
+                edit.setText(display_hotkey_str(defaults.get(cfg_key, "")))
         if hasattr(self, 'cursor_move_combo'):
             idx = self.cursor_move_combo.findData(defaults["inapp_cursor_move_mode"])
             if idx >= 0:

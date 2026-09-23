@@ -5,7 +5,16 @@
 卡住不粘——重试有上限，到点按当前焦点发出去。
 """
 
+import sys
+
 import pytest
+
+# 该测试用 Win32 前台窗口语义（get_foreground_hwnd/set_foreground_window/
+# send_ctrl_v 替身 + _ACTIVATE_MAX_ATTEMPTS 重试上限）验证"切焦点再粘贴"；
+# macOS 前台粘贴走 CGEvent 后端（阶段3 实机验证），不属于同一语义。
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32", reason="Win32 前台焦点语义为 Windows 专属"
+)
 
 from clipboard.controllers import paste_keystroke as paste_module
 

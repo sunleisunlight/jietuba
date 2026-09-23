@@ -675,6 +675,7 @@ ui/
 │   ├── page_capture.py      # 截图设置页
 │   ├── page_clipboard.py    # 剪贴板设置页
 │   ├── page_hotkey.py       # 快捷键设置页
+│   ├── page_permissions.py  # 系统权限页（macOS 屏幕录制/辅助功能/输入监控）
 │   ├── page_translation.py  # 翻译设置页
 │   ├── provider_fields.py   # 服务商字段的读写（按声明）
 │   ├── page_log.py          # 日志设置页

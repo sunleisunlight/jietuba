@@ -1,6 +1,12 @@
+import sys
+
 from types import SimpleNamespace
 
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32", reason="UIA 控件树为 Windows 专属"
+)
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
 from PySide6.QtGui import QImage, QWheelEvent
 

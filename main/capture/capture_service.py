@@ -6,6 +6,8 @@ ScreenCapturePermissionError）；Windows 保持原有 mss 实现。
 """
 
 import sys
+
+import mss  # 跨平台依赖（Windows/macOS 均使用；模块级导入供测试 patch 契约）
 from PySide6.QtGui import QImage
 from PySide6.QtCore import QRectF
 
@@ -47,7 +49,6 @@ class CaptureService:
                     raise ScreenCapturePermissionError() from e
                 raise
 
-        import mss
         with mss.mss() as sct:
             # monitors[0] 是所有显示器的合并区域 (虚拟桌面)
             monitors = sct.monitors

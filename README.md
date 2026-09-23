@@ -598,6 +598,7 @@ ui/
 │   ├── page_capture.py      # Capture settings
 │   ├── page_clipboard.py    # Clipboard settings
 │   ├── page_hotkey.py       # Hotkey settings
+│   ├── page_permissions.py  # System permissions page (macOS)
 │   ├── page_translation.py  # Translation settings
 │   ├── provider_fields.py   # 服务商字段的读写（按声明）
 │   ├── page_log.py          # Log settings

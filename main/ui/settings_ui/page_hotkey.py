@@ -303,7 +303,9 @@ def create_hotkey_page(dialog) -> QWidget:
             edit.setFixedSize(dialog_scaled(_EDIT_W), dialog_scaled(_EDIT_H))
             edit.setStyleSheet(input_style)
             value = dialog.config_manager.get_inapp_shortcut(cfg_key)
-            edit.setText("" if is_reserved_inapp_shortcut(value) else value)
+            edit.setText(
+                "" if is_reserved_inapp_shortcut(value) else display_hotkey_str(value)
+            )
             dialog._inapp_edits[cfg_key] = edit
             dialog._inapp_groups[cfg_key] = group_name
 
@@ -435,7 +437,9 @@ def _on_shortcut_changed(dialog, changed_key: str, new_text: str, base_style: st
     else:
         # 撤销本次输入，恢复旧值
         old_val = dialog.config_manager.get_inapp_shortcut(changed_key)
-        current_edit.setText("" if is_reserved_inapp_shortcut(old_val) else old_val)
+        current_edit.setText(
+            "" if is_reserved_inapp_shortcut(old_val) else display_hotkey_str(old_val)
+        )
 
     current_edit.blockSignals(False)
     conflict_edit.blockSignals(False)

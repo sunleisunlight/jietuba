@@ -393,12 +393,22 @@ class TestResetCurrentPageDispatch:
 # ============================================================================
 
 class TestResetHotkeyPage:
+    """_reset_hotkey_page 把配置回填到输入框。
+
+    macOS 上显示层按平台习惯把 win→Cmd / ctrl→Control 等展示（存储格式不变），
+    因此断言使用与页面一致的 display 格式。
+    """
+
+    @staticmethod
+    def _shown(hotkey: str) -> str:
+        from core.shortcut_manager import display_hotkey_str
+        return display_hotkey_str(hotkey)
 
     def test_primary_hotkey_is_always_restored(self):
         widget = _TextWidget("changed")
         fake = SimpleNamespace(config_manager=_config(), hotkey_input=widget)
         SettingsDialog._reset_hotkey_page(fake)
-        assert widget.set_texts == ["ctrl+shift+a"]
+        assert widget.set_texts == [self._shown("ctrl+shift+a")]
 
     def test_every_attached_secondary_input_is_restored(self):
         fake = SimpleNamespace(
@@ -411,10 +421,10 @@ class TestResetHotkeyPage:
             translation_hotkey_edit_2=_TextWidget(),
         )
         SettingsDialog._reset_hotkey_page(fake)
-        assert fake.hotkey_input_2.set_texts == ["ctrl+alt+a"]
-        assert fake.clipboard_hotkey_edit.set_texts == ["ctrl+shift+v"]
-        assert fake.clipboard_hotkey_edit_2.set_texts == ["ctrl+alt+v"]
-        assert fake.translation_hotkey_edit.set_texts == ["ctrl+shift+t"]
+        assert fake.hotkey_input_2.set_texts == [self._shown("ctrl+alt+a")]
+        assert fake.clipboard_hotkey_edit.set_texts == [self._shown("ctrl+shift+v")]
+        assert fake.clipboard_hotkey_edit_2.set_texts == [self._shown("ctrl+alt+v")]
+        assert fake.translation_hotkey_edit.set_texts == [self._shown("ctrl+shift+t")]
         assert fake.translation_hotkey_edit_2.set_texts == [""]
 
     def test_inapp_shortcut_without_a_default_falls_back_to_empty(self):
@@ -427,7 +437,7 @@ class TestResetHotkeyPage:
             },
         )
         SettingsDialog._reset_hotkey_page(fake)
-        assert fake._inapp_edits["inapp_confirm"].set_texts == ["ctrl+c"]
+        assert fake._inapp_edits["inapp_confirm"].set_texts == [self._shown("ctrl+c")]
         assert fake._inapp_edits["inapp_unknown_future_key"].set_texts == [""]
 
     def test_cursor_move_mode_is_selected_by_data(self):
