@@ -112,7 +112,25 @@ class SmartTranslationController(QObject):
         self._open_compact_input(token, "empty-clipboard")
 
     def _send_copy_shortcut(self) -> None:
-        """Send the Windows alternate copy shortcut without raising console SIGINT."""
+        """Send the platform copy shortcut without raising console SIGINT.
+
+        Windows: Ctrl+Insert（备用复制）；macOS: Cmd+C。
+        """
+        import sys
+        if sys.platform == "darwin":
+            try:
+                import Quartz
+                cmd = Quartz.CGEventCreateKeyboardEvent(None, 0x37, True)   # kVK_Command
+                c = Quartz.CGEventCreateKeyboardEvent(None, 8, True)        # kVK_ANSI_C
+                c_up = Quartz.CGEventCreateKeyboardEvent(None, 8, False)
+                cmd_up = Quartz.CGEventCreateKeyboardEvent(None, 0x37, False)
+                Quartz.CGEventSetFlags(c, 0x100000)                         # kCGEventFlagMaskCommand
+                Quartz.CGEventSetFlags(c_up, 0x100000)
+                for ev in (cmd, c, c_up, cmd_up):
+                    Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+            except Exception:
+                pass
+            return
         user32 = ctypes.windll.user32
         user32.keybd_event(VK_CONTROL, 0, 0, 0)
         user32.keybd_event(VK_INSERT, 0, 0, 0)

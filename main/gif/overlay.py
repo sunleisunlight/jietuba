@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """蓝色/红色选区边框覆盖层 — 动态穿透切换 + RESIZE 模式下 4 边拖拽"""
 
 import ctypes
@@ -84,6 +84,13 @@ class CaptureOverlay(QWidget):
     # ══════════════════════════════════════════════
 
     def _set_passthrough(self, enable: bool):
+        import sys
+        if sys.platform == "darwin":
+            # macOS：Qt 原生透明鼠标事件（仅穿透输入，不影响绘制）
+            self.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable
+            )
+            return
         hwnd = int(self.winId())
         style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
         if enable:

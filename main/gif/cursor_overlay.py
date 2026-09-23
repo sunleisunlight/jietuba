@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 回放鼠标光标覆盖层 — 独立透明窗口
 
@@ -56,17 +56,19 @@ class CursorOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
-        # WS_EX_TRANSPARENT: 鼠标事件完全穿透
-        try:
-            import ctypes
-            hwnd = int(self.winId())
-            GWL_EXSTYLE       = -20
-            WS_EX_TRANSPARENT = 0x00000020
-            user32 = ctypes.windll.user32
-            style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT)
-        except Exception as e:
-            log_exception(e, T("设置光标覆盖层透明"))
+        # WS_EX_TRANSPARENT: 鼠标事件完全穿透（macOS 已用 WA_TransparentForMouseEvents）
+        import sys
+        if sys.platform != "darwin":
+            try:
+                import ctypes
+                hwnd = int(self.winId())
+                GWL_EXSTYLE       = -20
+                WS_EX_TRANSPARENT = 0x00000020
+                user32 = ctypes.windll.user32
+                style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TRANSPARENT)
+            except Exception as e:
+                log_exception(e, T("设置光标覆盖层透明"))
 
         # 懒加载 SVG（类级别，只加载一次）
         if CursorOverlay._svg_renderer is None:

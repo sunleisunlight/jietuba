@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 帧采集控制器 — 全 Rust 架构 (gifrecorder)
 
@@ -393,20 +393,41 @@ class FrameRecorder(QObject):
 
     @staticmethod
     def _get_cursor_pos() -> Tuple[int, int]:
-        """获取鼠标屏幕坐标（Win32 GetCursorPos）"""
+        """获取鼠标屏幕坐标（Windows: GetCursorPos；macOS: Quartz 全局坐标，与 mss 同点空间）"""
+        import sys
+        if sys.platform == "darwin":
+            import Quartz
+            p = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+            return int(p.x), int(p.y)
         pt = _POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
         return pt.x, pt.y
 
     @staticmethod
     def _is_left_pressed() -> bool:
-        """鼠标左键是否按下（Win32 GetAsyncKeyState）"""
+        """鼠标左键是否按下（Windows: GetAsyncKeyState；macOS: CGEventSourceButtonState）"""
+        import sys
+        if sys.platform == "darwin":
+            import Quartz
+            return bool(
+                Quartz.CGEventSourceButtonState(
+                    Quartz.kCGEventSourceStateCombinedSessionState, 0
+                )
+            )
         # VK_LBUTTON = 0x01
         return bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
 
     @staticmethod
     def _is_right_pressed() -> bool:
-        """鼠标右键是否按下（Win32 GetAsyncKeyState）"""
+        """鼠标右键是否按下（Windows: GetAsyncKeyState；macOS: CGEventSourceButtonState）"""
+        import sys
+        if sys.platform == "darwin":
+            import Quartz
+            return bool(
+                Quartz.CGEventSourceButtonState(
+                    Quartz.kCGEventSourceStateCombinedSessionState, 1
+                )
+            )
         # VK_RBUTTON = 0x02
         return bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
 

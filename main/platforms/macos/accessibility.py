@@ -41,8 +41,11 @@ def _pid_for_window(window_id: int) -> Optional[int]:
         return pid
     try:
         import Quartz
+        # 注意：kCGWindowListOptionIncludingWindow 必须配具体窗口 id；
+        # 配 kCGNullWindowID 会返回空列表。这里用 OnScreenOnly 枚举全部
+        # 前台窗口即可解析到任一可见窗口的 PID。
         info = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionIncludingWindow,
+            Quartz.kCGWindowListOptionOnScreenOnly,
             Quartz.kCGNullWindowID,
         )
         for win in info or []:
@@ -70,16 +73,18 @@ def _ax_value(element, attribute):
 def _ax_position_size(element):
     """返回 (x, y, width, height) 或 None（AX 坐标=屏幕全局点坐标，左上原点）。"""
     try:
-        import ApplicationServices
-        position = _ax_value(element, ApplicationServices.kAXPositionAttribute)
-        size = _ax_value(element, ApplicationServices.kAXSizeAttribute)
+        import ApplicationServices as AS
+        position = _ax_value(element, AS.kAXPositionAttribute)
+        size = _ax_value(element, AS.kAXSizeAttribute)
         if position is None or size is None:
             return None
-        x = position.x if hasattr(position, "x") else position[0]
-        y = position.y if hasattr(position, "y") else position[1]
-        w = size.width if hasattr(size, "width") else size[0]
-        h = size.height if hasattr(size, "height") else size[1]
-        return float(x), float(y), float(w), float(h)
+        # PyObjC：AXValueGetValue 返回 (True, CGPoint/CGSize)，
+        # 直接访问 .x/.y/.width/.height 会 AttributeError。
+        ok_p, pt = AS.AXValueGetValue(position, AS.kAXValueCGPointType, None)
+        ok_s, sz = AS.AXValueGetValue(size, AS.kAXValueCGSizeType, None)
+        if not (ok_p and ok_s):
+            return None
+        return float(pt.x), float(pt.y), float(sz.width), float(sz.height)
     except Exception:
         return None
 

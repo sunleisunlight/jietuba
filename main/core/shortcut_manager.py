@@ -1,4 +1,4 @@
-﻿"""
+"""
 统一快捷键管理器
 
 合并了三套机制：
@@ -972,6 +972,41 @@ def _build_key_tables():
 # 模块级缓存，首次访问时构建
 _QT_KEY_TO_DISPLAY: Optional[Dict[int, str]] = None
 _STR_TO_QT_KEY: Optional[Dict[str, int]] = None
+
+
+# ── 平台化热键字符串显示 ───────────────────────────────
+_MOD_DISPLAY = (
+    ("ctrl", "Control"),
+    ("control", "Control"),
+    ("win", "Cmd"),
+    ("meta", "Cmd"),
+    ("super", "Cmd"),
+    ("cmd", "Cmd"),
+    ("command", "Cmd"),
+    ("alt", "Option"),
+    ("shift", "Shift"),
+)
+
+
+def display_hotkey_str(hotkey: str) -> str:
+    """设置/欢迎页展示用：macOS 上把 win/ctrl/alt 显示为 Cmd/Control/Option。
+
+    只影响显示，不改变存储格式（配置跨平台保持 ctrl+1 等原样）。
+    """
+    import sys
+    if sys.platform != "darwin" or not hotkey:
+        return hotkey
+    parts = [p.strip() for p in hotkey.split("+") if p.strip()]
+    out = []
+    for p in parts:
+        lp = p.lower()
+        mapped = None
+        for mod, disp in _MOD_DISPLAY:
+            if lp == mod:
+                mapped = disp
+                break
+        out.append(mapped if mapped else p)
+    return "+".join(out)
 
 
 def get_key_display_map() -> Dict[int, str]:
