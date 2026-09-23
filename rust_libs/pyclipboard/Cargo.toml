@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # PyO3 - Python 绑定
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
+pyo3 = { version = "0.22", features = ["abi3-py311"] }
 
 # 剪贴板操作
 clipboard-rs = "0.3.5"
@@ -37,3 +37,6 @@ image.workspace = true
 
 # zstd 压缩（用于超过 100KB 的格式数据）
 zstd = "0.13"
+
+[features]
+extension-module = ["pyo3/extension-module"]

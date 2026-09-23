@@ -26,4 +26,4 @@ classifiers = [
 [tool.maturin]
 # 发行名是 j-gif，import 名保持 gifrecorder 不变
 module-name = "gifrecorder"
-features = ["pyo3/extension-module"]
+features = ["extension-module"]
