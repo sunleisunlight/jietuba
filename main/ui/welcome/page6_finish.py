@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 第6页 — 完成
 
@@ -255,49 +255,101 @@ class FinishPage(BasePage):
         )
         return f'"{sys.executable}" "{main_script}"'
 
+    _AUTOSTART_LAUNCH_AGENT_LABEL = "cc.jilei.jietuba"
+
+    @classmethod
+    def _get_launch_agent_path(cls) -> str:
+        import os
+        return os.path.join(
+            os.path.expanduser("~"),
+            "Library", "LaunchAgents", f"{cls._AUTOSTART_LAUNCH_AGENT_LABEL}.plist",
+        )
+
     @classmethod
     def _get_autostart(cls) -> bool:
-        """检测注册表 HKCU\\Run 中是否存在本程序的启动项"""
-        import winreg
-        try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                cls._AUTOSTART_REG_KEY,
-                0,
-                winreg.KEY_READ,
-            )
+        """检测开机自启项：Windows=注册表 HKCU\\Run；macOS=LaunchAgent plist"""
+        import os
+        import sys
+        if sys.platform == "win32":
+            import winreg
             try:
-                winreg.QueryValueEx(key, cls._AUTOSTART_APP_NAME)
-                return True
-            except FileNotFoundError:
+                key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    cls._AUTOSTART_REG_KEY,
+                    0,
+                    winreg.KEY_READ,
+                )
+                try:
+                    winreg.QueryValueEx(key, cls._AUTOSTART_APP_NAME)
+                    return True
+                except FileNotFoundError:
+                    return False
+                finally:
+                    winreg.CloseKey(key)
+            except Exception:
                 return False
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            return False
+        return os.path.exists(cls._get_launch_agent_path())
 
     @classmethod
     def _set_autostart(cls, enabled: bool):
-        """启用：写入注册表 HKCU\\Run；禁用：删除对应注册表值"""
-        import winreg
+        """启用：Windows 写注册表 / macOS 写 LaunchAgent；禁用：删除对应项"""
+        import sys
+        if sys.platform == "win32":
+            import winreg
+            try:
+                key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    cls._AUTOSTART_REG_KEY,
+                    0,
+                    winreg.KEY_SET_VALUE,
+                )
+                if enabled:
+                    exe_path = cls._get_exe_path()
+                    winreg.SetValueEx(key, cls._AUTOSTART_APP_NAME, 0, winreg.REG_SZ, exe_path)
+                    log_info(T("已写入开机自启注册表项: {exe_path}", exe_path=exe_path), "page6")
+                else:
+                    try:
+                        winreg.DeleteValue(key, cls._AUTOSTART_APP_NAME)
+                        log_info(T("已删除开机自启注册表项"), "page6")
+                    except FileNotFoundError:
+                        pass  # 不存在则忽略
+                winreg.CloseKey(key)
+            except Exception as e:
+                log_exception(e, T("设置开机自启"))
+            return
+
+        # macOS：LaunchAgent plist（RunAtLoad）
+        plist_path = cls._get_launch_agent_path()
         try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                cls._AUTOSTART_REG_KEY,
-                0,
-                winreg.KEY_SET_VALUE,
-            )
             if enabled:
-                exe_path = cls._get_exe_path()
-                winreg.SetValueEx(key, cls._AUTOSTART_APP_NAME, 0, winreg.REG_SZ, exe_path)
-                log_info(T("已写入开机自启注册表项: {exe_path}", exe_path=exe_path), "page6")
+                if getattr(sys, 'frozen', False):
+                    program = [sys.executable]
+                else:
+                    main_script = os.path.abspath(
+                        os.path.join(os.path.dirname(__file__), "..", "..", "main_app.py")
+                    )
+                    program = [sys.executable, main_script]
+                plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{cls._AUTOSTART_LAUNCH_AGENT_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>{''.join(f"<string>{arg}</string>" for arg in program)}</array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+"""
+                os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+                with io.open(plist_path, "w", encoding="utf-8") as f:
+                    f.write(plist)
+                log_info(T("已写入开机自启 LaunchAgent: {path}", path=plist_path), "page6")
             else:
-                try:
-                    winreg.DeleteValue(key, cls._AUTOSTART_APP_NAME)
-                    log_info(T("已删除开机自启注册表项"), "page6")
-                except FileNotFoundError:
-                    pass  # 不存在则忽略
-            winreg.CloseKey(key)
+                if os.path.exists(plist_path):
+                    os.remove(plist_path)
+                    log_info(T("已删除开机自启 LaunchAgent"), "page6")
         except Exception as e:
             log_exception(e, T("设置开机自启"))
 
@@ -309,16 +361,26 @@ class FinishPage(BasePage):
     def _get_desktop_lnk_path(cls) -> str:
         """返回桌面上快捷方式的完整路径"""
         import os
+        if sys.platform == "darwin":
+            return os.path.join(
+                os.path.expanduser("~"), "Desktop", f"{PRODUCT_NAME}.app"
+            )
         desktop = os.path.join(os.path.expanduser("~"), "Desktop", cls._DESKTOP_LNK_NAME)
         return desktop
 
     @classmethod
     def _create_desktop_shortcut(cls):
-        """在桌面创建指向当前程序的快捷方式。"""
+        """在桌面创建指向当前程序的快捷方式。
+
+        Windows：PowerShell WScript.Shell .lnk；macOS：对 .app 建符号链接。
+        """
+        import sys
+        if sys.platform == "darwin":
+            cls._create_desktop_symlink()
+            return
         import base64
         import os
         import subprocess
-        import sys
 
         desktop_lnk = cls._get_desktop_lnk_path()
         try:
@@ -372,6 +434,40 @@ class FinishPage(BasePage):
                 raise RuntimeError(error_text or f"PowerShell exited with code {result.returncode}")
 
             log_info(T("已创建桌面快捷方式: {desktop_lnk}", desktop_lnk=desktop_lnk), "page6")
+        except Exception as e:
+            log_exception(e, T("创建桌面快捷方式"))
+
+    @classmethod
+    def _create_desktop_symlink(cls):
+        """macOS：在桌面创建指向 .app 的符号链接（等价于 Windows 快捷方式）。"""
+        import os
+        import sys
+        try:
+            if not getattr(sys, 'frozen', False):
+                # 开发模式没有可执行的 .app，跳过（避免产生指向 python 的假链接）
+                log_info(T("开发模式跳过桌面快捷方式（无 .app）"), "page6")
+                return
+            desktop_link = cls._get_desktop_lnk_path()
+            app_path = sys.executable  # frozen 时 executable 位于 .app/Contents/MacOS/
+            # 向上回溯到 .app bundle
+            bundle = app_path
+            for _ in range(3):
+                if bundle.endswith(".app") or os.path.basename(bundle).endswith(".app"):
+                    break
+                parent = os.path.dirname(bundle)
+                if parent == bundle:
+                    break
+                bundle = parent
+            if not os.path.isdir(bundle):
+                log_warning(T("未找到 .app 包，跳过桌面快捷方式"), "page6")
+                return
+            if os.path.islink(desktop_link) or os.path.exists(desktop_link):
+                try:
+                    os.remove(desktop_link)
+                except OSError:
+                    pass
+            os.symlink(bundle, desktop_link)
+            log_info(T("已创建桌面快捷方式: {desktop_link}", desktop_link=desktop_link), "page6")
         except Exception as e:
             log_exception(e, T("创建桌面快捷方式"))
 

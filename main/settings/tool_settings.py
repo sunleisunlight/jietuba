@@ -16,6 +16,7 @@
 """
 
 import os
+import sys
 from typing import Dict, Any, Optional
 from PySide6.QtCore import QSettings, Signal, QObject
 from PySide6.QtGui import QColor
@@ -305,7 +306,16 @@ class ToolSettingsManager(QObject):
 
         # ==================== 6. 日志 ====================
         "log_enabled": True,                   # 日志启用
-        "log_dir": os.path.join(os.path.expanduser("~"), "AppData", "Local", "Jietuba", "Logs"),
+        "log_dir": (
+            os.path.join(
+                os.path.expanduser("~"),
+                "Library", "Application Support", "Jietuba", "Logs",
+            )
+            if sys.platform == "darwin"
+            else os.path.join(
+                os.path.expanduser("~"), "AppData", "Local", "Jietuba", "Logs",
+            )
+        ),
         "log_level": "INFO",                  # 日志等级: DEBUG, INFO, WARNING, ERROR
         "log_retention_days": 7,               # 日志保留天数（0表示永久保留）
 

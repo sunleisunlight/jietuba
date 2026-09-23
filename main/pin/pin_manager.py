@@ -11,7 +11,13 @@ from core import log_debug, log_info, log_error
 from core.logger import T
 
 import ctypes
-_user32 = ctypes.windll.user32
+import sys
+
+_IS_WINDOWS = sys.platform == "win32"
+if _IS_WINDOWS:
+    _user32 = ctypes.windll.user32
+else:
+    _user32 = None
 _SWP_NOMOVE = 0x0002
 _SWP_NOSIZE = 0x0001
 _SWP_NOACTIVATE = 0x0010
@@ -295,8 +301,13 @@ class PinManager(QObject):
         self._suppressed_pins.clear()
         for pin in self.pin_windows:
             if pin.windowFlags() & Qt.WindowType.WindowStaysOnTopHint:
-                hwnd = int(pin.winId())
-                _user32.SetWindowPos(hwnd, _HWND_NOTOPMOST, 0, 0, 0, 0, _SWP_FLAGS)
+                if _IS_WINDOWS:
+                    hwnd = int(pin.winId())
+                    _user32.SetWindowPos(hwnd, _HWND_NOTOPMOST, 0, 0, 0, 0, _SWP_FLAGS)
+                else:
+                    # macOS：置顶通过 Qt 窗口标志表达，压制=移除该标志
+                    pin.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, False)
+                    pin.show()
                 self._suppressed_pins.append(pin)
         if self._suppressed_pins:
             log_debug(T("已压制 {count} 个钉图的置顶状态", count=len(self._suppressed_pins)), "PinManager")
@@ -310,8 +321,12 @@ class PinManager(QObject):
         for pin in self._suppressed_pins:
             if pin not in self.pin_windows:
                 continue
-            hwnd = int(pin.winId())
-            _user32.SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_FLAGS)
+            if _IS_WINDOWS:
+                hwnd = int(pin.winId())
+                _user32.SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_FLAGS)
+            else:
+                pin.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+                pin.show()
         self._suppressed_pins.clear()
 
     def cleanup(self):

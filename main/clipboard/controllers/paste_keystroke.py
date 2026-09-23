@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""把焦点还给目标窗口，然后补一次 Ctrl+V。
+"""把焦点还给目标窗口，然后补一次 Ctrl+V / Cmd+V。
 
-keybd_event 注入的是全局按键事件，没有收件人——按键落到谁身上完全取决于按下
-那一刻谁持有焦点。所以顺序只能是：先把目标窗口切到前台，确认切成功，再发按键。
+Windows：keybd_event 注入的是全局按键事件，没有收件人——按键落到谁身上完全取决
+于按下那一刻谁持有焦点。所以顺序只能是：先把目标窗口切到前台，确认切成功，再发
+按键。
+
+macOS：CGEventPost 注入的按键同样没有收件人，先 NSRunningApplication 激活目标
+应用（按 PID），确认前台已切换，再发 Cmd+V。
 
 焦点切换是异步的，SetForegroundWindow 返回不代表已经切过去，所以这里用定时
 重试代替固定延迟：固定延迟在慢机器上不够、在快机器上白等。
 """
 
 import ctypes
+import sys
 from ctypes import wintypes
 from typing import Optional
 
@@ -18,21 +23,28 @@ from core.logger import T, log_debug, log_exception
 
 from .foreground_tracker import get_current_pid, get_foreground_hwnd, get_window_pid
 
-_user32 = ctypes.windll.user32
-_kernel32 = ctypes.windll.kernel32
+_IS_WINDOWS = sys.platform == "win32"
+_IS_MACOS = sys.platform == "darwin"
 
-_user32.SetForegroundWindow.argtypes = [wintypes.HWND]
-_user32.SetForegroundWindow.restype = wintypes.BOOL
-_user32.BringWindowToTop.argtypes = [wintypes.HWND]
-_user32.BringWindowToTop.restype = wintypes.BOOL
-_user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
-_user32.AttachThreadInput.restype = wintypes.BOOL
-_user32.IsIconic.argtypes = [wintypes.HWND]
-_user32.IsIconic.restype = wintypes.BOOL
-_user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
-_user32.ShowWindow.restype = wintypes.BOOL
-_user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
-_user32.GetAsyncKeyState.restype = ctypes.c_short
+if _IS_WINDOWS:
+    _user32 = ctypes.windll.user32
+    _kernel32 = ctypes.windll.kernel32
+
+    _user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    _user32.SetForegroundWindow.restype = wintypes.BOOL
+    _user32.BringWindowToTop.argtypes = [wintypes.HWND]
+    _user32.BringWindowToTop.restype = wintypes.BOOL
+    _user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    _user32.AttachThreadInput.restype = wintypes.BOOL
+    _user32.IsIconic.argtypes = [wintypes.HWND]
+    _user32.IsIconic.restype = wintypes.BOOL
+    _user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    _user32.ShowWindow.restype = wintypes.BOOL
+    _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    _user32.GetAsyncKeyState.restype = ctypes.c_short
+else:
+    _user32 = None
+    _kernel32 = None
 
 SW_RESTORE = 9
 
@@ -53,15 +65,17 @@ _ACTIVATE_RETRY_MS = 20
 _ACTIVATE_MAX_ATTEMPTS = 10
 
 
-def set_foreground_window(hwnd: Optional[int]) -> bool:
-    """把目标窗口切到前台。
+def _mac_clipboard_backend():
+    from platforms import get_platform_backend
+    return get_platform_backend().clipboard
 
-    裸调 SetForegroundWindow 只在本进程持有最后一次输入事件时才被系统放行。
-    附加到目标窗口的输入队列可以绕过这条限制，附加期间两个线程共享焦点状态，
-    所以用完必须立刻解除。
-    """
+
+def set_foreground_window(hwnd: Optional[int]) -> bool:
+    """把目标窗口切到前台（macOS：按 PID 激活目标应用）。"""
     if not hwnd:
         return False
+    if _IS_MACOS:
+        return _mac_clipboard_backend().activate_target(hwnd)
 
     current_thread = None
     target_thread = None
@@ -88,8 +102,11 @@ def release_modifiers():
     """松开用户仍然按着的修饰键。
 
     唤出窗口的热键带 Ctrl，用户松手比我们发按键慢时 Ctrl 还是按下状态，
-    此刻发 Ctrl+V，目标窗口收到的是按错的组合键。
+    此刻发 Ctrl+V，目标窗口收到的是按错的组合键。macOS 无此问题（Cmd 由
+    CGEvent 自带按下/抬起），no-op。
     """
+    if not _IS_WINDOWS:
+        return
     try:
         for vk in _MODIFIER_KEYS:
             if _user32.GetAsyncKeyState(vk) & _KEY_DOWN_MASK:
@@ -99,7 +116,9 @@ def release_modifiers():
 
 
 def send_ctrl_v() -> bool:
-    """模拟按下 Ctrl+V。"""
+    """模拟按下 Ctrl+V（macOS：注入 Cmd+V）。"""
+    if _IS_MACOS:
+        return _mac_clipboard_backend().send_cmd_v()
     try:
         _user32.keybd_event(VK_CONTROL, 0, 0, 0)
         _user32.keybd_event(VK_V, 0, 0, 0)
@@ -112,11 +131,14 @@ def send_ctrl_v() -> bool:
 
 
 def paste_to_target(hwnd: Optional[int]):
-    """切到目标窗口后发送 Ctrl+V。
+    """切到目标窗口后发送 Ctrl+V / Cmd+V。
 
-    hwnd 为空说明目标窗口已经关掉（句柄失效）。这时只能发给当前前台窗口，
-    但前台停在自己人身上时宁可不发——按键会被本应用接住。
+    hwnd 为空说明目标已经关掉（Windows 句柄失效 / macOS 进程退出）。这时只能
+    发给当前前台窗口，但前台停在自己人身上时宁可不发——按键会被本应用接住。
     """
+    if _IS_MACOS:
+        _mac_clipboard_backend().paste_to_target(hwnd)
+        return
     if not hwnd:
         if not _foreground_is_own_process():
             _send_paste()

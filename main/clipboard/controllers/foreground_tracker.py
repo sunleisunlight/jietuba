@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """前台窗口跟踪：记住最后一个不属于本进程的前台窗口，作为粘贴目标。
 
-粘贴是"把焦点还给目标窗口 + 模拟 Ctrl+V"。keybd_event 没有收件人，按键落到谁
+粘贴是"把焦点还给目标窗口 + 模拟 Ctrl+V/Cmd+V"。keybd_event 没有收件人，按键落到谁
 身上取决于那一刻谁持有焦点，所以必须先知道该把焦点还给谁。
 
 窗口失焦即隐藏时，show 时取一次样就够——记录和使用之间用户没有机会切换窗口。
@@ -12,29 +12,41 @@
 标注、翻译）都是合法的粘贴目标，按进程排除会把它们一起误伤。同样排除任务栏、
 桌面，以及拿不到键盘焦点的窗口——它们收不到模拟按键。
 取样不合格时保留上一次的值，不回退到当前前台。
+
+平台差异：Windows 记录的是 HWND；macOS 记录的是目标应用 PID（CGWindowID 会随
+窗口重建而失效，PID 更稳定，且 macOS 的激活/粘贴都以 PID 为锚）。
 """
 
 import ctypes
+import os
+import sys
 from ctypes import wintypes
 from typing import Callable, Optional
 
 from core.logger import T, log_debug, log_exception
 
-_user32 = ctypes.windll.user32
-_kernel32 = ctypes.windll.kernel32
+_IS_WINDOWS = sys.platform == "win32"
+_IS_MACOS = sys.platform == "darwin"
 
-# 64 位下句柄按默认 int 返回会被截断，必须声明类型
-_user32.GetForegroundWindow.restype = wintypes.HWND
-_user32.IsWindow.argtypes = [wintypes.HWND]
-_user32.IsWindow.restype = wintypes.BOOL
-_user32.IsWindowVisible.argtypes = [wintypes.HWND]
-_user32.IsWindowVisible.restype = wintypes.BOOL
-_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
-_user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-_user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-_user32.GetClassNameW.restype = ctypes.c_int
-_user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
-_user32.GetWindowLongW.restype = wintypes.LONG
+if _IS_WINDOWS:
+    _user32 = ctypes.windll.user32
+    _kernel32 = ctypes.windll.kernel32
+
+    # 64 位下句柄按默认 int 返回会被截断，必须声明类型
+    _user32.GetForegroundWindow.restype = wintypes.HWND
+    _user32.IsWindow.argtypes = [wintypes.HWND]
+    _user32.IsWindow.restype = wintypes.BOOL
+    _user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    _user32.IsWindowVisible.restype = wintypes.BOOL
+    _user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    _user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    _user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    _user32.GetClassNameW.restype = ctypes.c_int
+    _user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+    _user32.GetWindowLongW.restype = ctypes.LONG
+else:
+    _user32 = None
+    _kernel32 = None
 
 GWL_EXSTYLE = -20
 WS_EX_NOACTIVATE = 0x08000000
@@ -54,8 +66,11 @@ _SAMPLE_INTERVAL_MS = 400
 
 
 def get_foreground_hwnd() -> Optional[int]:
-    """当前前台窗口句柄；取不到返回 None。"""
+    """当前前台窗口句柄 / macOS 前台应用 PID；取不到返回 None。"""
     try:
+        if _IS_MACOS:
+            from platforms import get_platform_backend
+            return get_platform_backend().windows.foreground_handle()
         return _user32.GetForegroundWindow() or None
     except Exception as e:
         log_exception(e, T("读取前台窗口"))
@@ -63,10 +78,16 @@ def get_foreground_hwnd() -> Optional[int]:
 
 
 def is_alive(hwnd: Optional[int]) -> bool:
-    """句柄是否仍指向一个存在且可见的窗口。"""
+    """句柄是否仍指向一个存在且可见的窗口 / PID 对应进程是否仍在运行。"""
     if not hwnd:
         return False
     try:
+        if _IS_MACOS:
+            try:
+                os.kill(hwnd, 0)
+                return True
+            except (OSError, ProcessLookupError, PermissionError):
+                return False
         return bool(_user32.IsWindow(hwnd)) and bool(_user32.IsWindowVisible(hwnd))
     except Exception as e:
         log_exception(e, T("校验窗口句柄"))
@@ -74,8 +95,10 @@ def is_alive(hwnd: Optional[int]) -> bool:
 
 
 def get_window_pid(hwnd: int) -> Optional[int]:
-    """窗口所属进程 ID；取不到返回 None。"""
+    """窗口所属进程 ID；macOS 上句柄本身就是 PID，原样返回。"""
     try:
+        if _IS_MACOS:
+            return hwnd or None
         pid = wintypes.DWORD()
         _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         return pid.value or None
@@ -85,8 +108,10 @@ def get_window_pid(hwnd: int) -> Optional[int]:
 
 
 def get_window_class(hwnd: int) -> str:
-    """窗口类名；取不到返回空串。"""
+    """窗口类名；macOS 无类名概念，返回空串。"""
     try:
+        if _IS_MACOS:
+            return ""
         buffer = ctypes.create_unicode_buffer(256)
         if _user32.GetClassNameW(hwnd, buffer, len(buffer)) <= 0:
             return ""
@@ -97,8 +122,14 @@ def get_window_class(hwnd: int) -> str:
 
 
 def can_take_focus(hwnd: int) -> bool:
-    """窗口能否接受键盘焦点。拿不到焦点的窗口收不到模拟按键。"""
+    """窗口能否接受键盘焦点。拿不到焦点的窗口收不到模拟按键。
+
+    macOS：只有 activationPolicy 为 Regular 的应用才可能被激活并接收键盘事件。
+    """
     try:
+        if _IS_MACOS:
+            from platforms import get_platform_backend
+            return get_platform_backend().windows.can_take_focus(hwnd)
         return not (_user32.GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_NOACTIVATE)
     except Exception as e:
         log_exception(e, T("读取窗口扩展样式"))
@@ -106,11 +137,13 @@ def can_take_focus(hwnd: int) -> bool:
 
 
 def get_current_pid() -> int:
+    if _IS_MACOS:
+        return os.getpid()
     return _kernel32.GetCurrentProcessId()
 
 
 class ForegroundWindowTracker:
-    """周期性取样前台窗口，保留最后一个可作为粘贴目标的句柄。
+    """周期性取样前台窗口，保留最后一个可作为粘贴目标的目标。
 
     QTimer 延迟到 start() 才创建，这样控制器可以在没有 QApplication 的环境里
     构造（测试直接调 sample()）。
@@ -128,7 +161,7 @@ class ForegroundWindowTracker:
 
     @property
     def target_hwnd(self) -> Optional[int]:
-        """最后一次采到的粘贴目标；窗口已销毁时返回 None。"""
+        """最后一次采到的粘贴目标；目标已销毁时返回 None。"""
         if not is_alive(self._target_hwnd):
             return None
         return self._target_hwnd

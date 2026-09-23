@@ -392,3 +392,16 @@ class UIAElementFinder(QObject):
         self._session.cancelled.set()
         self._inflight.clear()
         self._snapshots.clear()
+
+
+# ============================================================================
+# 平台分派：macOS 使用 AXUIElement 实现（同一上层接口）
+# ============================================================================
+if sys.platform == "darwin":
+    from platforms.macos.accessibility import (  # noqa: E402
+        MacAccessibilityElementFinder as _MacElementFinder,
+        is_macos_accessibility_available as _mac_is_available,
+    )
+
+    UIAElementFinder = _MacElementFinder  # noqa: F811
+    is_uia_available = _mac_is_available  # noqa: F811
