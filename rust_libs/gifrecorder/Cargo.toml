@@ -30,3 +30,6 @@ rayon = "1.7"
 
 # 有界 channel (decoder ↔ Python)
 crossbeam-channel = "0.5"
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+cc = "1"
