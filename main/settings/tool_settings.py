@@ -37,6 +37,7 @@ ANNOTATION_TOOL_SHORTCUTS = (
     ("inapp_tool_rect", "rect", "Rectangle", "r"),
     ("inapp_tool_ellipse", "ellipse", "Ellipse", "o"),
     ("inapp_tool_text", "text", "Text", "t"),
+    ("inapp_tool_note", "note", "Note", "1"),
     ("inapp_tool_eraser", "eraser", "Eraser", "e"),
 )
 
@@ -159,6 +160,23 @@ class ToolSettingsManager(QObject):
             "font_size": 10,
             "opacity": 1.0,
             "stroke_width": 12,
+        },
+        "note": {
+            "color": "#FF0000",       # 备注一条一个颜色：正文、目标框描边、箭头共用
+            "stroke_width": 3,        # 目标框描边 / 箭杆的线宽
+            "opacity": 1.0,
+            "font_size": 14,
+            "font_family": "",
+            # 文本框相对目标框的位置：right / left / top / bottom（见 NoteItem.POSITIONS）
+            "label_position": "right",
+            # 箭头指向：target = 指向被标注的目标（默认），text = 指向文本框
+            "arrow_head_at": "target",
+            # 箭杆造型，取值见 ArrowItem.STYLES
+            "arrow_style": "single",
+            # 默认排版宽度；0 = 自动（交给 NoteItem 按当前 UI 比例和目标周围的空间算）
+            "text_width": 0,
+            # 目标框与文本框之间的间隙；0 = 自动（同上）
+            "gap": 0,
         },
         "eraser": {
             "stroke_width": 25,  # 橡皮擦大小（宽度）

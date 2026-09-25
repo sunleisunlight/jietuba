@@ -857,6 +857,10 @@ Replace it?</source>
         <source>Keep original text formatting</source>
         <translation>保持原文格式</translation>
     </message>
+    <message>
+        <source>Note</source>
+        <translation>备注</translation>
+    </message>
 </context>
 
 <context>
@@ -970,6 +974,10 @@ Replace it?</source>
     <message>
         <source>Add text</source>
         <translation>添加文字</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>添加备注</translation>
     </message>
     <message>
         <source>Eraser tool</source>
@@ -2588,6 +2596,26 @@ Replace it?</source>
         <source>Strength: Maximum</source>
         <translation>强度：最强</translation>
     </message>
+    <message>
+        <source>Note direction</source>
+        <translation>备注方向</translation>
+    </message>
+    <message>
+        <source>Text on right</source>
+        <translation>文字在右侧</translation>
+    </message>
+    <message>
+        <source>Text on left</source>
+        <translation>文字在左侧</translation>
+    </message>
+    <message>
+        <source>Text above</source>
+        <translation>文字在上方</translation>
+    </message>
+    <message>
+        <source>Text below</source>
+        <translation>文字在下方</translation>
+    </message>
 </context>
 
 <context>
@@ -3681,6 +3709,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Confirm</source>
         <translation>确定</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>备注</translation>
     </message>
 </context>
 <context>

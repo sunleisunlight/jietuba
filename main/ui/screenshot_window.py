@@ -7,7 +7,7 @@
 import gc
 from PySide6.QtWidgets import QApplication, QWidget, QGraphicsTextItem
 from PySide6.QtCore import Qt, QTimer, QRect, QRectF
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from ui.dialogs import show_modeless_warning_dialog
 
 from canvas import CanvasScene, CanvasView
@@ -653,6 +653,8 @@ class ScreenshotWindow(QWidget):
         # 箭头/线条/序号样式为self方法，安全
         self.toolbar.arrow_style_changed.connect(self.on_arrow_style_changed)
         self.toolbar.line_style_changed.connect(self.on_line_style_changed)
+        if hasattr(self.toolbar, "note_style_changed"):
+            self.toolbar.note_style_changed.connect(self.on_note_style_changed)
         if hasattr(self.toolbar, "number_next_changed"):
             self.toolbar.number_next_changed.connect(self.on_number_next_changed)
         if hasattr(self.toolbar, "number_style_changed"):
@@ -1037,6 +1039,68 @@ class ScreenshotWindow(QWidget):
                 
                 item.update()
                 log_debug(T("箭头样式已更新: {style}", style=style), "ScreenshotWindow")
+
+    def on_note_style_changed(self, state: dict):
+        """备注面板改动 → 应用到当前选中的那一条备注。
+
+        撤销粒度在这里定死：颜色 / 线宽 / 透明度 / 字号是样式，和文字面板一样
+        **不**进撤销栈（撤销栈留给画布内容，面板上调样式不该占掉用户的 Ctrl+Z）；
+        方向改的是备注的排版结构，和拖目标框、拖文本宽度同类，一次改动推一条
+        EditItemCommand。面板一次只发一条信号，所以一次操作最多也就一条命令。
+        """
+        from canvas.items import NoteItem
+
+        controller = getattr(getattr(self, 'view', None), 'smart_edit_controller', None)
+        item = getattr(controller, 'selected_item', None)
+        if not isinstance(item, NoteItem):
+            return
+
+        editor = getattr(controller, 'layer_editor', None)
+        direction = NoteItem.normalize_position(
+            state.get('label_position', item.direction)
+        )
+        old_state = None
+        if editor is not None and direction != item.direction:
+            old_state = editor.capture_state(item)
+
+        self._apply_note_style(item, state)
+
+        if old_state is not None:
+            new_state = editor.capture_state(item)
+            if old_state != new_state:
+                from canvas.undo import EditItemCommand
+                undo_stack = getattr(self.scene, 'undo_stack', None)
+                if undo_stack is not None:
+                    command = EditItemCommand(item, old_state, new_state, T("修改备注方向"))
+                    if hasattr(undo_stack, 'push_command'):
+                        undo_stack.push_command(command)
+                    else:
+                        undo_stack.push(command)
+        item.update()
+        log_debug(T("备注样式已更新"), "ScreenshotWindow")
+
+    @staticmethod
+    def _apply_note_style(item, state: dict):
+        """把面板状态落到一条备注上；state 里缺的字段保持原样。"""
+        color = state.get("color")
+        if isinstance(color, QColor) and color.isValid():
+            item.set_note_color(color)
+
+        width = state.get("stroke_width")
+        if width is not None:
+            item.set_note_stroke_width(float(width))
+
+        font_size = state.get("font_size")
+        if font_size is not None:
+            item.set_note_font_size(int(font_size))
+
+        opacity = state.get("opacity")
+        if opacity is not None:
+            item.set_visual_opacity(float(opacity))
+
+        position = state.get("label_position")
+        if position is not None:
+            item.set_direction(position)
 
     def on_mosaic_style_changed(self, style: str):
         """马赛克种类变化（马赛克/模糊），交给 MosaicTool 统一处理。"""

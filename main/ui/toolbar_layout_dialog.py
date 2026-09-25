@@ -46,6 +46,7 @@ BUTTON_NAMES = {
     "rect": "Rectangle",
     "ellipse": "Ellipse",
     "text": "Text",
+    "note": "Note",
     "eraser": "Eraser",
     "undo": "Undo",
     "redo": "Redo",

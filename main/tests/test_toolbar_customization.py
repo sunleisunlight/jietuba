@@ -86,6 +86,18 @@ class TestNormalizeLayout:
         assert keys[keys.index("text_recognize") + 1] == "scan_code"
         assert dict(layout)["scan_code"] == MORE
 
+    def test_a_layout_saved_before_note_existed_gains_the_note_button(self):
+        """备注是后加的工具：老用户的排布里没有它，读出来必须自动补上、且不挤坏原排布。"""
+        stored = [(key, SHOW) for key in DEFAULT_ORDER if key != "note"]
+        layout = normalize_layout(stored)
+        keys = [key for key, _mode in layout]
+
+        assert "note" in keys
+        assert keys[keys.index("text") + 1] == "note", "备注应当补在文字按钮后面"
+        assert dict(layout)["note"] == SHOW
+        # 去重、保序：原有按钮一个不少也不重复
+        assert len(keys) == len(set(keys)) == len(DEFAULT_ORDER)
+
 
 class TestPersistence:
 
@@ -138,6 +150,17 @@ class TestScreenshotToolbar:
         toolbar.select_tool("mosaic")
         assert toolbar.current_tool == "mosaic"
         assert toolbar.mosaic_btn.isChecked()
+
+    def test_note_button_sits_between_text_and_mosaic_and_selects_the_tool(self, qapp):
+        """备注按钮排在文字后面，点它切到 note 工具并弹出备注设置面板"""
+        toolbar = Toolbar()
+        assert _toolbar_row(toolbar)[_toolbar_row(toolbar).index("text") + 1] == "note"
+        assert toolbar.tool_buttons["note"] is toolbar.note_btn
+
+        toolbar.select_tool("note")
+        assert toolbar.current_tool == "note"
+        assert toolbar.note_btn.isChecked()
+        assert toolbar.note_panel is not None
 
     def test_more_popup_hosts_folded_buttons_that_still_work(self, qapp):
         save_layout(_layout_with(mosaic=MORE, save=MORE))

@@ -89,7 +89,7 @@ class CanvasScene(QGraphicsScene):
         from tools import ToolController, ToolContext
         from tools import (
             PenTool, RectTool, EllipseTool, ArrowTool,
-            TextTool, NumberTool, HighlighterTool, CursorTool, EraserTool, MosaicTool, SpotlightTool
+            TextTool, NoteTool, NumberTool, HighlighterTool, CursorTool, EraserTool, MosaicTool, SpotlightTool
         )
 
         ctx = ToolContext(
@@ -111,6 +111,7 @@ class CanvasScene(QGraphicsScene):
         self.tool_controller.register(EllipseTool())
         self.tool_controller.register(ArrowTool())
         self.tool_controller.register(TextTool())
+        self.tool_controller.register(NoteTool())
         self.tool_controller.register(NumberTool())
         self.tool_controller.register(HighlighterTool())
         if enable_mosaic:
@@ -180,7 +181,9 @@ class CanvasScene(QGraphicsScene):
             list: 选区内的绘制项目列表（按绘制顺序，先绘制的在前）
         """
         from PySide6.QtWidgets import QGraphicsEllipseItem
-        
+
+        from canvas.items import is_composite_child
+
         drawing_items = []
         # SelectionItem 不画东西了，但仍在场景里接收鼠标事件，
         # 所以枚举标注图元时依然要排除它（否则会被当成标注克隆进钉图）
@@ -194,7 +197,17 @@ class CanvasScene(QGraphicsScene):
             # 排除基础UI元素
             if item in excluded_items:
                 continue
-            
+
+            # 备注（NoteItem）把目标框和箭头挂成自己的子图元，好让整条备注对外
+            # 只有一个逻辑身份（一次选中、一次撤销、一次克隆）。它们对场景同样是
+            # 可见的图元，不排掉的话一条备注会被当成"根 + 子图元"共三条标注导出、
+            # 克隆三份，钉图里就散架了。
+            #
+            # 判断用标志位而不是 item.parentItem()：后者会让绑定层放弃那些"只被
+            # 场景持有"的顶层图元的所有权，图元随即被回收（详见 is_composite_child）。
+            if is_composite_child(item):
+                continue
+
             # 排除画笔指示器（Z值=10000的QGraphicsEllipseItem）
             if isinstance(item, QGraphicsEllipseItem) and item.zValue() >= 10000:
                 continue

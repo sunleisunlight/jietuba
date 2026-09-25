@@ -817,6 +817,10 @@ Replace it?</translation>
         <source>Keep original text formatting</source>
         <translation>Keep original text formatting</translation>
     </message>
+    <message>
+        <source>Note</source>
+        <translation>Note</translation>
+    </message>
 </context>
 
 <context>
@@ -925,6 +929,10 @@ Replace it?</translation>
     <message>
         <source>Add text</source>
         <translation>Add text</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>Add note</translation>
     </message>
     <message>
         <source>Eraser tool</source>
@@ -2441,6 +2449,26 @@ Replace it?</translation>
         <source>Strength: Maximum</source>
         <translation>Strength: Maximum</translation>
     </message>
+    <message>
+        <source>Note direction</source>
+        <translation>Note direction</translation>
+    </message>
+    <message>
+        <source>Text on right</source>
+        <translation>Text on right</translation>
+    </message>
+    <message>
+        <source>Text on left</source>
+        <translation>Text on left</translation>
+    </message>
+    <message>
+        <source>Text above</source>
+        <translation>Text above</translation>
+    </message>
+    <message>
+        <source>Text below</source>
+        <translation>Text below</translation>
+    </message>
 </context>
 
 <context>
@@ -3516,6 +3544,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Confirm</source>
         <translation>Confirm</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Note</translation>
     </message>
 </context>
 <context>

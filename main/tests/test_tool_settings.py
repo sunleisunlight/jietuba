@@ -248,6 +248,7 @@ class TestToolSettingsManager:
             "rect": "r",
             "ellipse": "o",
             "text": "t",
+            "note": "1",
             "eraser": "e",
         }
         assert {tool_id: default for _key, tool_id, _label, default in ANNOTATION_TOOL_SHORTCUTS} == expected

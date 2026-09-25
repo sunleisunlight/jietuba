@@ -118,6 +118,8 @@ def test_text_tool_applies_always_on_top_setting(
             Qt.MouseButton.LeftButton,
             scene.tool_controller.ctx,
         )
+        # 文字工具现在是"按下记起点、松开才定性"的状态机：单击路径得走完 release
+        text_tool.on_release(QPointF(10, 10), scene.tool_controller.ctx)
         items = [item for item in scene.items() if isinstance(item, TextItem)]
         assert len(items) == 1
         assert items[0].zValue() == expected_z

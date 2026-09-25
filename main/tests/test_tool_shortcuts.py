@@ -108,6 +108,7 @@ def test_default_text_shortcut_selects_text(monkeypatch, isolated_manager):
         (Qt.Key.Key_R, "rect"),
         (Qt.Key.Key_O, "ellipse"),
         (Qt.Key.Key_T, "text"),
+        (Qt.Key.Key_1, "note"),
         (Qt.Key.Key_E, "eraser"),
     ],
 )
@@ -128,6 +129,61 @@ def test_residual_text_editing_skips_tool_matching(monkeypatch, isolated_manager
 
     assert handler.handle_key(_key_event(Qt.Key.Key_T)) is False
     assert window.toolbar.selected == []
+
+
+def test_default_note_shortcut_selects_note(monkeypatch, isolated_manager):
+    """数字键 1 默认切到备注工具。"""
+    monkeypatch.setattr("core.shortcut_manager.load_move_keys", lambda: {})
+    window = _window()
+    handler = ScreenshotShortcutHandler(window)
+
+    assert handler.handle_key(_key_event(Qt.Key.Key_1)) is True
+    assert window.toolbar.selected == [("note", False)]
+
+
+def test_note_shortcut_is_ignored_while_editing_note_text(monkeypatch, isolated_manager):
+    """编辑备注文本时输入「1」必须进文本框，不能切工具。"""
+    monkeypatch.setattr("core.shortcut_manager.load_move_keys", lambda: {})
+    window = _window()
+    window._is_text_editing = lambda: True
+    handler = ScreenshotShortcutHandler(window)
+
+    assert handler.handle_key(_key_event(Qt.Key.Key_1)) is False
+    assert window.toolbar.selected == []
+
+
+def test_custom_note_binding(monkeypatch, isolated_manager):
+    isolated_manager.set_inapp_shortcut("inapp_tool_note", "shift+u")
+    monkeypatch.setattr("core.shortcut_manager.load_move_keys", lambda: {})
+    window = _window()
+    handler = ScreenshotShortcutHandler(window)
+
+    assert handler.handle_key(_key_event(Qt.Key.Key_U)) is False
+    assert handler.handle_key(_key_event(Qt.Key.Key_U, Qt.KeyboardModifier.ShiftModifier)) is True
+    assert window.toolbar.selected == [("note", False)]
+
+
+def test_settings_page_exposes_note_row(qapp, isolated_manager):
+    """设置页快捷键列表必须出现 Note 行，默认值 1。"""
+    from ui.settings_ui.page_hotkey import TOOL_KEYS, create_hotkey_page
+
+    row = next((item for item in TOOL_KEYS if item[0] == "inapp_tool_note"), None)
+    assert row is not None, "TOOL_KEYS 缺少 inapp_tool_note"
+    assert row[1] == "Note"
+    assert row[2] == "1"
+
+    dialog = SimpleNamespace(
+        config_manager=isolated_manager,
+        current_hotkey=isolated_manager.get_hotkey(),
+        _get_input_style=lambda: "",
+        tr=lambda text: text,
+    )
+    page = create_hotkey_page(dialog)
+    try:
+        assert "inapp_tool_note" in dialog._inapp_edits
+        assert dialog._inapp_groups["inapp_tool_note"] == "screenshot"
+    finally:
+        page.close()
 
 
 def test_tool_shortcut_requires_confirmed_selection(monkeypatch, isolated_manager):
@@ -205,7 +261,7 @@ def test_settings_page_exposes_tool_tab_shared_conflict_group_and_empty_value(
     )
     page = create_hotkey_page(dialog)
     try:
-        assert len(TOOL_KEYS) == 10
+        assert len(TOOL_KEYS) == 11
         assert dialog._inapp_groups["inapp_confirm"] == "screenshot"
         assert dialog._inapp_groups["inapp_tool_text"] == "screenshot"
         assert dialog._inapp_groups["inapp_copy_pin"] == "pin"
@@ -235,7 +291,7 @@ def test_settings_page_uses_chinese_annotation_tool_labels(
         labels = {label.text() for label in page.findChildren(QLabel)}
         assert {
             "选择 / 光标", "画笔", "荧光笔", "马赛克", "箭头",
-            "序号", "矩形", "椭圆", "文字", "橡皮擦",
+            "序号", "矩形", "椭圆", "文字", "备注", "橡皮擦",
         } <= labels
     finally:
         page.close()

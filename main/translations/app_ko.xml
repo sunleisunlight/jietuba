@@ -848,6 +848,10 @@ Replace it?</source>
         <source>LLM translation: better with context and idioms, but slower, billed per token, and may refuse some content</source>
         <translation>LLM 번역: 문맥과 관용 표현에 강하지만 느리고 토큰 단위로 과금되며 일부 내용은 거부될 수 있습니다</translation>
     </message>
+    <message>
+        <source>Note</source>
+        <translation>메모</translation>
+    </message>
 </context>
 
 <context>
@@ -956,6 +960,10 @@ Replace it?</source>
     <message>
         <source>Add text</source>
         <translation>텍스트 추가</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>메모 추가</translation>
     </message>
     <message>
         <source>Eraser tool</source>
@@ -2504,6 +2512,26 @@ Replace it?</source>
         <source>Strength: Maximum</source>
         <translation>강도: 최대</translation>
     </message>
+    <message>
+        <source>Note direction</source>
+        <translation>메모 방향</translation>
+    </message>
+    <message>
+        <source>Text on right</source>
+        <translation>오른쪽에 텍스트</translation>
+    </message>
+    <message>
+        <source>Text on left</source>
+        <translation>왼쪽에 텍스트</translation>
+    </message>
+    <message>
+        <source>Text above</source>
+        <translation>위에 텍스트</translation>
+    </message>
+    <message>
+        <source>Text below</source>
+        <translation>아래에 텍스트</translation>
+    </message>
 </context>
 
 <context>
@@ -3607,6 +3635,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Confirm</source>
         <translation>확인</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>메모</translation>
     </message>
 </context>
 <context>

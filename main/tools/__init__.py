@@ -10,6 +10,7 @@ from .rect import RectTool
 from .ellipse import EllipseTool
 from .arrow import ArrowTool
 from .text import TextTool
+from .note import NoteTool
 from .number import NumberTool
 from .highlighter import HighlighterTool
 from .cursor import CursorTool
@@ -27,6 +28,7 @@ __all__ = [
     'EllipseTool',
     'ArrowTool',
     'TextTool',
+    'NoteTool',
     'NumberTool',
     'HighlighterTool',
     'EraserTool',

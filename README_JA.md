@@ -218,7 +218,8 @@ canvas/
     ├── spotlight_item.py    # SpotlightItem / SpotlightCurtain — スポットライトの穴と共有の幕
     ├── selection_item.py    # SelectionItem — 選択境界表示
     ├── arrow_item.py        # ArrowItem — 矢印アイテム、9 種類の軸・先端・輪郭のジオメトリ
-    └── text_item.py         # TextItem — テキストアイテム、縁取り/影/背景と三状態の操作枠
+    ├── text_item.py         # TextItem — テキストアイテム、縁取り/影/背景と三状態の操作枠
+    └── note_item.py         # NoteItem — メモアイテム、目標枠＋矢印＋テキスト枠を 1 つの論理注釈に
 ```
 
 </details>
@@ -476,8 +477,10 @@ tools/
 ├── pen.py                   # PenTool — フリーハンド描画
 ├── rect.py                  # RectTool — 矩形（塗りつぶし/アウトライン）
 ├── ellipse.py               # EllipseTool — 楕円
+├── drag_preview.py          # DragRectPreview — ドラッグ中の破線フィードバック（テキスト/メモツール共用）
 ├── arrow.py                 # ArrowTool — 矢印
-├── text.py                  # TextTool — テキスト
+├── text.py                  # TextTool — テキスト（クリック＝ポイントテキスト、ドラッグ＝段落テキスト）
+├── note.py                  # NoteTool — 枠をドラッグして「目標枠＋矢印＋テキスト枠」をまとめて作成
 ├── number.py                # NumberTool — 自動インクリメント番号
 ├── highlighter.py           # HighlighterTool — 蛍光ペン
 ├── mosaic.py                # MosaicTool — モザイク
@@ -579,6 +582,7 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — ブラシ設定パネル
 ├── shape_settings_panel.py  # ShapeSettingsPanel — 形状設定パネル
 ├── text_settings_panel.py   # TextSettingsPanel — テキスト設定パネル
+├── note_settings_panel.py   # NoteSettingsPanel — メモ設定パネル（色/線幅/方向/フォントサイズ）
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — 矢印設定パネル
 ├── number_settings_panel.py # 番号ツール設定パネル
 ├── mosaic_settings_panel.py # モザイクツール設定パネル

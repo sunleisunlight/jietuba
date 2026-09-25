@@ -12,22 +12,38 @@ from PySide6.QtGui import QPen, QPainter, QPainterPath, QColor, QFont
 from PySide6.QtCore import Qt, QRectF, QPointF
 from core import log_debug, safe_event
 from core.logger import T
+from core.ui_scale import scaled_f
 
 from .drawing_items import DrawingItemMixin
 
 
 class TextItem(DrawingItemMixin, QGraphicsTextItem):
-    """文字图元 - 增强版"""
+    """文字图元 - 增强版
+
+    两种排版模式（Photoshop 式）：
+    - point text（点文本）：``setTextWidth(-1)``，宽度随内容自然增长，换行只由
+      手动回车决定。单击创建的文字走这一路。
+    - paragraph text（段落文本）：``setTextWidth(宽度)``，右侧固定在拖出来的宽度
+      上，文字排到右边界自动换行、内容变多时向下增高。拖拽创建的文字走这一路。
+
+    模式不用 ``textWidth()`` 反推：-1 和"宽度恰好是 -1"在 Qt 里是同一件事，而
+    "用户拖出来的段落宽度"是图元自身的性质，需要一个独立的字段记住它。
+    """
     # 文字与交互框之间的内边距（document margin）
     TEXT_PADDING = 3
     MIN_POINT_SIZE = 6.0
     MAX_POINT_SIZE = 400.0
     CLICK_MARGIN = 2  # 点击/悬停旷量（像素/每侧），命中区比交互矩形略宽
 
+    # 段落文本的最小排版宽度（100% UI 比例下的基准像素）。窄于这个宽度时每个
+    # 汉字都会被挤到自己一行，看着像竖排，所以拖到再窄也按这个值兜底。
+    BASE_MIN_PARAGRAPH_WIDTH = 48.0
+
     # 手柄 id：避开矩形(0-7)、圆角(10-13)、序号(200-202)
     HANDLE_ROTATE = 210
     HANDLE_DELETE = 211
     HANDLE_SCALE = 212
+    HANDLE_TEXT_WIDTH = 213
     SCALE_HANDLE_SIZE = 10
     NORMAL_ANNOTATION_Z_VALUE = 20
     ANNOTATION_Z_VALUE = 30
@@ -70,6 +86,8 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
     ):
         super().__init__(text)
         self._init_drawing_mixin()
+        # 排版宽度：None = 点文本（宽度随内容增长），有值 = 段落文本（固定宽度换行）
+        self._paragraph_width = None
         # 尺寸始终跟随内容：不设换行宽度，短内容才不会撑出多余的背景色。
         self.setTextWidth(-1)
         self.setPos(pos)
@@ -128,8 +146,61 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         font.setPointSizeF(clamped)
         self.setFont(font)
 
+    # ------------------------------------------------------------------
+    # 排版模式：点文本 / 段落文本
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def min_paragraph_width(cls) -> float:
+        """当前 UI 比例下段落文本的最小排版宽度。"""
+        return max(1.0, scaled_f(cls.BASE_MIN_PARAGRAPH_WIDTH))
+
+    def is_paragraph_text(self) -> bool:
+        """是否是段落文本（固定宽度、右边界自动换行）。"""
+        return self._paragraph_width is not None
+
+    def paragraph_width(self) -> float | None:
+        """段落宽度；点文本返回 None。"""
+        return self._paragraph_width
+
+    def set_paragraph_width(self, width):
+        """切换排版宽度。
+
+        - ``width`` 为 None → 回到点文本（``setTextWidth(-1)``，宽度随内容增长）
+        - ``width`` 有值 → 段落文本，宽度钳到最小值以上
+
+        改宽度会改变文档排版，包围盒、背景、命中区、四角手柄都跟着变，所以先
+        ``prepareGeometryChange()`` 再动宽度。Qt 的 ``setTextWidth`` 内部也会
+        触发一次失效，重复调用只是把小范围失效扩大成整图元失效，不影响正确性。
+        """
+        new_width = None if width is None else max(self.min_paragraph_width(), float(width))
+        if new_width == self._paragraph_width and (
+            (new_width is None and self.textWidth() < 0)
+            or (new_width is not None and abs(self.textWidth() - new_width) < 1e-9)
+        ):
+            return
+
+        self.prepareGeometryChange()
+        self._paragraph_width = new_width
+        self.setTextWidth(-1.0 if new_width is None else new_width)
+        self.update()
+        self._notify_layout_changed()
+
+    def clear_paragraph_width(self):
+        """退回到点文本模式。"""
+        self.set_paragraph_width(None)
+
+    def _notify_layout_changed(self):
+        """排版变化后的扩展点。
+
+        TextItem 自己不需要做别的事（Qt 会按新的文档尺寸重排），但 NoteItem 要
+        在文本长高/变宽之后重新摆放文本框和箭头，所以留一个钩子。
+        """
+        return
+
+
     def get_edit_handles(self):
-        """左上旋转、右上删除、右下缩放；左下角不放功能。
+        """左上旋转、右上删除、右下缩放；段落文本再在右边中点加一个宽度手柄。
 
         锚点逐点 mapToScene 映射 local 包围盒的角，而不是取 sceneBoundingRect()
         的角：后者是轴对齐外包围盒，旋转之后它的角会甩到文字外面去（实测 45°
@@ -141,7 +212,7 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         from canvas.handle_editor import EditHandle, HandleType, LayerEditor
 
         local = self.interaction_rect()
-        return [
+        handles = [
             EditHandle(
                 self.HANDLE_ROTATE,
                 HandleType.ROTATE,
@@ -166,6 +237,20 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
                 8,
             ),
         ]
+
+        # 段落文本才需要宽度手柄：点文本的宽度由内容决定，没有可调的排版宽度
+        if self.is_paragraph_text():
+            handles.append(
+                EditHandle(
+                    self.HANDLE_TEXT_WIDTH,
+                    HandleType.TEXT_WIDTH,
+                    QPointF(self.mapToScene(QPointF(local.right(), local.center().y()))),
+                    Qt.CursorShape.SizeHorCursor,
+                    self.SCALE_HANDLE_SIZE,
+                    8,
+                )
+            )
+        return handles
 
     # ------------------------------------------------------------------
     # 描边与阴影
@@ -218,6 +303,16 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
             self.shadow_color = QColor(color)
         self.update()
 
+    def document_rect(self) -> QRectF:
+        """文档排版矩形：文字真正占的地方，不含描边、阴影、点击旷量。
+
+        ``QGraphicsTextItem.boundingRect()`` 取的是文档当前排版出来的尺寸，段落
+        文本下它的宽度就是 ``textWidth()``，所以这个矩形天然跟着排版模式变。
+        显式写成基类调用，是因为子类（NoteItem）会重写 ``boundingRect()`` 去覆盖
+        更大的范围。
+        """
+        return QGraphicsTextItem.boundingRect(self)
+
     def content_rect(self) -> QRectF:
         """文字真正画到的地方：文档区域再往外放出描边和阴影占的地方。
 
@@ -228,7 +323,7 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         背景色块按这个矩形画，而不是 boundingRect()：后者为了摆得下四角按钮有最小
         宽度，窄字的背景跟着变宽就成了画面上看得见的差别，导出的图也跟着变。
         """
-        rect = super().boundingRect()
+        rect = self.document_rect()
         outline = self.outline_extent()
         far_side = outline + self.shadow_distance()
         return rect.adjusted(-outline, -outline, far_side, far_side)
@@ -251,8 +346,22 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         旷量只用来扩点击/悬停判定，边框、四角按钮仍然按 interaction_rect()
         摆，不跟着放大。
         """
+        return self.text_hit_rect()
+
+    def text_hit_rect(self) -> QRectF:
+        """只圈住"文字自己"的命中矩形，与目标框、箭头无关。
+
+        NoteItem 会把 interaction_rect()/hit_rect() 重写成"整条标注"的范围，
+        而它的 shape() 仍然需要一块只属于文字的命中区（否则框与文字之间的空白
+        也会被算成命中，压在下面的标注就点不着了）。所以这里显式走 TextItem
+        自己的算法，不经过那两个可能被重写的入口。
+        """
+        gap = self.FRAME_SIDE_GAP
+        rect = QRectF(TextItem.content_rect(self)).adjusted(-gap, 0, gap, 0)
+        if rect.width() < self.MIN_INTERACTION_WIDTH:
+            rect.setWidth(self.MIN_INTERACTION_WIDTH)
         margin = self.CLICK_MARGIN
-        return self.interaction_rect().adjusted(-margin, -margin, margin, margin)
+        return rect.adjusted(-margin, -margin, margin, margin)
 
     def boundingRect(self) -> QRectF:
         """包围盒按命中矩形算：必须完整覆盖 shape()，否则命中区会漏出包围盒外。"""
@@ -519,7 +628,7 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         if not self.boundingRect().contains(local_pos):
             return False
         margin = self.document().documentMargin()
-        inner = super().boundingRect().adjusted(margin, margin, -margin, -margin)
+        inner = self.document_rect().adjusted(margin, margin, -margin, -margin)
         if inner.width() <= 0 or inner.height() <= 0:
             return True
         return not inner.contains(local_pos)
@@ -569,3 +678,21 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
 
     def get_visual_opacity(self) -> float | None:
         return max(0.0, min(1.0, float(self.opacity())))
+
+    # ------------------------------------------------------------------
+    # 撤销快照扩展
+    # ------------------------------------------------------------------
+
+    def capture_extra_state(self) -> dict:
+        """除 LayerEditor 默认字段外，本图元还要记进状态快照的字段。
+
+        LayerEditor._copy_layer_state 会把这几个键并进同一份 dict，EditItemCommand
+        回放时通过 restore_extra_state 还原——一份命令仍然只描述"一个图元"，不需要
+        为段落宽度单开一种命令。
+        """
+        return {"paragraph_width": self._paragraph_width}
+
+    def restore_extra_state(self, state: dict):
+        """按快照还原本图元的扩展字段（state 可能是别的图元的，只取自己认识的键）。"""
+        if "paragraph_width" in state:
+            self.set_paragraph_width(state["paragraph_width"])

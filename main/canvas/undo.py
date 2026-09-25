@@ -581,6 +581,15 @@ class EditItemCommand(QUndoCommand):
             except Exception as e:
                 log_exception(e, T("恢复corner_radius"))
 
+        # 图元自定义字段（段落文本宽度、备注方向 / 目标框等）。这些字段由图元自己
+        # 从同一份 state 里挑它认识的键，所以不需要为它们另开命令类型。
+        restore_extra = getattr(self.item, "restore_extra_state", None)
+        if callable(restore_extra):
+            try:
+                restore_extra(state)
+            except Exception as e:
+                log_exception(e, T("恢复图元扩展状态"))
+
         # 触发重绘
         if hasattr(self.item, "update"):
             self.item.update()

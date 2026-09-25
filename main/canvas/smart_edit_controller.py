@@ -16,7 +16,8 @@ from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene
 from shiboken6 import isValid as _cpp_object_is_alive
 
 from canvas.items import (
-    StrokeItem, RectItem, EllipseItem, ArrowItem, TextItem, NumberItem, MosaicItem, SpotlightItem,
+    StrokeItem, RectItem, EllipseItem, ArrowItem, TextItem, NoteItem, NumberItem, MosaicItem, SpotlightItem,
+    is_composite_child,
 )
 from canvas.handle_editor import HandleType, LayerEditor
 from canvas.undo import EditItemCommand
@@ -48,6 +49,7 @@ class ItemType(Enum):
     SHAPE = "shape"        # 形状（矩形、椭圆）
     ARROW = "arrow"        # 箭头
     TEXT = "text"          # 文字
+    NOTE = "note"          # 备注（目标框 + 箭头 + 文本框组成的复合标注）
     NUMBER = "number"      # 序号
     OTHER = "other"        # 其他
 
@@ -81,6 +83,31 @@ class SmartEditController(QObject):
     # 必须在 select_item() 之前同步处理完，否则工具切换清空选择会把
     # 刚选中的图元又清掉。
     tool_switch_requested = Signal(str)  # 参数：工具 ID
+
+    # 能进入选择/悬停判定的图元类型。备注的框和箭头虽然也是 RectItem/ArrowItem，
+    # 但它们是 NoteItem 的子图元，由 _pick_drawable_items 拦在外面。
+    DRAWABLE_TYPES = (
+        StrokeItem, RectItem, EllipseItem, ArrowItem,
+        TextItem, NoteItem, NumberItem, MosaicItem,
+    )
+
+    @staticmethod
+    def _pick_drawable_items(items):
+        """从 scene.items(pos) 里挑出可编辑的图元。
+
+        ``scene.items()`` 连子图元一起返回。复合标注（备注）的框和箭头正是子图元：
+        它们只是父图元的一部分、鼠标事件也全被关掉了，留着会让悬停命中一个"半条
+        备注"，选中对象和四角手柄跟着错位。
+
+        判断走 is_composite_child 而不是 ``item.parentItem() is None``：后者对
+        "只被场景持有"的顶层图元调用一次，就会让绑定层放弃它的所有权，等
+        ``scene.items()`` 的临时列表回收，图元就被销毁（幕布消失事件）。
+        """
+        return [
+            item for item in items
+            if isinstance(item, SmartEditController.DRAWABLE_TYPES)
+            and not is_composite_child(item)
+        ]
 
     def __init__(self, scene: QGraphicsScene):
         """
@@ -181,6 +208,10 @@ class SmartEditController(QObject):
             return ItemType.SHAPE
         elif isinstance(item, ArrowItem):
             return ItemType.ARROW
+        elif isinstance(item, NoteItem):
+            # 必须排在 TextItem 之前：NoteItem 继承 TextItem，晚一步就永远轮不到
+            # 这个分支，备注会被当成普通文字，文字工具也就能把它选走了
+            return ItemType.NOTE
         elif isinstance(item, TextItem):
             return ItemType.TEXT
         elif isinstance(item, NumberItem):
@@ -207,6 +238,10 @@ class SmartEditController(QObject):
             return "ellipse"
         if isinstance(item, ArrowItem):
             return "arrow"
+        if isinstance(item, NoteItem):
+            # 同样必须排在 TextItem 之前，否则备注会被报成 "text"：
+            # Ctrl 跨工具选它时会切到文字工具，面板也会弹出文字面板
+            return "note"
         if isinstance(item, TextItem):
             return "text"
         if isinstance(item, NumberItem):
@@ -278,6 +313,7 @@ class SmartEditController(QObject):
             "ellipse": ItemType.SHAPE,
             "arrow": ItemType.ARROW,
             "text": ItemType.TEXT,
+            "note": ItemType.NOTE,
             "number": ItemType.NUMBER,
         }
         
@@ -313,6 +349,7 @@ class SmartEditController(QObject):
             "ellipse": ItemType.SHAPE,
             "arrow": ItemType.ARROW,
             "text": ItemType.TEXT,
+            "note": ItemType.NOTE,
             "number": ItemType.NUMBER,
         }
 
@@ -343,10 +380,7 @@ class SmartEditController(QObject):
         if self.scene is None:
             return False
         items = self.scene.items(scene_pos)
-        drawable_items = [
-            item for item in items
-            if isinstance(item, (StrokeItem, RectItem, EllipseItem, ArrowItem, TextItem, NumberItem, MosaicItem))
-        ]
+        drawable_items = self._pick_drawable_items(items)
 
         if drawable_items:
             item = drawable_items[0]
@@ -393,10 +427,7 @@ class SmartEditController(QObject):
         
         # 获取点击的图元
         items = self.scene.items(scene_pos)
-        drawable_items = [
-            item for item in items
-            if isinstance(item, (StrokeItem, RectItem, EllipseItem, ArrowItem, TextItem, NumberItem, MosaicItem))
-        ]
+        drawable_items = self._pick_drawable_items(items)
         
         if drawable_items:
             # Ctrl 临时选择会在首个可编辑图元处命中；普通点击则继续向下
@@ -698,7 +729,7 @@ class SmartEditController(QObject):
         # 显示的数值会停在拖拽前的旧值。
         from PySide6.QtWidgets import QGraphicsTextItem
         if isinstance(self.selected_item, QGraphicsTextItem):
-            self._sync_text_panel_state(self.selected_item)
+            self._sync_text_like_panel_state(self.selected_item)
 
         return True
     
@@ -806,7 +837,7 @@ class SmartEditController(QObject):
                 if isinstance(self.selected_item, ArrowItem):
                     self._sync_arrow_panel_state(self.selected_item)
                 elif isinstance(self.selected_item, TextItem):
-                    self._sync_text_panel_state(self.selected_item)
+                    self._sync_text_like_panel_state(self.selected_item)
 
                 self._repaint_handles()
     
@@ -839,6 +870,19 @@ class SmartEditController(QObject):
         if panel is not None:
             panel.set_state_from_item(text_item)
 
+    def _sync_note_panel_state(self, note_item):
+        """同步备注设置面板状态（方向、字号、线宽等），理由同上。"""
+        panel = self._panel('note_panel')
+        if panel is not None:
+            panel.set_state_from_item(note_item)
+
+    def _sync_text_like_panel_state(self, item):
+        """文字和备注都继承 QGraphicsTextItem，但各有各的面板，不能混着填。"""
+        if isinstance(item, NoteItem):
+            self._sync_note_panel_state(item)
+        else:
+            self._sync_text_panel_state(item)
+
     # ========================================================================
     # 文字属性更新槽函数
     # ========================================================================
@@ -852,10 +896,20 @@ class SmartEditController(QObject):
                 self.layer_editor.start_edit(self.selected_item)
 
     def on_text_color_changed(self, color):
-        """更新选中文字的颜色"""
-        if self.selected_item and isinstance(self.selected_item, TextItem):
-            self.selected_item.setDefaultTextColor(color)
-            self.selected_item.update()
+        """更新选中文字的颜色。
+
+        备注是"一条备注一个颜色"：正文、目标框描边、箭头一起变，所以走
+        NoteItem.set_note_color；只改文字色的话，框和箭头会留在旧颜色上。
+        """
+        item = self.selected_item
+        if item is None or not isinstance(item, TextItem):
+            return
+        set_note_color = getattr(item, "set_note_color", None)
+        if callable(set_note_color):
+            set_note_color(color)
+        else:
+            item.setDefaultTextColor(color)
+        item.update()
 
     def on_text_outline_changed(self, enabled, color, width):
         """更新选中文字的描边。

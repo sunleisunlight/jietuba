@@ -63,6 +63,7 @@ class HandleType(Enum):
     NUMBER_DELETE = "number_delete"  # 删除序号
     ITEM_DELETE = "item_delete"      # 通用删除按钮（文字等）
     TEXT_SCALE = "text_scale"        # 文字右下角字号缩放
+    TEXT_WIDTH = "text_width"        # 段落文本右边中点的排版宽度调整
 
 
 @dataclass
@@ -177,6 +178,10 @@ class LayerEditor:
         self._arrow_base_control_modified: bool = False  # 控制点是否被修改
         self._base_corner_radius: Optional[float] = None  # 圆角基准状态
         self._base_font_point_size: Optional[float] = None
+        self._base_paragraph_width: Optional[float] = None
+        # 图元自定义的状态（如 NoteItem 的目标框 / 方向）：只当图元提供了
+        # capture_extra_state / restore_extra_state 两个方法时才有值
+        self._base_extra_state: Optional[Dict[str, Any]] = None
         
         # 初始化旋转光标
         self._ensure_rotate_cursor()
@@ -281,6 +286,8 @@ class LayerEditor:
         self._arrow_base_control_modified = False
         self._base_corner_radius = None
         self._base_font_point_size = None
+        self._base_paragraph_width = None
+        self._base_extra_state = None
 
     def is_editing(self) -> bool:
         return self.active_layer is not None
@@ -742,6 +749,15 @@ class LayerEditor:
         if callable(point_size):
             self._base_font_point_size = float(point_size())
 
+        self._base_paragraph_width = None
+        paragraph_width = getattr(self.active_layer, "paragraph_width", None)
+        if callable(paragraph_width):
+            value = paragraph_width()
+            if isinstance(value, (int, float)):
+                self._base_paragraph_width = float(value)
+
+        self._base_extra_state = self._capture_extra_state(self.active_layer)
+
         self._base_rotation = None
         self._rotation_origin_local = None
         if hasattr(self.active_layer, "rotation") and callable(self.active_layer.rotation):
@@ -811,6 +827,8 @@ class LayerEditor:
         self._rotation_origin_local = None
         self._base_corner_radius = None
         self._base_font_point_size = None
+        self._base_paragraph_width = None
+        self._base_extra_state = None
 
         if (
             undo_stack is not None
@@ -857,6 +875,11 @@ class LayerEditor:
         # ---- 文字字号缩放 ----
         if handle.handle_type == HandleType.TEXT_SCALE:
             self._apply_text_scale_drag(layer, delta_scene)
+            return
+
+        # ---- 段落文本宽度 ----
+        if handle.handle_type == HandleType.TEXT_WIDTH:
+            self._apply_text_width_drag(layer, delta_scene)
             return
 
         # ---- 圆角手柄 ----
@@ -948,6 +971,21 @@ class LayerEditor:
         if factor <= 0:
             factor = 0.01
         layer.set_font_point_size(base_size * factor)
+
+    def _apply_text_width_drag(self, layer: Any, delta_scene: QPointF):
+        """右边中点手柄：只改段落排版宽度，不动字号、不动整体缩放。
+
+        基准宽度取这次拖拽开始时的值（``drag_to`` 每次都会先回到基准状态），
+        所以拖多远、来回拖多少次都只由"指针相对起点的水平位移"决定，不会累积误差。
+        ``setTextWidth`` 保持左边不动、向右边伸缩，左侧锚点天然稳定。
+        """
+        base_width = self._base_paragraph_width
+        if base_width is None:
+            return
+        setter = getattr(layer, "set_paragraph_width", None)
+        if not callable(setter):
+            return
+        setter(base_width + float(delta_scene.x()))
 
     def _apply_corner_radius_drag(self, layer: Any, handle: EditHandle, delta_scene: QPointF):
         """拖拽圆角手柄，改变矩形圆角半径。
@@ -1522,7 +1560,26 @@ class LayerEditor:
             except Exception as e:
                 log_exception(e, T("捕获number"))
 
+        # 图元自定义字段（段落宽度、备注方向 / 目标框等）并进同一份快照，
+        # 这样一次拖拽仍然只对应一条 EditItemCommand
+        extra = self._capture_extra_state(layer)
+        if extra:
+            state.update(extra)
+
         return state
+
+    @staticmethod
+    def _capture_extra_state(layer: Any) -> Optional[Dict[str, Any]]:
+        """图元自定义状态快照；图元没实现 capture_extra_state 就返回 None。"""
+        capture = getattr(layer, "capture_extra_state", None)
+        if not callable(capture):
+            return None
+        try:
+            snapshot = capture()
+        except Exception as e:
+            log_exception(e, T("捕获图元扩展状态"))
+            return None
+        return dict(snapshot) if isinstance(snapshot, dict) else None
 
     def _restore_base_state(self, layer: Any):
         """每次 drag_to 前恢复到起始状态，避免累计误差"""
@@ -1551,6 +1608,14 @@ class LayerEditor:
             and hasattr(layer, "set_font_point_size")
         ):
             layer.set_font_point_size(self._base_font_point_size)
+
+        if self._base_extra_state is not None:
+            restore = getattr(layer, "restore_extra_state", None)
+            if callable(restore):
+                try:
+                    restore(dict(self._base_extra_state))
+                except Exception as e:
+                    log_exception(e, T("恢复图元扩展状态"))
 
         if (
             self._is_arrow_item(layer)

@@ -17,8 +17,8 @@ MODES = (SHOW, MORE, HIDE)
 # 可配置按钮的全集，也是默认顺序
 DEFAULT_ORDER = (
     "long_screenshot", "save", "screenshot_translate", "text_recognize", "scan_code", "gif",
-    "pen", "highlighter", "mosaic", "spotlight", "arrow", "number", "rect", "ellipse", "text", "eraser",
-    "undo", "redo",
+    "pen", "highlighter", "mosaic", "spotlight", "arrow", "number", "rect", "ellipse", "text", "note",
+    "eraser", "undo", "redo",
     "cancel", "pin", "confirm",
 )
 

@@ -275,6 +275,11 @@ class Toolbar(QWidget):
     text_outline_changed = Signal(bool, QColor, float)  # 宽度是 TextItem.OUTLINE_WIDTH_LEVELS 之一
     text_shadow_changed = Signal(bool, QColor)          # 颜色的 alpha 即阴影不透明度
     text_background_changed = Signal(bool, QColor, int)
+
+    # 备注工具专用信号。载荷是面板上的全部备注样式（颜色/线宽/透明度/字号/方向），
+    # 一次操作一条：备注的颜色、方向、字号是同一个对象上的属性，拆成四个信号发出去
+    # 就等于让窗口推四条撤销命令，而用户只按了一下。
+    note_style_changed = Signal(object)
     
     # 箭头工具专用信号
     arrow_style_changed = Signal(str)  # 箭头样式改变(single/double/bar)
@@ -288,7 +293,8 @@ class Toolbar(QWidget):
     
     # 有二级面板的工具。pen/highlighter 与 rect/ellipse 各自共用一个面板，
     # 但设置是分工具存的，所以这里按工具而不是按面板列。
-    PANEL_TOOLS = ("pen", "highlighter", "rect", "ellipse", "arrow", "number", "text", "mosaic")
+    PANEL_TOOLS = ("pen", "highlighter", "rect", "ellipse", "arrow", "number", "text",
+                   "note", "mosaic")
 
     def __init__(self, parent=None):
         super().__init__(parent)  # 使用父窗口（如果有）
@@ -365,6 +371,7 @@ class Toolbar(QWidget):
         self.rect_btn = self._add_tool_button("rect", "svg/方框.svg", "Draw rectangle", tool)
         self.ellipse_btn = self._add_tool_button("ellipse", "svg/圆框.svg", "Draw ellipse", tool)
         self.text_btn = self._add_tool_button("text", "svg/文字.svg", "Add text", tool)
+        self.note_btn = self._add_tool_button("note", "svg/备注.svg", "Add note", tool)
         self.eraser_btn = self._add_tool_button(
             "eraser", "svg/橡皮.svg", "Eraser tool",
             (self.BASE_BTN_WIDTH, self.BASE_ICON_ERASER))
@@ -404,6 +411,7 @@ class Toolbar(QWidget):
             "rect": self.rect_btn,
             "ellipse": self.ellipse_btn,
             "text": self.text_btn,
+            "note": self.note_btn,
             "eraser": self.eraser_btn,
         }
 
@@ -505,7 +513,7 @@ class Toolbar(QWidget):
         self._arrange([key for key, mode in layout if mode == SHOW] + ["more"])
 
     PANEL_ATTRS = ('paint_panel', 'shape_panel', 'arrow_panel',
-                   'number_panel', 'text_panel', 'mosaic_panel')
+                   'number_panel', 'text_panel', 'note_panel', 'mosaic_panel')
 
     def _iter_panels(self):
         """已建出来的二级设置面板"""
@@ -604,6 +612,7 @@ class Toolbar(QWidget):
         from .number_settings_panel import NumberSettingsPanel
         from .text_settings_panel import TextSettingsPanel
         from .mosaic_settings_panel import MosaicSettingsPanel
+        from .note_settings_panel import NoteSettingsPanel
         
         parent = self.parent()
         
@@ -683,7 +692,15 @@ class Toolbar(QWidget):
         self.text_panel.shadow_changed.connect(self._on_text_shadow_changed)
         self.text_panel.hide()
 
-        # === 6. 马赛克设置面板 (mosaic) ===
+        # === 6. 备注设置面板 (note) ===
+        self.note_panel = NoteSettingsPanel(parent)
+        self._make_floating(self.note_panel)
+
+        # 备注面板一次只发一条信号（见 Toolbar.note_style_changed 的说明）
+        self.note_panel.note_style_changed.connect(self._on_note_style_changed)
+        self.note_panel.hide()
+
+        # === 7. 马赛克设置面板 (mosaic) ===
         self.mosaic_panel = MosaicSettingsPanel(parent)
         self._make_floating(self.mosaic_panel)
 
@@ -734,6 +751,9 @@ class Toolbar(QWidget):
             if tool_id == "text":
                 # 文字面板自己有一份完整的读配置逻辑，别在这里再抄一遍
                 self.text_panel.load_from_config()
+            elif tool_id == "note":
+                # 备注面板同理：颜色/线宽/字号/方向的读法在一处
+                self.note_panel.load_from_config()
             elif tool_id in ("pen", "highlighter"):
                 self.paint_panel.line_style = settings.get("line_style")
                 if tool_id == "highlighter":
@@ -789,7 +809,7 @@ class Toolbar(QWidget):
             except RuntimeError:
                 continue
         # 二级面板的文本在构造时一次性设置，这里补一次刷新
-        for attr in ("mosaic_panel", "text_panel"):
+        for attr in ("mosaic_panel", "text_panel", "note_panel"):
             panel = getattr(self, attr, None)
             if panel is not None and hasattr(panel, "retranslate"):
                 panel.retranslate()
@@ -870,6 +890,7 @@ class Toolbar(QWidget):
         if hasattr(self, 'arrow_panel'): self.arrow_panel.hide()
         if hasattr(self, 'number_panel'): self.number_panel.hide()
         if hasattr(self, 'text_panel'): self.text_panel.hide()
+        if hasattr(self, 'note_panel'): self.note_panel.hide()
         if hasattr(self, 'mosaic_panel'): self.mosaic_panel.hide()
 
     def _show_panel_for_tool(self, tool_id: str):
@@ -901,6 +922,7 @@ class Toolbar(QWidget):
             "arrow": self.arrow_panel,
             "number": self.number_panel,
             "text": self.text_panel,
+            "note": self.note_panel,
             "mosaic": self.mosaic_panel,
         }
         
@@ -1011,6 +1033,17 @@ class Toolbar(QWidget):
         from .text_settings_panel import TextSettingsPanel
         TextSettingsPanel.save_shadow_to_config(enabled, color)
 
+    def _on_note_style_changed(self, state):
+        """备注样式改变：落盘（临时编辑态除外）+ 转发给宿主应用到选中的备注。
+
+        临时编辑态（选中的是一个已有备注）不写设置：这时面板调的是"这一条备注"，
+        不是"以后新建的备注"，改了就把整条时间线的默认值也带跑了。
+        """
+        if not self.temporary_edit_active:
+            from .note_settings_panel import NoteSettingsPanel
+            NoteSettingsPanel.save_to_config(state)
+        self.note_style_changed.emit(dict(state))
+
     def _on_arrow_style_changed(self, style: str):
         """箭头样式改变"""
         if not self.temporary_edit_active:
@@ -1100,6 +1133,8 @@ class Toolbar(QWidget):
             self.arrow_panel.set_color(color)
         if hasattr(self, 'number_panel'):
             self.number_panel.set_color(color)
+        if hasattr(self, 'note_panel'):
+            self.note_panel.set_color(color)
     
     def set_stroke_width(self, width: int):
         """设置笔触宽度（更新UI显示）"""
@@ -1113,6 +1148,8 @@ class Toolbar(QWidget):
             self.arrow_panel.set_size(width)
         if hasattr(self, 'number_panel'):
             self.number_panel.set_size(width)
+        if hasattr(self, 'note_panel'):
+            self.note_panel.set_size(width)
         if hasattr(self, 'mosaic_panel'):
             self.mosaic_panel.set_size(width)
 
@@ -1127,6 +1164,8 @@ class Toolbar(QWidget):
             self.arrow_panel.set_opacity(opacity_255)
         if hasattr(self, 'number_panel'):
             self.number_panel.set_opacity(opacity_255)
+        if hasattr(self, 'note_panel'):
+            self.note_panel.set_opacity(opacity_255)
 
     def _on_number_style_changed(self, style: str):
         """转发给窗口统一处理：落到选中的序号 + 存设置 + 刷新光标。"""
@@ -1304,6 +1343,8 @@ class Toolbar(QWidget):
             self._sync_panel_position(self.number_panel)
         if hasattr(self, 'text_panel') and self.text_panel.isVisible():
             self._sync_panel_position(self.text_panel)
+        if hasattr(self, 'note_panel') and self.note_panel.isVisible():
+            self._sync_panel_position(self.note_panel)
         if hasattr(self, 'mosaic_panel') and self.mosaic_panel.isVisible():
             self._sync_panel_position(self.mosaic_panel)
         popup = getattr(self, '_more_popup', None)

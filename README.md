@@ -219,7 +219,8 @@ canvas/
     ├── spotlight_item.py    # SpotlightItem / SpotlightCurtain — spotlight holes and their shared curtain
     ├── selection_item.py    # SelectionItem — selection boundary display
     ├── arrow_item.py        # ArrowItem — arrow item, geometry for nine shaft and head styles
-    └── text_item.py         # TextItem — text item, outline/shadow/background and tri-state interaction frame
+    ├── text_item.py         # TextItem — text item, outline/shadow/background and tri-state interaction frame
+    └── note_item.py         # NoteItem — note annotation (target box + arrow + text box) as one logical item
 ```
 
 </details>
@@ -477,8 +478,10 @@ tools/
 ├── pen.py                   # PenTool — freehand drawing
 ├── rect.py                  # RectTool — rectangle (filled/outlined)
 ├── ellipse.py               # EllipseTool — ellipse
+├── drag_preview.py          # DragRectPreview — dashed rubber-band feedback shared by the text and note tools
 ├── arrow.py                 # ArrowTool — arrow
-├── text.py                  # TextTool — text
+├── text.py                  # TextTool — text (click for point text, drag for paragraph text)
+├── note.py                  # NoteTool — drag a box to annotate it with an arrow and a labelled text box
 ├── number.py                # NumberTool — auto-incrementing numbers
 ├── highlighter.py           # HighlighterTool — highlighter
 ├── mosaic.py                # MosaicTool — pixel mosaic
@@ -580,6 +583,7 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — brush settings panel
 ├── shape_settings_panel.py  # ShapeSettingsPanel — shape settings panel
 ├── text_settings_panel.py   # TextSettingsPanel — text settings panel
+├── note_settings_panel.py   # NoteSettingsPanel — note settings panel (color, line width, direction, font size)
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — arrow settings panel
 ├── number_settings_panel.py # number tool settings panel
 ├── mosaic_settings_panel.py # mosaic tool settings panel

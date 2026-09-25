@@ -448,7 +448,9 @@ def test_new_text_uses_the_saved_effects(qapp, restore_text_settings):
     view = CanvasView(scene)
     try:
         scene.activate_tool("text")
+        # 文字工具现在是"按下记起点、松开才定性"的状态机：单击路径得走完 release
         scene.tool_controller.on_press(QPointF(20, 20), Qt.MouseButton.LeftButton)
+        scene.tool_controller.on_release(QPointF(20, 20))
         item = next(i for i in scene.items() if isinstance(i, TextItem))
 
         assert item.outline_state() == (True, QColor("#00FF00"), EXTRA_THICK)

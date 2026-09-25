@@ -855,6 +855,10 @@ Replace it?</source>
         <source>LLM translation: better with context and idioms, but slower, billed per token, and may refuse some content</source>
         <translation>大規模言語モデル翻訳：文脈や慣用表現に強い一方、速度が遅く、トークン単位の課金で、内容によっては拒否されることがあります</translation>
     </message>
+    <message>
+        <source>Note</source>
+        <translation>メモ</translation>
+    </message>
 </context>
 
 <context>
@@ -969,6 +973,10 @@ Replace it?</source>
     <message>
         <source>Add text</source>
         <translation>テキストを追加</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>メモを追加</translation>
     </message>
     <message>
         <source>Eraser tool</source>
@@ -2549,6 +2557,26 @@ Replace it?</source>
         <source>Strength: Maximum</source>
         <translation>強度：最強</translation>
     </message>
+    <message>
+        <source>Note direction</source>
+        <translation>メモの方向</translation>
+    </message>
+    <message>
+        <source>Text on right</source>
+        <translation>文字を右に</translation>
+    </message>
+    <message>
+        <source>Text on left</source>
+        <translation>文字を左に</translation>
+    </message>
+    <message>
+        <source>Text above</source>
+        <translation>文字を上に</translation>
+    </message>
+    <message>
+        <source>Text below</source>
+        <translation>文字を下に</translation>
+    </message>
 </context>
 
 <context>
@@ -3648,6 +3676,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Confirm</source>
         <translation>確定</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>メモ</translation>
     </message>
 </context>
 <context>

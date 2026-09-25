@@ -221,7 +221,8 @@ canvas/
     ├── spotlight_item.py    # SpotlightItem / SpotlightCurtain — 聚光灯的孔与共用幕布
     ├── selection_item.py    # SelectionItem — 选中项的边界显示框
     ├── arrow_item.py        # ArrowItem — 箭头图元，九种样式的箭杆/端头/描边几何
-    └── text_item.py         # TextItem — 文字图元，描边/阴影/背景色块与三态交互框
+    ├── text_item.py         # TextItem — 文字图元，描边/阴影/背景色块与三态交互框
+    └── note_item.py         # NoteItem — 备注图元，目标框 + 箭头 + 文本框合成一个逻辑标注
 ```
 
 </details>
@@ -542,8 +543,10 @@ tools/
 ├── pen.py                   # PenTool — 自由绘制笔工具
 ├── rect.py                  # RectTool — 矩形工具（实心/空心）
 ├── ellipse.py               # EllipseTool — 椭圆工具
+├── drag_preview.py          # DragRectPreview — 拖框反馈（虚线框），文字/备注工具共用
 ├── arrow.py                 # ArrowTool — 箭头工具
-├── text.py                  # TextTool — 文字工具
+├── text.py                  # TextTool — 文字工具（单击=点文本，拖拽=段落文本）
+├── note.py                  # NoteTool — 备注工具：拖框圈住目标，自动生成「目标框 + 箭头 + 文本框」
 ├── number.py                # NumberTool — 数字编号工具（自动递增）
 ├── highlighter.py           # HighlighterTool — 荧光笔工具
 ├── mosaic.py                # MosaicTool — 马赛克工具
@@ -656,6 +659,7 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — 画笔设置面板
 ├── shape_settings_panel.py  # ShapeSettingsPanel — 形状设置面板
 ├── text_settings_panel.py   # TextSettingsPanel — 文字设置面板
+├── note_settings_panel.py   # NoteSettingsPanel — 备注设置面板（颜色/线宽/方向/字号）
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — 箭头设置面板
 ├── number_settings_panel.py # 数字工具设置面板
 ├── mosaic_settings_panel.py # 马赛克工具设置面板

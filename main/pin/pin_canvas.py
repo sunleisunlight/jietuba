@@ -146,7 +146,7 @@ class PinCanvas(QObject):
             # 从canvas.items模块导入具体的item类
             from canvas.items import (
                 StrokeItem, RectItem, EllipseItem, ArrowItem, 
-                TextItem, NumberItem
+                TextItem, NumberItem, NoteItem
             )
             from canvas.items import MosaicItem, SpotlightItem
 
@@ -164,6 +164,10 @@ class PinCanvas(QObject):
                 return self._clone_ellipse_item(item)
             elif isinstance(item, ArrowItem):
                 return self._clone_arrow_item(item)
+            elif isinstance(item, NoteItem):
+                # 必须排在 TextItem 前面：备注继承文字，落进下面会被克隆成一段
+                # 光秃秃的文字，目标框和箭头就丢了
+                return self._clone_note_item(item)
             elif isinstance(item, TextItem):
                 return self._clone_text_item(item)
             elif isinstance(item, NumberItem):
@@ -398,6 +402,12 @@ class PinCanvas(QObject):
         # 保留截图场景中的文字排版宽度，避免钉图后重新展开为单行。
         if item.textWidth() >= 0:
             cloned.setTextWidth(item.textWidth())
+
+        # 光恢复排版宽度还不够：is_paragraph_text() / 宽度手柄 / 后续换行判定看的
+        # 是 paragraph_width 这个模式字段。只 setTextWidth 的话，钉图里的段落文字
+        # 会被当成点文本——宽度手柄消失，也没法再调栏宽。
+        if item.is_paragraph_text():
+            cloned.set_paragraph_width(item.paragraph_width())
         
         # 复制增强属性
         cloned.set_outline(*item.outline_state())
@@ -409,6 +419,23 @@ class PinCanvas(QObject):
         
         return cloned
     
+    def _clone_note_item(self, item):
+        """克隆备注项目。
+
+        走 NoteItem.clone()：它复制的是**本地几何**（目标框、箭头端点都按原样），
+        克隆完再 setPos 到源图元的位置。钉图的坐标平移由 _apply_static_item_state
+        统一对着 pos() 做，而目标框和箭头都存的是相对 pos 的本地坐标，所以整条
+        备注会一起平移，不会退化成"文字走了、框留在原地"。
+
+        这里不碰 _clone_text_item 里"保留 textWidth"的那段逻辑——备注的排版宽度
+        由 clone() 自己按 export_state 恢复，两边分工不重叠。
+        """
+        note = item.clone()
+        # 克隆后的内容属于新场景，不能带着"临时文字"的标记（那个标记只在截图
+        # 场景里由 TextTool 用，失焦时决定要不要补 AddItemCommand）
+        note._provisional = False
+        return note
+
     def _clone_number_item(self, item):
         """克隆序号项目"""
         from canvas.items import NumberItem

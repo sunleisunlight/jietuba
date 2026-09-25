@@ -1,0 +1,17 @@
+# 构建产物
+build/
+dist/
+*.spec
+
+# 会话数据
+.workbuddy/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 测试临时产物
+main/out.gif
+main/scaled.gif
+main/odd.gif
