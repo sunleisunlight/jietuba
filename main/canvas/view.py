@@ -14,6 +14,7 @@ from canvas.items import (
     EllipseItem,
     ArrowItem,
     TextItem,
+    NoteItem,
     NumberItem,
 )
 from core import log_debug, log_info, log_warning, log_error, safe_event
@@ -157,13 +158,16 @@ class CanvasView(QGraphicsView):
 
         # 两种由 View 全程接管的手势，各自管着自己那一摊状态（见 canvas/gestures.py）
         from canvas.gestures import (
-            DrawingStroke, ManualItemDrag, PendingTextEdit, SelectionDrag, TextEdgeDrag,
+            DrawingStroke, ManualItemDrag, NotePartDrag, PendingTextEdit,
+            SelectionDrag, TextEdgeDrag,
         )
         self.drawing = DrawingStroke(self)
         self.selection_drag = SelectionDrag(self)
         self.text_drag = TextEdgeDrag(self)
         self.item_drag = ManualItemDrag(self)
         self.pending_text_edit = PendingTextEdit(self)
+        # 备注内部拖动：拖目标框只动框、拖文字只动文字（见 NoteItem.move_*_by_scene）
+        self.note_drag = NotePartDrag(self)
 
         # 控制点画在 viewport 之上的独立浮层里，不进 QGraphicsScene 的渲染管线。
         # 这样内容层的脏区只需要描述内容，不必再为"手柄能凸出多远"外扩。
@@ -218,6 +222,7 @@ class CanvasView(QGraphicsView):
         if self._is_closed:
             return
         self.item_drag.finish(commit=True)
+        self.note_drag.finish(commit=True)
         self._is_closed = True
 
         from core.qt_utils import safe_disconnect
@@ -620,6 +625,7 @@ class CanvasView(QGraphicsView):
     def _on_editing_cleanup(self):
         """响应 editing_cleanup_requested 信号，清除编辑状态"""
         self.item_drag.finish(commit=True)
+        self.note_drag.finish(commit=True)
         if self.smart_edit_controller.selected_item:
             log_debug(T("取消智能编辑选择"), "CanvasView")
             self.smart_edit_controller.clear_selection(suppress_block=True)
@@ -628,6 +634,7 @@ class CanvasView(QGraphicsView):
 
     def _on_tool_changed_for_edit(self, tool_id: str):
        self.item_drag.finish(commit=True)
+       self.note_drag.finish(commit=True)
        self.smart_edit_controller.set_tool(tool_id)
 
        # 工具切换时立即更新光标
@@ -744,7 +751,11 @@ class CanvasView(QGraphicsView):
         is_cross_tool = bool(controller and controller.is_cross_tool_selection())
         toolbar.set_temporary_edit_active(is_cross_tool)
 
-        is_text_item = isinstance(item, QGraphicsTextItem)
+        # 文字不参与线宽同步（它的"大小"是字号，另有入口）；备注是例外——它明确有
+        # 目标框描边和箭头线宽，`get_stroke_width()` 给的就是那个值，必须照读。
+        # NoteItem 继承 TextItem，所以判断要显式把它排除掉，否则备注的线宽永远同步
+        # 不到面板上。
+        is_text_item = isinstance(item, QGraphicsTextItem) and not isinstance(item, NoteItem)
         width_value = None if is_text_item else self._extract_selection_width(item)
         opacity_value = self._extract_selection_opacity(item)
 
@@ -808,9 +819,13 @@ class CanvasView(QGraphicsView):
 
         面板按图元的归属工具（SmartEditController.get_item_tool_id）选，不按类名：
         荧光笔矩形、聚光灯的孔都是 RectItem，按类名判断就得记住它们必须排在矩形前面。
+        备注（NoteItem）继承 TextItem，同理必须排在文字前面，否则选中备注弹出的会是
+        普通文字面板。
         """
         try:
-            if isinstance(item, QGraphicsTextItem):
+            if isinstance(item, NoteItem):
+                tool_id = "note"
+            elif isinstance(item, QGraphicsTextItem):
                 tool_id = "text"
             else:
                 controller = getattr(self, "smart_edit_controller", None)
@@ -819,7 +834,9 @@ class CanvasView(QGraphicsView):
                 return
 
             toolbar._show_panel_for_tool(tool_id)
-            if tool_id == "text":
+            if tool_id == "note":
+                toolbar.note_panel.set_state_from_item(item)
+            elif tool_id == "text":
                 toolbar.text_panel.set_state_from_item(item)
             elif tool_id == "arrow":
                 toolbar.arrow_panel.arrow_style = getattr(item, "_arrow_style", "single")
@@ -996,8 +1013,9 @@ class CanvasView(QGraphicsView):
                         self.text_drag.is_point_on_edge(focus_item, scene_pos):
                     self.text_drag.begin(focus_item, scene_pos)
                     return
-                # 检查点击位置是否在当前编辑的文本框内
-                if focus_item.contains(focus_item.mapFromScene(scene_pos)):
+                # 检查点击位置是否在当前编辑的文本框内（备注只看文字主体：点在它的
+                # 目标框内部不算"在文字里"，那一下该用来选/拖目标框）
+                if self._point_inside_edited_text(focus_item, scene_pos):
                     # 点击在文本框内，正常传递事件（移动光标等）
                     super().mousePressEvent(event)
                     return
@@ -1043,11 +1061,25 @@ class CanvasView(QGraphicsView):
                 # 选中了图元，阻止绘图
                 # 传递给 Scene（让图元处理拖拽）
                 log_debug(T("图元选择被处理，阻止绘图"), "CanvasView")
-                self.pending_text_edit.arm(event, scene_pos)
+                selected_item = self.smart_edit_controller.selected_item
+                note_part = (
+                    selected_item.hit_note_part(scene_pos)
+                    if isinstance(selected_item, NoteItem) else None
+                )
+                # 备注：只有抓在文字上才算"可能是单击进入编辑"；抓目标框/箭头的那一下
+                # 不用来编辑文字（单击目标框只是选中备注）
+                if note_part in (None, "text"):
+                    self.pending_text_edit.arm(event, scene_pos)
                 if self.smart_edit_controller.press_requires_manual_dispatch:
                     # Qt 默认把事件交给 z 轴最上方图元；当控制器有意向下
                     # 命中兼容目标时，由 View 接管本次拖动，避免顶层文字抢走事件。
                     self.item_drag.begin(scene_pos)
+                    event.accept()
+                    return
+                if isinstance(selected_item, NoteItem) and note_part in ("text", "target"):
+                    # 备注内部拖动：折在这里起手，超过阈值后只移动被抓住的那个主体。
+                    # 不能交给 Qt：ItemIsMovable 会把目标框（子图元）一起搬走。
+                    self.note_drag.begin(selected_item, note_part, scene_pos)
                     event.accept()
                     return
                 super().mousePressEvent(event)
@@ -1311,7 +1343,12 @@ class CanvasView(QGraphicsView):
         if self.item_drag.active and is_left_pressed:
             self._handle_selected_item_drag(event, scene_pos)
             return
-        
+
+        # 备注内部拖动（拖目标框 / 拖文字）同样由 View 全程拥有
+        if self.note_drag.active and is_left_pressed:
+            self.note_drag.perform(scene_pos)
+            return
+
         # 子状态1：正在拖拽控制点/手柄
         if self._handle_edit_handle_drag(scene_pos):
             return
@@ -1396,6 +1433,17 @@ class CanvasView(QGraphicsView):
             if self._is_text_editing() and isinstance(selected_item, QGraphicsTextItem):
                 # 文字编辑模式：光标由 TextItem.hoverMoveEvent 负责（工字/拖拽区分）
                 super().mouseMoveEvent(event)
+                return True
+            if isinstance(selected_item, NoteItem):
+                # 备注：抓在文字或目标框上都是"可以拖着走"（图元自己给的 SizeAll），
+                # 箭头只负责连接，给普通选择光标——不让人以为它也能单独移动。
+                part = selected_item.hit_note_part(scene_pos)
+                super().mouseMoveEvent(event)
+                self.setCursor(
+                    Qt.CursorShape.SizeAllCursor
+                    if part in ("text", "target")
+                    else Qt.CursorShape.ArrowCursor
+                )
                 return True
             # 非文字：十字光标
             self.setCursor(Qt.CursorShape.CrossCursor)
@@ -1493,6 +1541,14 @@ class CanvasView(QGraphicsView):
             self.item_drag.finish(commit=True)
             if self.smart_edit_controller.selected_item:
                 self._update_edit_handles()
+            event.accept()
+            return
+
+        if self.note_drag.active:
+            # 备注内部拖动收尾：没拖动的那些按下还会走 PendingTextEdit 的"单击进入
+            # 编辑"结算（拖过的那些在起拖时已经把它清掉了）。
+            self.note_drag.finish(commit=True)
+            self.pending_text_edit.settle(event, scene_pos)
             event.accept()
             return
         
@@ -1730,6 +1786,17 @@ class CanvasView(QGraphicsView):
                 return focus_item
         return None
 
+    def _point_inside_edited_text(self, item, scene_pos: QPointF) -> bool:
+        """这一下点的是不是"正在编辑的那段文字本身"。
+
+        普通文字就是命中区里。备注（NoteItem）要更窄一点：它的命中区在选中态下还
+        包着整个目标框，而点击目标框该用来选/拖框，不该把光标丢进文字里，所以只有
+        part == "text" 才算"在文字里"。
+        """
+        if isinstance(item, NoteItem):
+            return item.hit_note_part(scene_pos) == "text"
+        return item.contains(item.mapFromScene(scene_pos))
+
     def _text_switch_target(self, scene_pos: QPointF, editing_item, modifiers):
         """编辑中点在文字外时，这一下点中的另一段文字；没点中就是 None。
 
@@ -1799,6 +1866,14 @@ class CanvasView(QGraphicsView):
 
     def _set_text_item_point_size(self, item: QGraphicsTextItem, point_size: float):
         if not item:
+            return
+        # 备注继承文字，但它的字号是"只动文字、不动目标框和线宽，并把箭头重连一遍"
+        # （见 NoteItem.set_note_font_size）；直接 setFont 会让箭头停在旧的文本框
+        # 边界上，穿过字里行间。
+        set_note_font_size = getattr(item, "set_note_font_size", None)
+        if callable(set_note_font_size):
+            set_note_font_size(max(6.0, float(point_size)))
+            item.update()
             return
         font = item.font()
         font.setPointSizeF(max(6.0, float(point_size)))

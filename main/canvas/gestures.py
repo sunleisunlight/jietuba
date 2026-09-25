@@ -10,6 +10,9 @@ _manual_item_drag_last_scene_pos、_pending_text_edit_moved……），跨十来
 - ManualItemDrag：控制器有意越过顶层图元往下选中当前工具兼容的目标时（拿矩形工具
   点一段压在矩形边框上的文字就是如此），Qt 会把 move 派给顶层那个，所以这次手势
   必须由 View 全程拥有。
+- NotePartDrag：备注（NoteItem）内部的拖动。备注是一个逻辑对象，但目标框和文字是
+  两个可以独立移动的主体，Qt 的 ItemIsMovable 只会把整个图元（连同子图元）搬走，
+  于是按下时先记住抓的是哪一部分，超过阈值后按部分调用 NoteItem 自己的移动接口。
 
 不是所有拖动都归这里——Qt 自己的 ItemIsMovable 能处理的仍然交给 Qt（图元照样会被
 scene 认成 mouse grabber），这里只收它做不到的那些。
@@ -23,6 +26,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtWidgets import QGraphicsTextItem
+
+from core.logger import T, log_exception
 
 
 class SelectionDrag:
@@ -199,7 +204,12 @@ class TextEdgeDrag:
         delta = scene_pos - self._last_scene_pos
         if abs(delta.x()) < 1e-3 and abs(delta.y()) < 1e-3:
             return
-        self.item.moveBy(delta.x(), delta.y())
+        # 备注：拖文字的边缘只移动文字主体，目标框留在场景里原地不动
+        move_text = getattr(self.item, "move_text_by_scene", None)
+        if callable(move_text):
+            move_text(delta)
+        else:
+            self.item.moveBy(delta.x(), delta.y())
         self._last_scene_pos = scene_pos
 
     def end(self):
@@ -339,4 +349,115 @@ class ManualItemDrag:
                 editor.is_moving_item = False
 
         self.active = False
+        self._last_scene_pos = None
+
+
+class NotePartDrag:
+    """备注内部的拖动：拖目标框只动目标框，拖文字只动文字。
+
+    备注对外是一个逻辑对象，但内部目标是两个可以独立移动的主体，所以不能用 Qt 的
+    ItemIsMovable 让图元整体搬走（子图元会跟着 pos 一起跑）。按下时先记住抓的是
+    哪一部分（由 NoteItem.hit_note_part 判定），超过阈值之后按部分调用 NoteItem
+    的移动接口，箭头由图元自己重连。
+
+    "单击文字 = 进入编辑、按住拖动 = 移动文字"由 PendingTextEdit 一起保证：阈值
+    之内不动、松手时 PendingTextEdit 才真的进编辑；一旦真的拖动了，就把那个待编辑
+    状态清掉，免得松手又跳进文字编辑。
+
+    撤销粒度与 TextEdgeDrag / ManualItemDrag 一致：进入拖动时抓一次快照，松手交给
+    SmartEditController._finalize_move_edit 比较前后状态，一次拖动只推一条命令。
+    """
+
+    # 按下到移动超过这么多像素才算"在拖"，否则当单击
+    DRAG_THRESHOLD = 4.0
+
+    def __init__(self, view):
+        self._view = view
+        self.active = False
+        self.item = None
+        self.part = None
+        self.dragging = False
+        self._press_scene_pos = None
+        self._last_scene_pos = None
+
+    def begin(self, item, part: str, scene_pos: QPointF):
+        self.active = True
+        self.item = item
+        self.part = part
+        self.dragging = False
+        self._press_scene_pos = QPointF(scene_pos)
+        self._last_scene_pos = QPointF(scene_pos)
+
+    def perform(self, scene_pos: QPointF):
+        item = self.item
+        if not self.active or item is None:
+            return
+        if not self.dragging:
+            moved = (scene_pos - self._press_scene_pos).manhattanLength()
+            if moved <= self.DRAG_THRESHOLD:
+                return
+            self.dragging = True
+            # 这一下已经是拖动，不再是"单击进入编辑"
+            self._view.pending_text_edit.clear()
+            self._last_scene_pos = QPointF(self._press_scene_pos)
+            self._capture_start()
+            if item.scene() is None:
+                self._clear()
+                return
+
+        delta = scene_pos - self._last_scene_pos
+        if abs(delta.x()) < 1e-3 and abs(delta.y()) < 1e-3:
+            return
+        try:
+            if self.part == "target":
+                item.move_target_by_scene(delta)
+            else:
+                item.move_text_by_scene(delta)
+        except Exception as exc:
+            log_exception(exc, T("拖动备注"))
+            self._clear()
+            return
+
+        self._last_scene_pos = QPointF(scene_pos)
+        self._view.setCursor(Qt.CursorShape.SizeAllCursor)
+        self._view._update_edit_handles()
+
+    def _capture_start(self):
+        """抓一份"拖动之前"的状态，留给松手时的撤销比较。"""
+        controller = getattr(self._view, "smart_edit_controller", None)
+        if controller is None or self.item is None:
+            return
+        if controller.selected_item is not self.item:
+            controller.select_item(self.item, auto_select=False)
+        controller.is_dragging = True
+        controller._move_initial_state = controller._capture_layer_state(self.item)
+
+    def finish(self, *, commit: bool):
+        """松手（commit=True）或取消（commit=False），把 View 与控制器两边清干净。"""
+        controller = getattr(self._view, "smart_edit_controller", None)
+        item = self.item
+        dragging = self.dragging
+        self._clear()
+
+        if controller is not None:
+            if commit and dragging and item is not None and controller.selected_item is item:
+                try:
+                    controller._finalize_move_edit()
+                except Exception as exc:
+                    log_exception(exc, T("结算备注拖动"))
+            controller.is_dragging = False
+            controller.drag_start_pos = None
+
+        self._view._update_edit_handles()
+
+    def reset(self):
+        """取消这次手势，不结算撤销。"""
+        self.finish(commit=False)
+
+    def _clear(self):
+        self.active = False
+        self.item = None
+        self.part = None
+        self.dragging = False
+        self._press_scene_pos = None
         self._last_scene_pos = None

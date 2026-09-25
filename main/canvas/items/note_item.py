@@ -1,7 +1,7 @@
 """备注（Note）图元 —— 目标框 + 箭头 + 文本框组成的复合标注。
 
-对外只算**一个逻辑标注**：创建、选中、移动、删除、撤销、钉图克隆、导出全部按
-"一个图元"处理。之所以能这么干净，是因为内部没有各自独立的顶层图元：
+对外仍然只算**一个逻辑标注**：创建、选中、删除、撤销、钉图克隆、导出全部按
+"一个图元"处理。内部也没有各自独立的顶层图元：
 
     目标框(RectItem)   ── 子图元，不接受鼠标、不参与选中，只是画出来
     箭头(ArrowItem)    ── 同上
@@ -16,8 +16,21 @@
   因为整条备注从头到尾只有一个 QGraphicsItem；
 - 钉图克隆只需要重建这一个图元，不会漏掉框或箭头。
 
+**目标框和文本框是两个可以独立移动的主体**，箭头只是两者之间的派生连接器
+（``arrow = connect(target, text)``，自己没有一个需要用户维护的自由状态）：
+
+- 拖目标框：只动目标框，文字留在原地，箭头重新连接（``move_target_by_scene``）；
+- 拖文字：只动文字（也就是本图元的 ``pos``），目标框靠本地坐标反向补偿留在原地
+  （``move_text_by_scene``）。
+
 子图元用 ``ItemStacksBehindParent`` 排在文字之后绘制，并关掉鼠标与悬停事件：
-点击框、箭头、文字的任何可见部分都会命中 NoteItem 自己。
+点击框、箭头、文字的任何可见部分都会命中 NoteItem 自己，具体抓的是哪一部分由
+``hit_note_part`` 判定。
+
+布局有 AUTO / FREE 两个模式（见 ``LAYOUT_AUTO`` / ``LAYOUT_FREE``）：刚创建时按
+方向自动排版（用户看到的是"框 + 旁边一行说明"），用户第一次手工移动任何一个主体
+之后进入自由布局，此后改文字、改字号、改排版宽度都只保留各自的位置、只重连箭头，
+不会再被吸回自动位置。
 
 方向（direction）指**文本框相对目标框的位置**，与 ArrowItem 的 arrow_style
 （箭杆/箭头的造型）是两件不同的事。
@@ -73,6 +86,12 @@ class NoteItem(TextItem):
     ARROW_AT_TARGET = "target"
     ARROW_AT_TEXT = "text"
 
+    # 布局模式：AUTO = 按方向自动排版（创建时的聪明排版、方向按钮重排）；
+    # FREE = 用户手工摆过位置，此后各主体位置独立、只重连箭头
+    LAYOUT_AUTO = "auto"
+    LAYOUT_FREE = "free"
+    LAYOUT_MODES = (LAYOUT_AUTO, LAYOUT_FREE)
+
     # 相对位置 -> 面板图标/文案用的翻译键（由 NoteSettingsPanel 取用）
     POSITION_LABELS = {
         POSITION_RIGHT: "Text on right",
@@ -91,6 +110,8 @@ class NoteItem(TextItem):
     HANDLE_TARGET_TR = 221
     HANDLE_TARGET_BR = 222
     HANDLE_TARGET_BL = 223
+    # 文字主体的字号手柄。id 必须避开 TextItem(212/213) 与上面目标框四角(220-223)
+    HANDLE_TEXT_SCALE = 214
 
     def __init__(
         self,
@@ -107,6 +128,7 @@ class NoteItem(TextItem):
         fit_bounds: QRectF = None,
         always_on_top: bool = True,
         provisional: bool = True,
+        layout_mode: str = LAYOUT_AUTO,
     ):
         """target_rect 是**场景坐标**下的目标框；fit_bounds 是允许摆放的选区。"""
         super().__init__(
@@ -120,6 +142,7 @@ class NoteItem(TextItem):
 
         self._direction = self.normalize_position(direction)
         self._arrow_at = self.normalize_arrow_at(arrow_at)
+        self._layout_mode = self.normalize_layout_mode(layout_mode)
         self._gap = self.base_gap() if gap is None else max(0.0, float(gap))
         self._stroke_width = max(1.0, float(stroke_width))
         self._fit_bounds = QRectF(fit_bounds) if isinstance(fit_bounds, QRectF) else None
@@ -153,6 +176,9 @@ class NoteItem(TextItem):
 
         if self._fit_bounds is not None:
             self.fit_into(self._fit_bounds)
+        elif self._layout_mode == self.LAYOUT_FREE:
+            # 自由布局的重建（钉图克隆）：各主体按传进来的几何原样摆好，只连箭头
+            self._refresh_geometry()
         else:
             self._relayout()
 
@@ -175,6 +201,11 @@ class NoteItem(TextItem):
     @classmethod
     def normalize_arrow_at(cls, value) -> str:
         return value if value in (cls.ARROW_AT_TARGET, cls.ARROW_AT_TEXT) else cls.ARROW_AT_TARGET
+
+    @classmethod
+    def normalize_layout_mode(cls, value) -> str:
+        """无法识别的布局模式回退到 AUTO（创建时的自动排版）。"""
+        return value if value in cls.LAYOUT_MODES else cls.LAYOUT_AUTO
 
     @staticmethod
     def base_gap() -> float:
@@ -237,6 +268,15 @@ class NoteItem(TextItem):
     def arrow_at(self) -> str:
         return self._arrow_at
 
+    @property
+    def layout_mode(self) -> str:
+        """AUTO（按方向自动排版）/ FREE（用户手工摆过位置）。"""
+        return self._layout_mode
+
+    def _enter_free_layout(self):
+        """进入自由布局：目标框与文字的位置此后互相独立。"""
+        self._layout_mode = self.LAYOUT_FREE
+
     def _text_origin(self, target: QRectF, width: float, height: float) -> QPointF:
         """按方向和文本框尺寸算出文本框左上角（场景坐标）。"""
         gap = self._gap
@@ -249,7 +289,19 @@ class NoteItem(TextItem):
         return QPointF(target.right() + gap, target.top())
 
     def _anchor_points(self, target: QRectF, text_box: QRectF):
-        """箭头两端的锚点：(文本侧, 目标侧)，都取各自靠近对方的边中点。"""
+        """箭头两端的锚点：(文本侧, 目标侧)。
+
+        - AUTO：按方向取各自靠近对方的边中点（和"文字在右边"的排版语义一致）；
+        - FREE：用户已经把两个主体摆到任意相对位置，方向不再能描述几何，改成
+          按"目标框中心 ↔ 文字框中心"这条射线分别求与两个矩形边界的交点——箭头
+          永远连在两个矩形**面对彼此**的那条边上，文字挪到左上方也不会用错锚点。
+        """
+        if self._layout_mode == self.LAYOUT_FREE:
+            return self._free_anchor_points(target, text_box)
+        return self._direction_anchor_points(target, text_box)
+
+    def _direction_anchor_points(self, target: QRectF, text_box: QRectF):
+        """AUTO：文本侧、目标侧各取靠近对方的边中点。"""
         if self._direction == self.POSITION_LEFT:
             return (
                 QPointF(text_box.right(), text_box.center().y()),
@@ -269,6 +321,42 @@ class NoteItem(TextItem):
             QPointF(text_box.left(), text_box.center().y()),
             QPointF(target.right(), target.center().y()),
         )
+
+    def _free_anchor_points(self, target: QRectF, text_box: QRectF):
+        """FREE：两个中心连成一条射线，各自求它与自己矩形边界的交点。"""
+        target_center = target.center()
+        text_center = text_box.center()
+        dx = text_center.x() - target_center.x()
+        dy = text_center.y() - target_center.y()
+        if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+            # 两个中心完全重叠：射线不存在，退回方向语义，至少还有一对合法端点
+            return self._direction_anchor_points(target, text_box)
+
+        target_anchor = self._ray_rect_boundary(target, QPointF(dx, dy))
+        text_anchor = self._ray_rect_boundary(text_box, QPointF(-dx, -dy))
+        return (text_anchor, target_anchor)
+
+    @staticmethod
+    def _ray_rect_boundary(rect: QRectF, direction: QPointF) -> QPointF:
+        """从矩形中心沿 direction 出发，与矩形边界的交点。
+
+        direction 不必单位化，按"到任一轴边界所需的比例"取较小者即可；中心的
+        一侧起点保证交点一定落在矩形的边上。矩形退化（宽或高为 0）、方向为零向量
+        时都退回中心，不会算出 nan。
+        """
+        center = rect.center()
+        half_w = rect.width() / 2.0
+        half_h = rect.height() / 2.0
+        dx, dy = float(direction.x()), float(direction.y())
+        if half_w <= 0.0 or half_h <= 0.0:
+            return QPointF(center)
+        if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+            return QPointF(center.x() + half_w, center.y())
+
+        t_x = half_w / abs(dx) if abs(dx) > 1e-9 else float("inf")
+        t_y = half_h / abs(dy) if abs(dy) > 1e-9 else float("inf")
+        t = min(t_x, t_y)
+        return QPointF(center.x() + dx * t, center.y() + dy * t)
 
     def _relayout(self):
         """按目标框当前位置、方向和当前文本尺寸重排文本框与箭头。
@@ -305,6 +393,71 @@ class NoteItem(TextItem):
         self._arrow_item.set_positions(self._arrow_start_local, self._arrow_end_local)
         self.update()
 
+    def _refresh_geometry(self):
+        """按"当前 pos + 当前目标框本地矩形 + 当前文本尺寸"重连箭头。
+
+        与 ``_relayout`` 的区别是**完全不动 pos、也不动目标框**：自由布局下改文字、
+        改字号、改排版宽度、拖完目标框之后都走这里，两个主体各自留在用户放的地方，
+        只有箭头作为派生几何跟着重算。
+        """
+        if getattr(self, "_target_item", None) is None:
+            return
+        origin = self.pos()
+        target = QRectF(self._target_rect_local).translated(origin.x(), origin.y())
+        box = self.document_rect()
+        self.prepareGeometryChange()
+        self._apply_local_geometry(target, QRectF(origin, box.size()), box.width(), box.height())
+
+    def move_text_by_scene(self, delta_scene: QPointF):
+        """只移动文字主体：目标框在场景里原地不动。
+
+        本图元的 ``pos`` 就是文本框左上角，也是目标框本地坐标的原点。所以移动文字
+        之后必须按"移动前目标框的场景矩形"反算一次本地坐标，让目标框在场景里保持
+        原位——否则目标框会作为子图元跟着 pos 一起跑掉。
+        """
+        if getattr(self, "_target_item", None) is None:
+            return
+        dx, dy = float(delta_scene.x()), float(delta_scene.y())
+        if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+            return
+
+        target_scene = self.target_rect_scene()
+        self.prepareGeometryChange()
+        self.setPos(self.pos() + QPointF(dx, dy))
+        self._target_rect_local = target_scene.translated(-self.pos().x(), -self.pos().y())
+        self._target_item.setRect(self._target_rect_local)
+
+        self._enter_free_layout()
+        self._refresh_geometry()
+
+    def move_target_by_scene(self, delta_scene: QPointF):
+        """只移动目标框：文字（pos）完全不动。"""
+        dx, dy = float(delta_scene.x()), float(delta_scene.y())
+        if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+            return
+        rect = self.target_rect_scene().translated(dx, dy)
+        self.set_target_rect_scene_preserve_text(rect)
+
+    def set_target_rect_scene_preserve_text(self, rect: QRectF):
+        """把目标框改到给定的场景矩形上，文字位置保持不变，并进入自由布局。
+
+        这是目标框移动 / 四角缩放的唯一入口。刻意不走 ``_text_origin()`` →
+        ``setPos()`` 那条老路：那条路会把文字重新排到目标框旁边，用户手工摆好的
+        两个主体就没法独立了。
+        """
+        if getattr(self, "_target_item", None) is None:
+            return
+        origin = self.pos()
+        local = QRectF(rect).normalized().translated(-origin.x(), -origin.y())
+        self._enter_free_layout()
+        self._set_target_local(local)
+        self._refresh_geometry()
+
+    def _set_target_local(self, local: QRectF):
+        self.prepareGeometryChange()
+        self._target_rect_local = QRectF(local)
+        self._target_item.setRect(self._target_rect_local)
+
     def fit_into(self, bounds: QRectF):
         """在给定范围内挑一个放得下目标框的方向与文本宽度，并摆好整条备注。
 
@@ -313,6 +466,8 @@ class NoteItem(TextItem):
         保证备注不会跑到截图选区外面去。
         """
         bounds = QRectF(bounds).normalized()
+        # 创建 / 方向按钮重排都算自动排版，重新回到 AUTO
+        self._layout_mode = self.LAYOUT_AUTO
         if bounds.isEmpty():
             self._relayout()
             return
@@ -383,37 +538,59 @@ class NoteItem(TextItem):
         )
 
     def _on_contents_changed(self):
-        """文字内容变了：行数/高度可能变了，重排一次（RIGHT/LEFT 的 pos 不变）。"""
+        """文字内容变了：高度（可能还有行数）变了，得重连箭头。
+
+        自由布局下只重连箭头、保留文字的左上角与目标框；自动布局下才按方向重排。
+        这条分支就是"用户手工摆好文字之后再打字，文字不能跳回目标框旁边"的落点。
+        """
         if self.scene() is None:
             return
         try:
-            self._relayout()
+            if self._layout_mode == self.LAYOUT_FREE:
+                self._refresh_geometry()
+            else:
+                self._relayout()
         except Exception as exc:
             log_exception(exc, T("备注重排"))
 
     def _notify_layout_changed(self):
-        """TextItem 的排版钩子：段落宽度变了 → 重排文本框与箭头。"""
-        self._relayout()
+        """TextItem 的排版钩子：段落宽度变了 → 重连箭头（自动布局下才重排位置）。"""
+        if getattr(self, "_target_item", None) is None:
+            return
+        if self._layout_mode == self.LAYOUT_FREE:
+            self._refresh_geometry()
+        else:
+            self._relayout()
 
     # ------------------------------------------------------------------
     # 设置
     # ------------------------------------------------------------------
 
     def set_direction(self, direction: str):
-        """切换文本相对目标框的位置：保留文本与样式，只重排几何。"""
+        """切换文本相对目标框的位置。
+
+        方向按钮的语义是"我要重新自动排列"：目标框保持原位，文字按选择的方向重新
+        摆好、箭头重新连接，并回到 AUTO 布局。此前手工拖出来的自由布局因此被显式
+        覆盖——这正是用户点方向按钮的意图。
+        """
         direction = self.normalize_position(direction)
-        if direction == self._direction:
+        already_auto = self._layout_mode == self.LAYOUT_AUTO
+        if direction == self._direction and already_auto:
             return
         self._direction = direction
+        self._layout_mode = self.LAYOUT_AUTO
         self._relayout()
 
     def set_arrow_at(self, arrow_at: str):
-        """箭头指向：目标 / 文字。"""
+        """箭头指向：目标 / 文字。只换指向，不改两个主体的位置。"""
         arrow_at = self.normalize_arrow_at(arrow_at)
         if arrow_at == self._arrow_at:
             return
         self._arrow_at = arrow_at
-        self._relayout()
+        if self._layout_mode == self.LAYOUT_FREE:
+            self._refresh_geometry()
+        else:
+            self._relayout()
 
     def set_note_color(self, color: QColor):
         """备注统一颜色：目标框描边、箭头、正文用同一个颜色。"""
@@ -435,17 +612,24 @@ class NoteItem(TextItem):
         self.update()
 
     def set_note_font_size(self, point_size: float):
-        """改字号并重排。
+        """改字号：只动文字，不动目标框、不动线宽。
 
-        字号决定文本框多高、箭头锚在哪，不能只 setFont 了事——文档尺寸变了但
-        文本框左上角还留在原处，箭头就会从文本框里穿过去。
+        字号决定文本框多高、箭头锚在哪，所以改完必须重连箭头；但不能顺手重排——
+        自由布局下 `setFont` 本身就会保留文档左上角（正是我们要的"文字原地放大"），
+        再重排就会把用户摆好的文字吸回目标框旁边。
         """
         self.set_font_point_size(point_size)
-        self._relayout()
+        if self._layout_mode == self.LAYOUT_FREE:
+            self._refresh_geometry()
+        else:
+            self._relayout()
 
     def set_arrow_style(self, style: str):
         self._arrow_item.arrow_style = style
-        self._relayout()
+        if self._layout_mode == self.LAYOUT_FREE:
+            self._refresh_geometry()
+        else:
+            self._relayout()
 
     def note_stroke_width(self) -> float:
         return float(self._stroke_width)
@@ -454,13 +638,12 @@ class NoteItem(TextItem):
         return self._arrow_item.arrow_style
 
     def set_target_rect_scene(self, rect: QRectF):
-        """直接改写目标框（场景坐标），文本框和箭头跟着重排。"""
-        target = QRectF(rect).normalized()
-        box = self.document_rect()
-        origin = self._text_origin(target, box.width(), box.height())
-        self.prepareGeometryChange()
-        self.setPos(origin)
-        self._apply_local_geometry(target, QRectF(origin, box.size()), box.width(), box.height())
+        """直接改写目标框（场景坐标）。
+
+        等价于 ``set_target_rect_scene_preserve_text``：文字位置保持不动。历史上这里
+        会把文字重新排到目标框旁边，是"拖目标框文字跟着跑"的根源，已改掉。
+        """
+        self.set_target_rect_scene_preserve_text(rect)
 
     # ------------------------------------------------------------------
     # 命中区 / 包围盒
@@ -492,7 +675,12 @@ class NoteItem(TextItem):
         """只有看得见的部分算命中区。
 
         用整条备注的外接矩形当命中区会连框与箭头之间的空白一起吃掉，压在下面的
-        标注就点不到了；所以命中区是"文字自身的框 + 目标框描边 + 箭头轮廓"的并集。
+        标注就点不到了；所以命中区是"文字自身的框 + 目标框 + 箭头轮廓"的并集。
+
+        唯一的例外是**这条备注已被选中**时：目标框的空心内部也算命中区。框是空心的，
+        用户看到的是一个矩形，想拖它却要正好压在 1~3px 的边线上，不符合任何软件的
+        习惯；选中态下把整框让给拖动，同时因为"只有当前对象"才有这个特权，压在下面
+        的标注不会在平时被它挡住。
         """
         path = QPainterPath()
         # 显式走基类的"纯文字命中矩形"：NoteItem 自己把 hit_rect()/interaction_rect()
@@ -500,7 +688,10 @@ class NoteItem(TextItem):
         path.addRect(TextItem.text_hit_rect(self))
         target = getattr(self, "_target_item", None)
         if target is not None:
-            path.addPath(target.shape())
+            if self.is_edit_target():
+                path.addRect(self._target_rect_local)
+            else:
+                path.addPath(target.shape())
         arrow = getattr(self, "_arrow_item", None)
         if arrow is not None:
             path.addPath(arrow.shape())
@@ -508,6 +699,39 @@ class NoteItem(TextItem):
 
     def contains(self, point: QPointF) -> bool:
         return self.shape().contains(point)
+
+    def hit_note_part(self, scene_pos: QPointF):
+        """这个场景点在备注的哪一部分上："text" / "target" / "arrow" / None。
+
+        优先级 text > target > arrow：文字压在框上（自由布局允许重叠）时按文字算，
+        免得用户想改文字却被判成在拖框。箭头只是派生连接器，排最后。
+        """
+        local = self.mapFromScene(scene_pos)
+        if TextItem.text_hit_rect(self).contains(local):
+            return "text"
+        if QRectF(self._target_rect_local).contains(local):
+            return "target"
+        arrow = getattr(self, "_arrow_item", None)
+        if arrow is not None and arrow.shape().contains(local):
+            return "arrow"
+        return None
+
+    def _update_hover_cursor(self, event=None):
+        """悬停在选中的备注上时，按"抓的是哪一部分"给光标。
+
+        目标框内部、文字上都是"可以拖着走"的 SizeAll；箭头只负责连接，给普通选择
+        光标，免得让人以为它也能单独移动。
+        """
+        if self._can_show_hover() and self.is_edit_target() and event is not None:
+            part = self.hit_note_part(self.mapToScene(event.pos()))
+            self.setCursor(
+                Qt.CursorShape.SizeAllCursor
+                if part in ("text", "target")
+                else Qt.CursorShape.ArrowCursor
+            )
+            event.accept()
+            return
+        super()._update_hover_cursor(event)
 
     # ------------------------------------------------------------------
     # 绘制 / 手柄
@@ -539,12 +763,40 @@ class NoteItem(TextItem):
         painter.drawRect(self._target_item.rect())
         painter.restore()
 
-    def get_edit_handles(self):
-        """目标框四角 + 右上删除 + 文本右边中点宽度手柄。
+    def _paint_interaction_frame(self, painter):
+        """整条备注的三态框画在**文字主体**自己身上，不圈整条备注的外接矩形。
 
-        故意不给旋转手柄：整条备注的几何是"框 + 箭头 + 给定方向的文本框"，旋转
-        之后方向语义就说不清了（箭头该旋转还是该重新指向？），与其给一个会让人
-        迷惑的手柄，不如不给。
+        圈住"框 + 箭头 + 文字"的合并范围会画出一个很大的外框，看着像是只能整体
+        移动；而这里要表达的是"这条备注当前是编辑对象"。目标框自己另有一圈框
+        （``_paint_target_rect``），两个主体各自可见，谁也不埋没谁。
+        """
+        pen = self.selection_frame_pen()
+        if pen is None:
+            return
+        inset = self.FRAME_INSET
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(pen)
+        painter.drawRect(
+            TextItem.interaction_rect(self).adjusted(inset, inset, -inset, -inset)
+        )
+        painter.restore()
+
+    def _text_handles_rect(self) -> QRectF:
+        """文字主体自己的交互矩形（本地坐标）。
+
+        目标框在右边时，整条备注的 ``interaction_rect()`` 会一路铺到框的最右边——
+        拿它摆文字的手柄，宽度手柄就会跑到目标框边上。所有"属于文字"的手柄都必须
+        按这个矩形摆。
+        """
+        return TextItem.interaction_rect(self)
+
+    def get_edit_handles(self):
+        """目标框四角 + 文字主体的删除 / 字号 / 宽度手柄。
+
+        两个主体各有各的手柄，且都摆在自己身上：目标框四角围着目标框，文字的三类
+        手柄围着文字。故意不给旋转手柄：整条备注的几何是"框 + 箭头 + 给定方向的
+        文本框"，旋转之后方向语义就说不清了（箭头该旋转还是该重新指向？）。
         """
         from canvas.handle_editor import EditHandle, HandleType, LayerEditor
 
@@ -567,7 +819,7 @@ class NoteItem(TextItem):
                 )
             )
 
-        bounds = self.interaction_rect()
+        bounds = self._text_handles_rect()
         handles.append(
             EditHandle(
                 self.HANDLE_DELETE,
@@ -576,6 +828,16 @@ class NoteItem(TextItem):
                 Qt.CursorShape.PointingHandCursor,
                 LayerEditor.FUNCTIONAL_HANDLE_SIZE,
                 2,
+            )
+        )
+        handles.append(
+            EditHandle(
+                self.HANDLE_TEXT_SCALE,
+                HandleType.TEXT_SCALE,
+                QPointF(self.mapToScene(bounds.bottomRight())),
+                Qt.CursorShape.SizeFDiagCursor,
+                self.SCALE_HANDLE_SIZE,
+                8,
             )
         )
         handles.append(
@@ -591,10 +853,15 @@ class NoteItem(TextItem):
         return handles
 
     def apply_handle_drag(self, handle_id: int, delta_scene: QPointF, keep_ratio: bool):
-        """LayerEditor 的扩展入口：目标框四角改框，宽度手柄改排版宽度。
+        """LayerEditor 的扩展入口：目标框四角改框，文字手柄改字号 / 排版宽度。
 
         ``drag_to`` 每次都会先把图元恢复到"这次拖拽开始时"的状态，所以这里只需
         在当前值上叠加相对位移，不需要自己存基准。
+
+        三条铁律，对应三个主体的三种手柄：
+        - 目标框四角：只改框的大小，文字留在原地；
+        - 文字宽度手柄：只改段落排版宽度（左边不动、向右伸缩）；
+        - 文字字号手柄：只改字号，目标框与线宽都不动。
         """
         if handle_id in (
             self.HANDLE_TARGET_TL,
@@ -616,7 +883,8 @@ class NoteItem(TextItem):
             room = max(4.0, scaled_f(4.0))
             if rect.width() < room or rect.height() < room:
                 return
-            self.set_target_rect_scene(rect)
+            # 走"保留文字位置"的入口：改框大小不该把文字重新排回框旁边
+            self.set_target_rect_scene_preserve_text(rect)
             return
 
         if handle_id == self.HANDLE_TEXT_WIDTH:
@@ -624,6 +892,31 @@ class NoteItem(TextItem):
             current = self.paragraph_width()
             if callable(setter) and current is not None:
                 setter(current + float(delta_scene.x()))
+            return
+
+        if handle_id == self.HANDLE_TEXT_SCALE:
+            self._apply_text_scale_drag(delta_scene)
+
+    def _apply_text_scale_drag(self, delta_scene: QPointF):
+        """文字右下角手柄：按文字自身对角线的投影比例换算新的字号。
+
+        基准矩形取**文字自己的**交互矩形（不是整条备注的外接矩形）：LayerEditor 的
+        默认实现用的是整条备注的包围盒，目标框在右边时那条对角线会被拉长，同一个
+        拖拽距离换算出来的缩放比例就偏小，手感对不上。
+        ``drag_to`` 每次都先回到基准状态，所以基准矩形在整次拖拽里是稳定的，
+        ``font_point_size()`` 读到的也始终是起始字号。
+        """
+        base_rect = self._text_handles_rect()
+        base_size = self.font_point_size()
+        diag = base_rect.bottomRight() - base_rect.topLeft()
+        denom = diag.x() * diag.x() + diag.y() * diag.y()
+        if denom <= 0.0:
+            return
+        moved = diag + delta_scene
+        factor = (moved.x() * diag.x() + moved.y() * diag.y()) / denom
+        if factor <= 0:
+            factor = 0.01
+        self.set_note_font_size(base_size * factor)
 
     # ------------------------------------------------------------------
     # 统一属性接口
@@ -667,6 +960,7 @@ class NoteItem(TextItem):
             {
                 "note_direction": self._direction,
                 "note_arrow_at": self._arrow_at,
+                "note_layout_mode": self._layout_mode,
                 "note_target_rect": QRectF(self._target_rect_local),
                 "note_gap": float(self._gap),
             }
@@ -677,28 +971,25 @@ class NoteItem(TextItem):
         target_rect = state.get("note_target_rect")
         direction = state.get("note_direction")
         arrow_at = state.get("note_arrow_at")
+        layout_mode = state.get("note_layout_mode")
 
         self._direction = self.normalize_position(direction if direction is not None else self._direction)
         self._arrow_at = self.normalize_arrow_at(
             arrow_at if arrow_at is not None else self._arrow_at
         )
+        if layout_mode is not None:
+            self._layout_mode = self.normalize_layout_mode(layout_mode)
         if isinstance(target_rect, QRectF):
             self._target_rect_local = QRectF(target_rect)
 
+        # 文字位置（pos）由 LayerEditor 的通用字段负责恢复，这里只管目标框与布局；
+        # 因此投影回场景时不再改动 pos。
         super().restore_extra_state(state)
         self._relayout_target_only()
 
     def _relayout_target_only(self):
-        """按当前 pos 把本地目标框重新投影到场景并重排（不改动 pos）。"""
-        if getattr(self, "_target_item", None) is None:
-            return
-        origin = self.pos()
-        target = QRectF(self._target_rect_local).translated(origin.x(), origin.y())
-        box = self.document_rect()
-        self.prepareGeometryChange()
-        self._apply_local_geometry(
-            target, QRectF(origin, box.size()), box.width(), box.height()
-        )
+        """按当前 pos 把本地目标框重新投影到场景并重连箭头（不改动 pos）。"""
+        self._refresh_geometry()
 
     # ------------------------------------------------------------------
     # 克隆（钉图）
@@ -712,6 +1003,7 @@ class NoteItem(TextItem):
             "color": QColor(self.defaultTextColor()),
             "direction": self._direction,
             "arrow_at": self._arrow_at,
+            "layout_mode": self._layout_mode,
             "gap": float(self._gap),
             "target_rect_local": QRectF(self._target_rect_local),
             "paragraph_width": self.paragraph_width(),
@@ -729,6 +1021,9 @@ class NoteItem(TextItem):
 
         复制的是**本地几何**：目标框、箭头端点都按原样搬过去，克隆完再整体 setPos
         到钉图场景的对应位置，因此相对关系与源截图逐像素一致，也不会退化成散件。
+
+        布局模式也跟着复制：用户手工摆成"目标框在左上、文字在右下"之后钉图，钉图
+        里的备注必须还是那个样子，不能又按方向自动排回目标框右边。
         """
         state = self.export_state()
         clone = NoteItem(
@@ -744,6 +1039,7 @@ class NoteItem(TextItem):
             gap=state["gap"],
             fit_bounds=None,
             provisional=False,
+            layout_mode=state["layout_mode"],
         )
         clone._target_rect_local = QRectF(state["target_rect_local"])
         clone._target_item.setRect(clone._target_rect_local)
