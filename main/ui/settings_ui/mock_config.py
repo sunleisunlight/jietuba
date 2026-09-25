@@ -3,7 +3,7 @@
 import os
 import sys
 
-from settings.tool_settings import ANNOTATION_TOOL_SHORTCUTS
+from settings.tool_settings import ALL_TOOL_SHORTCUTS
 
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
@@ -75,7 +75,7 @@ APP_DEFAULT_SETTINGS = {
     "ui_scale_percent": 100,
     "dialog_scale_percent": 100,
     "inapp_confirm": "ctrl+c",
-    "inapp_pin": "ctrl+d",
+    "inapp_pin": "6",
     "inapp_undo": "ctrl+z",
     "inapp_redo": "ctrl+y",
     "inapp_delete": "delete",
@@ -86,10 +86,14 @@ APP_DEFAULT_SETTINGS = {
     "inapp_toggle_toolbar": "space",
     "inapp_zoom_in": "pageup",
     "inapp_zoom_out": "pagedown",
-    "inapp_translate": "shift+c",
-    "inapp_text_recognize": "shift+t",
+    "inapp_translate": "9",
+    "inapp_text_recognize": "8",
+    "inapp_save": "",
+    "inapp_long_screenshot": "",
+    "inapp_scan_code": "",
+    "inapp_gif": "",
     "inapp_cursor_move_mode": "both",
-    **{key: default for key, _tool, _label, default in ANNOTATION_TOOL_SHORTCUTS},
+    **{key: default for key, _tool, _label, default in ALL_TOOL_SHORTCUTS},
 }
 
 

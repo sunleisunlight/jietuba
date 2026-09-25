@@ -3714,4 +3714,48 @@ SOFTWARE.</translation></message>
         <translation>가운데 버튼</translation>
     </message>
 </context>
+<context>
+    <name>ToolbarLayoutDialog</name>
+    <message>
+        <source>Shortcut</source>
+        <translation>단축키</translation>
+    </message>
+    <message>
+        <source>Fixed</source>
+        <translation>고정</translation>
+    </message>
+    <message>
+        <source>Click a shortcut box and press a key to change it.</source>
+        <translation>단축키 상자를 클릭한 뒤 키를 누르면 변경할 수 있습니다.</translation>
+    </message>
+    <message>
+        <source>Shortcut Conflict</source>
+        <translation>단축키 충돌</translation>
+    </message>
+    <message>
+        <source>"%1" is already used by "%2".
+Replace it?</source>
+        <translation>"%1"은(는) 이미 "%2"에서 사용 중입니다.
+대체하시겠습니까?</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Spotlight</source>
+        <translation>스포트라이트</translation>
+    </message>
+    <message>
+        <source>Save Image</source>
+        <translation>이미지 저장</translation>
+    </message>
+    <message>
+        <source>Scan Code</source>
+        <translation>코드 스캔</translation>
+    </message>
+    <message>
+        <source>GIF Recording</source>
+        <translation>GIF 녹화</translation>
+    </message>
+</context>
 </TS>

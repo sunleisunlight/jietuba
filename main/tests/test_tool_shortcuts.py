@@ -92,7 +92,7 @@ def test_default_text_shortcut_selects_text(monkeypatch, isolated_manager):
     window = _window()
     handler = ScreenshotShortcutHandler(window)
 
-    assert handler.handle_key(_key_event(Qt.Key.Key_T)) is True
+    assert handler.handle_key(_key_event(Qt.Key.Key_4)) is True
     assert window.toolbar.selected == [("text", False)]
 
 
@@ -102,12 +102,12 @@ def test_default_text_shortcut_selects_text(monkeypatch, isolated_manager):
         (Qt.Key.Key_S, "cursor"),
         (Qt.Key.Key_P, "pen"),
         (Qt.Key.Key_M, "highlighter"),
-        (Qt.Key.Key_X, "mosaic"),
-        (Qt.Key.Key_A, "arrow"),
-        (Qt.Key.Key_N, "number"),
-        (Qt.Key.Key_R, "rect"),
+        (Qt.Key.Key_7, "mosaic"),
+        (Qt.Key.Key_3, "arrow"),
+        (Qt.Key.Key_5, "number"),
+        (Qt.Key.Key_2, "rect"),
         (Qt.Key.Key_O, "ellipse"),
-        (Qt.Key.Key_T, "text"),
+        (Qt.Key.Key_4, "text"),
         (Qt.Key.Key_1, "note"),
         (Qt.Key.Key_E, "eraser"),
     ],
@@ -191,7 +191,7 @@ def test_tool_shortcut_requires_confirmed_selection(monkeypatch, isolated_manage
     window = _window(confirmed=False)
     handler = ScreenshotShortcutHandler(window)
 
-    assert handler.handle_key(_key_event(Qt.Key.Key_T)) is False
+    assert handler.handle_key(_key_event(Qt.Key.Key_4)) is False
     assert window.toolbar.selected == []
 
 
@@ -261,7 +261,8 @@ def test_settings_page_exposes_tool_tab_shared_conflict_group_and_empty_value(
     )
     page = create_hotkey_page(dialog)
     try:
-        assert len(TOOL_KEYS) == 11
+        # 11 个自带默认键的标注工具 + 默认留空的聚光灯
+        assert len(TOOL_KEYS) == 12
         assert dialog._inapp_groups["inapp_confirm"] == "screenshot"
         assert dialog._inapp_groups["inapp_tool_text"] == "screenshot"
         assert dialog._inapp_groups["inapp_copy_pin"] == "pin"

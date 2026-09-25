@@ -3788,4 +3788,48 @@ SOFTWARE.</translation></message>
         <translation>中键</translation>
     </message>
 </context>
+<context>
+    <name>ToolbarLayoutDialog</name>
+    <message>
+        <source>Shortcut</source>
+        <translation>快捷键</translation>
+    </message>
+    <message>
+        <source>Fixed</source>
+        <translation>固定</translation>
+    </message>
+    <message>
+        <source>Click a shortcut box and press a key to change it.</source>
+        <translation>点击快捷键框后按下按键即可改键。</translation>
+    </message>
+    <message>
+        <source>Shortcut Conflict</source>
+        <translation>快捷键冲突</translation>
+    </message>
+    <message>
+        <source>"%1" is already used by "%2".
+Replace it?</source>
+        <translation>"%1" 已被 "%2" 使用。
+是否替换？</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Spotlight</source>
+        <translation>聚光灯</translation>
+    </message>
+    <message>
+        <source>Save Image</source>
+        <translation>保存图片</translation>
+    </message>
+    <message>
+        <source>Scan Code</source>
+        <translation>扫码</translation>
+    </message>
+    <message>
+        <source>GIF Recording</source>
+        <translation>GIF 录制</translation>
+    </message>
+</context>
 </TS>

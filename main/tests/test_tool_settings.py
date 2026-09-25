@@ -242,12 +242,12 @@ class TestToolSettingsManager:
             "cursor": "s",
             "pen": "p",
             "highlighter": "m",
-            "mosaic": "x",
-            "arrow": "a",
-            "number": "n",
-            "rect": "r",
+            "mosaic": "7",
+            "arrow": "3",
+            "number": "5",
+            "rect": "2",
             "ellipse": "o",
-            "text": "t",
+            "text": "4",
             "note": "1",
             "eraser": "e",
         }
@@ -255,8 +255,75 @@ class TestToolSettingsManager:
         for cfg_key, _tool_id, _label, default in ANNOTATION_TOOL_SHORTCUTS:
             assert manager.APP_DEFAULT_SETTINGS[cfg_key] == default
 
+    def test_quick_shortcut_defaults(self, manager):
+        """1~9 数字快速操作预设。"""
+        assert manager.get_inapp_shortcut("inapp_tool_note") == "1"
+        assert manager.get_inapp_shortcut("inapp_tool_rect") == "2"
+        assert manager.get_inapp_shortcut("inapp_tool_arrow") == "3"
+        assert manager.get_inapp_shortcut("inapp_tool_text") == "4"
+        assert manager.get_inapp_shortcut("inapp_tool_number") == "5"
+        assert manager.get_inapp_shortcut("inapp_pin") == "6"
+        assert manager.get_inapp_shortcut("inapp_tool_mosaic") == "7"
+        assert manager.get_inapp_shortcut("inapp_text_recognize") == "8"
+        assert manager.get_inapp_shortcut("inapp_translate") == "9"
+
+    def _legacy_manager(self, tmp_path, values):
+        """造一个“老版本存过值”的管理器：先写入旧值，再让管理器构造时迁移。"""
+        ini_path = str(tmp_path / "legacy_settings.ini")
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        for key, value in values.items():
+            qs.setValue(f"inapp/{key}", value)
+        qs.sync()
+        return ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+
+    def test_migrates_legacy_letter_defaults_to_digits(self, tmp_path):
+        manager = self._legacy_manager(tmp_path, {
+            "inapp_tool_rect": "r",
+            "inapp_tool_arrow": "a",
+            "inapp_tool_text": "t",
+            "inapp_tool_number": "n",
+            "inapp_pin": "ctrl+d",
+            "inapp_tool_mosaic": "x",
+            "inapp_text_recognize": "shift+t",
+            "inapp_translate": "shift+c",
+        })
+
+        assert manager.get_inapp_shortcut("inapp_tool_rect") == "2"
+        assert manager.get_inapp_shortcut("inapp_tool_arrow") == "3"
+        assert manager.get_inapp_shortcut("inapp_tool_text") == "4"
+        assert manager.get_inapp_shortcut("inapp_tool_number") == "5"
+        assert manager.get_inapp_shortcut("inapp_pin") == "6"
+        assert manager.get_inapp_shortcut("inapp_tool_mosaic") == "7"
+        assert manager.get_inapp_shortcut("inapp_text_recognize") == "8"
+        assert manager.get_inapp_shortcut("inapp_translate") == "9"
+
+    def test_migration_keeps_custom_values_and_skips_conflicts(self, tmp_path):
+        manager = self._legacy_manager(tmp_path, {
+            "inapp_tool_rect": "q",      # 用户自己改过
+            "inapp_zoom_in": "6",        # 已占用 6，钉图不该被迁移过去
+            "inapp_pin": "ctrl+d",
+        })
+
+        assert manager.get_inapp_shortcut("inapp_tool_rect") == "q"
+        assert manager.get_inapp_shortcut("inapp_pin") == "ctrl+d"
+        assert manager.get_inapp_shortcut("inapp_zoom_in") == "6"
+
+    def test_migration_runs_only_once(self, tmp_path):
+        ini_path = str(tmp_path / "once_settings.ini")
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        qs.setValue("inapp/inapp_tool_text", "t")
+        qs.sync()
+
+        first = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert first.get_inapp_shortcut("inapp_tool_text") == "4"
+
+        # 用户改回旧值后，同一 schema 版本不应再被迁移覆盖
+        first.set_inapp_shortcut("inapp_tool_text", "t")
+        second = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert second.get_inapp_shortcut("inapp_tool_text") == "t"
+
     def test_explicit_empty_inapp_shortcut_remains_unbound(self, manager):
-        assert manager.get_inapp_shortcut("inapp_tool_text") == "t"
+        assert manager.get_inapp_shortcut("inapp_tool_text") == "4"
         manager.set_inapp_shortcut("inapp_tool_text", "")
         assert manager.get_inapp_shortcut("inapp_tool_text") == ""
 
@@ -267,7 +334,7 @@ class TestToolSettingsManager:
         manager.reset_app_settings()
 
         assert manager.get_inapp_shortcut("inapp_confirm") == "ctrl+c"
-        assert manager.get_inapp_shortcut("inapp_tool_text") == "t"
+        assert manager.get_inapp_shortcut("inapp_tool_text") == "4"
 
     def test_translation_provider_configuration(self, manager):
         assert manager.get_translation_provider() == "google"

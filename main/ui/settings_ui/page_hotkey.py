@@ -15,24 +15,18 @@ from ui.fluent_lite.theme import ACCENT
 from .components import SettingCardGroup, WhiteCard, apply_theme_text_style
 from ..hotkey_edit import HotkeyEdit, validate_hotkey_group
 from ..inapp_key_edit import InAppKeyEdit
-from settings import ANNOTATION_TOOL_SHORTCUTS
+from settings.tool_settings import ALL_TOOL_SHORTCUTS, SCREENSHOT_ACTION_SHORTCUTS
 from core.shortcut_manager import (
     inapp_shortcut_display_text, is_reserved_inapp_shortcut,
 )
 
 
 # ── 应用内快捷键定义表（分组）──────────────────────────────
+# 截图作用域的定义来自 settings.tool_settings 的权威表：设置页与“自定义工具栏”
+# 因此读写同一批配置项、共用同一个冲突域。第三项只是默认值展示，实际值读配置。
 SCREENSHOT_KEYS = [
-    ("inapp_confirm",   "Confirm Screenshot",     "ctrl+c"),
-    ("inapp_pin",       "Pin Image",              "ctrl+d"),
-    ("inapp_undo",      "Undo",                   "ctrl+z"),
-    ("inapp_redo",      "Redo",                   "ctrl+y"),
-    ("inapp_delete",    "Delete Selected",        "delete"),
-    ("inapp_restore_last_region", "Restore Last Region", "l"),
-    ("inapp_zoom_in",   "Magnifier Zoom In",      "pageup"),
-    ("inapp_zoom_out",  "Magnifier Zoom Out",     "pagedown"),
-    ("inapp_translate", "Screenshot Translate",    "shift+c"),
-    ("inapp_text_recognize", "Recognize Text",   "shift+t"),
+    (cfg_key, label, "")
+    for cfg_key, label in SCREENSHOT_ACTION_SHORTCUTS
 ]
 
 PIN_KEYS = [
@@ -45,7 +39,7 @@ PIN_KEYS = [
 
 TOOL_KEYS = [
     (cfg_key, label, default)
-    for cfg_key, _tool_id, label, default in ANNOTATION_TOOL_SHORTCUTS
+    for cfg_key, _tool_id, label, default in ALL_TOOL_SHORTCUTS
 ]
 
 INAPP_KEYS = SCREENSHOT_KEYS + TOOL_KEYS + PIN_KEYS

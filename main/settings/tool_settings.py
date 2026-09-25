@@ -27,19 +27,105 @@ SMART_SELECTION_MODES = ("off", "window", "element")
 STORED_SMART_SELECTION_MODES = SMART_SELECTION_MODES[1:]
 
 
+# 标注工具的应用内默认快捷键。高频标注按 1~7 排，剩下的低频工具继续用字母，
+# 全部只在截图作用域生效，不注册成 Windows 全局热键。
 ANNOTATION_TOOL_SHORTCUTS = (
     ("inapp_tool_cursor", "cursor", "Select / Cursor", "s"),
     ("inapp_tool_pen", "pen", "Pen", "p"),
     ("inapp_tool_highlighter", "highlighter", "Highlighter", "m"),
-    ("inapp_tool_mosaic", "mosaic", "Mosaic", "x"),
-    ("inapp_tool_arrow", "arrow", "Arrow", "a"),
-    ("inapp_tool_number", "number", "Number", "n"),
-    ("inapp_tool_rect", "rect", "Rectangle", "r"),
+    ("inapp_tool_mosaic", "mosaic", "Mosaic", "7"),
+    ("inapp_tool_arrow", "arrow", "Arrow", "3"),
+    ("inapp_tool_number", "number", "Number", "5"),
+    ("inapp_tool_rect", "rect", "Rectangle", "2"),
     ("inapp_tool_ellipse", "ellipse", "Ellipse", "o"),
-    ("inapp_tool_text", "text", "Text", "t"),
+    ("inapp_tool_text", "text", "Text", "4"),
     ("inapp_tool_note", "note", "Note", "1"),
     ("inapp_tool_eraser", "eraser", "Eraser", "e"),
 )
+
+# 同样属于截图标注工具、但默认不给按键的按钮（聚光灯）。放在这里是为了让
+# “自定义工具栏”的快捷键列覆盖到它，用户想绑就绑。
+EXTRA_TOOL_SHORTCUTS = (
+    ("inapp_tool_spotlight", "spotlight", "Spotlight", ""),
+)
+
+# 截图里可配置快捷键的标注工具全集：设置页的“标注工具”分组、截图快捷键处理器
+# 的工具分支都读这一份，免得两边各维护一张表。
+ALL_TOOL_SHORTCUTS = ANNOTATION_TOOL_SHORTCUTS + EXTRA_TOOL_SHORTCUTS
+
+# 截图动作型应用内快捷键：(配置键, 设置页显示名)。
+# 最后四项默认留空，只为了让“自定义工具栏”的快捷键列完整、以后能绑。
+SCREENSHOT_ACTION_SHORTCUTS = (
+    ("inapp_confirm", "Confirm Screenshot"),
+    ("inapp_pin", "Pin Image"),
+    ("inapp_undo", "Undo"),
+    ("inapp_redo", "Redo"),
+    ("inapp_delete", "Delete Selected"),
+    ("inapp_restore_last_region", "Restore Last Region"),
+    ("inapp_zoom_in", "Magnifier Zoom In"),
+    ("inapp_zoom_out", "Magnifier Zoom Out"),
+    ("inapp_translate", "Screenshot Translate"),
+    ("inapp_text_recognize", "Recognize Text"),
+    ("inapp_save", "Save Image"),
+    ("inapp_long_screenshot", "Long Screenshot"),
+    ("inapp_scan_code", "Scan Code"),
+    ("inapp_gif", "GIF Recording"),
+)
+
+# 截图作用域的快捷键冲突域：同一套按键判定里，这些配置项彼此不允许重复绑定。
+SCREENSHOT_SHORTCUT_KEYS = tuple(
+    [key for key, _label in SCREENSHOT_ACTION_SHORTCUTS]
+    + [key for key, _tool, _label, _default in ALL_TOOL_SHORTCUTS]
+)
+
+# 工具栏按钮 key → 应用内快捷键配置 key 的权威映射（single source of truth）。
+# 工具栏角标、自定义工具栏对话框、截图快捷键处理器都从这里取，三处不再各写一份。
+# 值为 None 表示该按钮用的是固定键，不开放自定义（见 FIXED_TOOLBAR_SHORTCUTS）。
+TOOLBAR_SHORTCUT_BINDINGS = {
+    "long_screenshot": "inapp_long_screenshot",
+    "save": "inapp_save",
+    "screenshot_translate": "inapp_translate",
+    "text_recognize": "inapp_text_recognize",
+    "scan_code": "inapp_scan_code",
+    "gif": "inapp_gif",
+    "pen": "inapp_tool_pen",
+    "highlighter": "inapp_tool_highlighter",
+    "mosaic": "inapp_tool_mosaic",
+    "spotlight": "inapp_tool_spotlight",
+    "arrow": "inapp_tool_arrow",
+    "number": "inapp_tool_number",
+    "rect": "inapp_tool_rect",
+    "ellipse": "inapp_tool_ellipse",
+    "text": "inapp_tool_text",
+    "note": "inapp_tool_note",
+    "eraser": "inapp_tool_eraser",
+    "undo": "inapp_undo",
+    "redo": "inapp_redo",
+    "pin": "inapp_pin",
+    "confirm": "inapp_confirm",
+    "cancel": None,
+}
+
+# 固定、不可自定义的按钮快捷键：界面上只展示，不允许改。
+FIXED_TOOLBAR_SHORTCUTS = {
+    "cancel": "Esc",
+}
+
+# 旧默认字母键 → 新的数字预设。只在「用户从未改过、配置里存的仍是旧默认值」时迁移，
+# 用户自己改过的一律保留；新键位若已被截图作用域内其它动作占用就跳过，不制造冲突。
+_QUICK_SHORTCUT_MIGRATION = (
+    ("inapp_tool_rect", "r", "2"),
+    ("inapp_tool_arrow", "a", "3"),
+    ("inapp_tool_text", "t", "4"),
+    ("inapp_tool_number", "n", "5"),
+    ("inapp_pin", "ctrl+d", "6"),
+    ("inapp_tool_mosaic", "x", "7"),
+    ("inapp_text_recognize", "shift+t", "8"),
+    ("inapp_translate", "shift+c", "9"),
+)
+
+# 数字快速操作预设的迁移版本号。跑过一次就不再跑，保证幂等。
+QUICK_SHORTCUT_SCHEMA_VERSION = 1
 
 
 class ToolSettings:
@@ -199,7 +285,7 @@ class ToolSettingsManager(QObject):
 
         # 应用内快捷键
         "inapp_confirm": "ctrl+c",             # 确认截图（复制到剪贴板）
-        "inapp_pin": "ctrl+d",                 # 钉图
+        "inapp_pin": "6",                      # 钉图
         "inapp_undo": "ctrl+z",                # 撤销
         "inapp_redo": "ctrl+y",                # 重做
         "inapp_delete": "delete",              # 删除选中图元
@@ -211,10 +297,15 @@ class ToolSettingsManager(QObject):
         "inapp_toggle_toolbar": "space",       # 切换工具栏
         "inapp_zoom_in": "pageup",             # 放大镜放大
         "inapp_zoom_out": "pagedown",          # 放大镜缩小
-        "inapp_translate": "shift+c",          # 截图翻译
-        "inapp_text_recognize": "shift+t",     # 文字识别
+        "inapp_translate": "9",                # 截图翻译
+        "inapp_text_recognize": "8",           # 文字识别
         "inapp_cursor_move_mode": "both",      # 鼠标微移模式: both / arrows / wasd
-        **{key: default for key, _tool, _label, default in ANNOTATION_TOOL_SHORTCUTS},
+        # 截图动作：默认不给按键，只在“自定义工具栏”里提供可绑定入口
+        "inapp_save": "",                      # 保存到文件
+        "inapp_long_screenshot": "",           # 长截图
+        "inapp_scan_code": "",                 # 扫码
+        "inapp_gif": "",                       # GIF 录制
+        **{key: default for key, _tool, _label, default in ALL_TOOL_SHORTCUTS},
         # ==================== 2. 截图 ====================
         # 截图交互
         "double_click_copy_close": True,      # 双击选区复制到剪贴板并关闭
@@ -363,6 +454,8 @@ class ToolSettingsManager(QObject):
         self.qsettings = qsettings if qsettings is not None else QSettings("Jietuba", "ToolSettings")
         self._tool_settings: Dict[str, ToolSettings] = {}
         self._initialize_tools()
+        # 老用户升上来的配置里还留着旧的字母默认值，这里一次性换成新的 1~9 预设
+        self.migrate_quick_inapp_shortcuts()
 
     @property
     def settings(self):
@@ -746,6 +839,51 @@ class ToolSettingsManager(QObject):
     def set_inapp_shortcut(self, key: str, value: str):
         """设置应用内快捷键"""
         self.qsettings.setValue(f"inapp/{key}", value)
+
+    def migrate_quick_inapp_shortcuts(self) -> bool:
+        """把停留在旧默认字母的应用内快捷键一次性迁移到新的 1~9 数字预设。
+
+        只改「用户从来没动过」的项：配置里存的仍是旧默认值才迁移；用户自己改成
+        别的值说明是自定义，原样保留。目标键位如果已经被截图作用域内另一个动作
+        占用，则跳过这一项，不静默制造重复绑定。靠 schema 版本号保证只跑一次，
+        同一个版本反复启动不会覆盖用户设置。
+        """
+        version_key = "app/inapp_quick_shortcut_schema_version"
+        try:
+            if int(self.qsettings.value(version_key, 0)) >= QUICK_SHORTCUT_SCHEMA_VERSION:
+                return False
+        except (TypeError, ValueError):
+            pass
+
+        # 截图作用域内所有配置项的当前生效值，用来判断目标键位是否已被占用
+        occupied: Dict[str, list] = {}
+        for key in SCREENSHOT_SHORTCUT_KEYS:
+            value = (self.get_inapp_shortcut(key) or "").strip().lower()
+            if value:
+                occupied.setdefault(value, []).append(key)
+
+        changed = False
+        for cfg_key, old_default, new_default in _QUICK_SHORTCUT_MIGRATION:
+            stored = self.qsettings.value(f"inapp/{cfg_key}", None)
+            if stored is None:
+                continue  # 从未保存过，直接用新默认值即可
+            if str(stored).strip().lower() != old_default:
+                continue  # 用户自定义过，保留
+            if [k for k in occupied.get(new_default, []) if k != cfg_key]:
+                continue  # 新键位已被别的动作占用，保留原值，交给用户手工处理
+
+            self.set_inapp_shortcut(cfg_key, new_default)
+            old_owners = occupied.get(old_default)
+            if old_owners and cfg_key in old_owners:
+                old_owners.remove(cfg_key)
+            occupied.setdefault(new_default, []).append(cfg_key)
+            changed = True
+
+        self.qsettings.setValue(version_key, QUICK_SHORTCUT_SCHEMA_VERSION)
+        if changed:
+            from core.logger import log_info, T
+            log_info(T("应用内快捷键已迁移到新的数字预设"), "Settings")
+        return changed
 
     def get_inapp_cursor_move_mode(self) -> str:
         """获取鼠标微移模式 (both / arrows / wasd)"""

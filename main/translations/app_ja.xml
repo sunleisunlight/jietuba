@@ -3755,4 +3755,48 @@ SOFTWARE.</translation></message>
         <translation>中ボタン</translation>
     </message>
 </context>
+<context>
+    <name>ToolbarLayoutDialog</name>
+    <message>
+        <source>Shortcut</source>
+        <translation>ショートカット</translation>
+    </message>
+    <message>
+        <source>Fixed</source>
+        <translation>固定</translation>
+    </message>
+    <message>
+        <source>Click a shortcut box and press a key to change it.</source>
+        <translation>ショートカット欄をクリックしてキーを押すと変更できます。</translation>
+    </message>
+    <message>
+        <source>Shortcut Conflict</source>
+        <translation>ショートカット競合</translation>
+    </message>
+    <message>
+        <source>"%1" is already used by "%2".
+Replace it?</source>
+        <translation>"%1" は既に "%2" で使用されています。
+置き換えますか？</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Spotlight</source>
+        <translation>スポットライト</translation>
+    </message>
+    <message>
+        <source>Save Image</source>
+        <translation>画像を保存</translation>
+    </message>
+    <message>
+        <source>Scan Code</source>
+        <translation>コードスキャン</translation>
+    </message>
+    <message>
+        <source>GIF Recording</source>
+        <translation>GIF録画</translation>
+    </message>
+</context>
 </TS>

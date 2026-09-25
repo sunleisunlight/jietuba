@@ -31,18 +31,24 @@ class ScreenshotShortcutHandler(ShortcutHandler):
 
     def __init__(self, window: 'ScreenshotWindow'):
         self._window = window
-        # 从配置读取应用内快捷键（一次性，截图窗口生命周期内不变）
+        from settings.tool_settings import ALL_TOOL_SHORTCUTS
+
+        self._tool_shortcuts = tuple(ALL_TOOL_SHORTCUTS)
+        self.reload_bindings()
+
+    def reload_bindings(self):
+        """重新读取应用内快捷键配置。
+
+        截图窗口创建时读一次；用户在当前截图里打开“自定义工具栏”改完并确定后，
+        __init__ 里缓存的绑定就过期了，调用方再调一次即可让新快捷键立即生效，
+        不必退出重开截图。
+        """
         from core.shortcut_manager import (
             load_inapp_bindings, load_inapp_mouse_bindings, load_move_keys,
         )
-        from settings import ANNOTATION_TOOL_SHORTCUTS
-        action_keys = [
-            "inapp_confirm", "inapp_pin", "inapp_undo", "inapp_redo",
-            "inapp_delete", "inapp_restore_last_region",
-            "inapp_zoom_in", "inapp_zoom_out", "inapp_translate",
-            "inapp_text_recognize",
-        ]
-        self._tool_shortcuts = tuple(ANNOTATION_TOOL_SHORTCUTS)
+        from settings.tool_settings import SCREENSHOT_ACTION_SHORTCUTS
+
+        action_keys = [key for key, _label in SCREENSHOT_ACTION_SHORTCUTS]
         bound_keys = action_keys + [entry[0] for entry in self._tool_shortcuts]
         self._bindings = load_inapp_bindings(bound_keys)
         self._mouse_bindings = load_inapp_mouse_bindings(bound_keys)
@@ -91,9 +97,20 @@ class ScreenshotShortcutHandler(ShortcutHandler):
             w.view.invalidate_double_click_candidate()
         is_text_editing = w._is_text_editing()
 
-        # 文字编辑模式下，部分按键交给 QGraphicsTextItem
+        # 文字编辑模式下，按键优先交给 QGraphicsTextItem。
+        # 不带 Ctrl/Alt 的按键（数字、字母、Shift+字符、标点）都是可打印输入，
+        # 不能被截图快捷键抢走——否则默认的 1~9 会吃掉用户正在输入的数字。
+        # Esc、Ctrl+Z/Ctrl+Y、Ctrl+C/Ctrl+D 等既有编辑语义仍按下面的分支处理。
         if is_text_editing:
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                return False
+            has_shortcut_modifier = bool(
+                event.modifiers()
+                & (Qt.KeyboardModifier.ControlModifier
+                   | Qt.KeyboardModifier.AltModifier
+                   | Qt.KeyboardModifier.MetaModifier)
+            )
+            if not has_shortcut_modifier and key != Qt.Key.Key_Escape:
                 return False
             if key in (Qt.Key.Key_C, Qt.Key.Key_D):
                 return False
@@ -117,10 +134,11 @@ class ScreenshotShortcutHandler(ShortcutHandler):
                 w.action_handler.handle_confirm()
                 return True
 
-        # 钉图
+        # 钉图。按住不放只消费自动重复的那几次，不再重复执行动作。
         if self._match(event, "inapp_pin"):
             if w.scene and w.scene.selection_model.is_confirmed:
-                w.action_handler.handle_pin()
+                if not event_is_auto_repeat(event):
+                    w.action_handler.handle_pin()
                 return True
 
         # 撤销
@@ -148,16 +166,31 @@ class ScreenshotShortcutHandler(ShortcutHandler):
         # 截图翻译
         if self._match(event, "inapp_translate"):
             if w.scene and w.scene.selection_model.is_confirmed:
-                if hasattr(w, 'toolbar') and w.toolbar:
+                if not event_is_auto_repeat(event) and hasattr(w, 'toolbar') and w.toolbar:
                     w.toolbar.screenshot_translate_clicked.emit()
                 return True
 
         # 文字识别
         if self._match(event, "inapp_text_recognize"):
             if w.scene and w.scene.selection_model.is_confirmed:
-                if hasattr(w, 'toolbar') and w.toolbar:
+                if not event_is_auto_repeat(event) and hasattr(w, 'toolbar') and w.toolbar:
                     w.toolbar.text_recognize_clicked.emit()
                 return True
+
+        # 保存 / 长截图 / 扫码 / GIF：与点击工具栏同名按钮走同一条信号，
+        # 默认都不绑键，用户在“自定义工具栏”里绑了才生效。
+        for cfg_key, signal_name in (
+            ("inapp_save", "save_clicked"),
+            ("inapp_long_screenshot", "long_screenshot_clicked"),
+            ("inapp_scan_code", "scan_code_clicked"),
+            ("inapp_gif", "gif_record_clicked"),
+        ):
+            if self._match(event, cfg_key):
+                if w.scene and w.scene.selection_model.is_confirmed:
+                    toolbar = getattr(w, 'toolbar', None)
+                    if not event_is_auto_repeat(event) and toolbar is not None:
+                        getattr(toolbar, signal_name).emit()
+                    return True
 
         # 放大镜缩放属于可配置截图动作，优先于工具键。
         if self._match(event, "inapp_zoom_in"):
@@ -722,6 +755,18 @@ class ScreenshotWindow(QWidget):
     def _handle_scan_code(self):
         if self.action_handler:
             self.action_handler.handle_scan_code()
+
+    def reload_shortcut_bindings(self):
+        """应用内快捷键改完后立即生效：重载处理器绑定并刷新工具栏角标。
+
+        截图窗口和工具栏都是复用的实例，改完快捷键不需要退出重开截图。
+        """
+        handler = getattr(self, "_shortcut_handler", None)
+        if handler is not None:
+            handler.reload_bindings()
+        toolbar = getattr(self, "toolbar", None)
+        if toolbar is not None:
+            toolbar.refresh_shortcut_badges()
 
     def _safe_activate_and_focus(self):
         """避免已销毁窗口执行激活/聚焦导致崩溃"""

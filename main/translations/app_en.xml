@@ -3616,4 +3616,48 @@ SOFTWARE.</translation></message>
         <translation>Copied</translation>
     </message>
 </context>
+<context>
+    <name>ToolbarLayoutDialog</name>
+    <message>
+        <source>Shortcut</source>
+        <translation>Shortcut</translation>
+    </message>
+    <message>
+        <source>Fixed</source>
+        <translation>Fixed</translation>
+    </message>
+    <message>
+        <source>Click a shortcut box and press a key to change it.</source>
+        <translation>Click a shortcut box and press a key to change it.</translation>
+    </message>
+    <message>
+        <source>Shortcut Conflict</source>
+        <translation>Shortcut Conflict</translation>
+    </message>
+    <message>
+        <source>"%1" is already used by "%2".
+Replace it?</source>
+        <translation>"%1" is already used by "%2".
+Replace it?</translation>
+    </message>
+</context>
+<context>
+    <name>SettingsDialog</name>
+    <message>
+        <source>Spotlight</source>
+        <translation>Spotlight</translation>
+    </message>
+    <message>
+        <source>Save Image</source>
+        <translation>Save Image</translation>
+    </message>
+    <message>
+        <source>Scan Code</source>
+        <translation>Scan Code</translation>
+    </message>
+    <message>
+        <source>GIF Recording</source>
+        <translation>GIF Recording</translation>
+    </message>
+</context>
 </TS>

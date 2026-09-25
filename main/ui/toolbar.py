@@ -162,6 +162,59 @@ def _button_qss():
         }}
     """
 
+class _ShortcutBadge(QWidget):
+    """按钮左下角的快捷键角标（如 1~9）。
+
+    作为按钮自己的 child 存在：按钮从工具栏被 setParent 挪进「…」弹层时角标自动跟过去，
+    不需要为角标另建一套按钮。只画很短的键位文字，不接受鼠标事件。
+    """
+
+    BASE_SIZE = 14      # 角标边长
+    BASE_FONT = 9       # 角标字号
+    BASE_MARGIN = 1     # 与按钮左边缘的间距
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._text = ""
+        self.apply_scale()
+
+    def apply_scale(self):
+        """按当前 UI 比例重算尺寸、字号与位置（左下角）。"""
+        size = scaled(self.BASE_SIZE)
+        self.setFixedSize(size, size)
+        font = self.font()
+        font.setPixelSize(scaled(self.BASE_FONT))
+        font.setBold(True)
+        self.setFont(font)
+        parent = self.parentWidget()
+        if parent is not None:
+            self.move(scaled(self.BASE_MARGIN), max(0, parent.height() - size))
+
+    def set_shortcut(self, text: str):
+        text = text or ""
+        if text == self._text:
+            return
+        self._text = text
+        self.setVisible(bool(text))
+        self.update()
+
+    @safe_event
+    def paintEvent(self, event):
+        if not self._text:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        # 垫一层几乎不透光的白底：图标左下角未必是空白，这样数字在任何图标上都看得清
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(255, 255, 255, 220))
+        painter.drawRoundedRect(self.rect(), scaled_f(3.0), scaled_f(3.0))
+        painter.setPen(QColor(0xD9, 0x30, 0x25))
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._text)
+        painter.end()
+
+
 class _MorePopup(QWidget):
     """「…」弹层：装被收起的按钮，最下面一个「调整」入口。
 
@@ -249,6 +302,10 @@ class Toolbar(QWidget):
     HANDLE_WIDTH_RATIO = 0.32   # 拖动手柄宽 / 工具栏高
     BASE_RIGHT_NUDGE = 4     # 自动定位时整体右移，目视微调，不是算出来的
 
+    # 是否显示应用内快捷键角标与提示后缀。钉图工具栏的按钮不受截图快捷键控制，
+    # 由 PinToolbar 关掉，免得显示一组按了没反应的键位。
+    SHOW_SHORTCUT_BADGES = True
+
     # 信号定义
     tool_changed = Signal(str)  # 工具切换信号(tool_id)
     save_clicked = Signal()  # 保存按钮
@@ -315,6 +372,7 @@ class Toolbar(QWidget):
         self._buttons = {}
         self._button_bases = {}    # key → (基准按钮宽, 基准图标边长)，改比例时据此重算
         self._button_widths = {}   # key → 当前比例下的按钮宽，由 _apply_button_sizes 填
+        self._badges = {}          # key → 按钮左下角的快捷键角标
         self._folded_keys = []    # 收进「…」弹层的按钮，弹层展开时才摆进去
         self._more_popup = None   # 用到才建，见 _show_more_popup
 
@@ -332,8 +390,11 @@ class Toolbar(QWidget):
         self._drag_offset = QPoint()
         self._manual_positioned = False   # 用户手动拖动后为 True，阻止自动定位
 
-        # 记录所有 tooltip 源文本，供语言切换后整体刷新（按钮在 _add_button 里登记）
+        # 记录所有 tooltip 源文本，供语言切换后整体刷新（按钮在 _add_button 里登记）。
+        # 源文本里不写快捷键，真实键位由 _apply_button_tooltips 动态追加。
         self._tooltip_sources = {self.drag_handle: "Drag to move"}
+        # 按钮 → 工具栏 key，刷新角标/tooltip 时用来反查配置项
+        self._shortcut_key_by_button = {}
 
         wide = (self.BASE_WIDE_WIDTH, self.BASE_ICON_WIDE)
         tool = (self.BASE_BTN_WIDTH, self.BASE_ICON_TOOL)
@@ -381,10 +442,11 @@ class Toolbar(QWidget):
 
         self.cancel_btn = self._add_button(
             "cancel", "svg/结束截图.svg", "Cancel screenshot (ESC)", wide, self.cancel_clicked.emit)
+        # 提示文本里不写快捷键：真实键位由 _apply_button_tooltips 按当前配置动态追加
         self.pin_btn = self._add_button(
-            "pin", "svg/钉图.svg", "Pin image (Ctrl+D)", wide, self.pin_clicked.emit)
+            "pin", "svg/钉图.svg", "Pin image", wide, self.pin_clicked.emit)
         self.confirm_btn = self._add_button(
-            "confirm", "svg/确定.svg", "Confirm and save (Ctrl+C / Enter)", wide,
+            "confirm", "svg/确定.svg", "Confirm and save", wide,
             self.confirm_clicked.emit)
 
         # 「…」：悬停或点击展开被收起的按钮；和普通按钮一样登记进排布表，由 _arrange 固定摆在最右
@@ -419,6 +481,8 @@ class Toolbar(QWidget):
         self.init_settings_panels()
 
         self.reload_layout()
+        # 首次按配置把快捷键角标与 tooltip 填上
+        self.refresh_shortcut_badges()
 
         # 语言切换时刷新工具栏按钮提示与各面板文案（连接随本工具栏销毁自动断开）
         from core.i18n import I18nManager
@@ -450,6 +514,9 @@ class Toolbar(QWidget):
         self._buttons[key] = button
         self._button_bases[key] = size
         self._tooltip_sources[button] = tooltip
+        self._shortcut_key_by_button[button] = key
+        if self.SHOW_SHORTCUT_BADGES:
+            self._badges[key] = _ShortcutBadge(button)
         return button
 
     def _apply_button_sizes(self):
@@ -503,8 +570,15 @@ class Toolbar(QWidget):
             width = self._button_widths[key]
             button.setGeometry(x, 0, width, self._btn_height)
             button.show()
+            self._layout_badge(key)
             x += width
         self.resize(x, self._btn_height)
+
+    def _layout_badge(self, key):
+        """角标贴在按钮左下角；按钮几何定了才能算，所以只在 _arrange 里调。"""
+        badge = self._badges.get(key)
+        if badge is not None:
+            badge.apply_scale()
 
     def reload_layout(self):
         """按用户配置重排：始终显示的上工具栏，收进更多的留给弹层，「…」固定在最右"""
@@ -531,6 +605,7 @@ class Toolbar(QWidget):
         self._hide_more_popup()
         self._apply_button_sizes()
         self.reload_layout()
+        self.refresh_shortcut_badges()
         popup = getattr(self, '_more_popup', None)
         if popup is not None:
             popup.apply_scale()
@@ -585,13 +660,25 @@ class Toolbar(QWidget):
             self._more_popup.hide()
 
     def _open_layout_dialog(self):
-        """「调整」：编辑排布，确认后保存并立即重排"""
+        """「调整」：编辑排布与快捷键，点「确定」后统一保存并立即生效。
+
+        对话框内部只改临时状态，取消时什么都不写；排布写回布局配置，快捷键写回
+        inapp shortcut 配置，两者共用同一份数据源。
+        """
         from .toolbar_layout_dialog import ToolbarLayoutDialog
+        from settings import get_tool_settings_manager
+        from settings.tool_settings import SCREENSHOT_SHORTCUT_KEYS
 
         self._hide_more_popup()
         host = self._host_window()
+        manager = get_tool_settings_manager()
+        shortcut_values = {
+            cfg_key: (manager.get_inapp_shortcut(cfg_key) if manager else "")
+            for cfg_key in SCREENSHOT_SHORTCUT_KEYS
+        }
         dialog = ToolbarLayoutDialog(
-            load_layout(), {key: button.icon() for key, button in self._buttons.items()}, host)
+            load_layout(), {key: button.icon() for key, button in self._buttons.items()},
+            shortcut_values, host)
         # 截图窗口横跨整个虚拟桌面，对话框默认居中到它的中点，多屏时未必落在用户
         # 正在操作的那块屏幕上；改为放到工具栏所在屏幕的中央
         screen = QApplication.screenAt(self.mapToGlobal(QPoint(0, 0))) or QApplication.primaryScreen()
@@ -599,11 +686,33 @@ class Toolbar(QWidget):
         if not dialog.exec():
             return
         save_layout(dialog.entries())
+        self._save_shortcut_entries(dialog.shortcut_entries())
         self.reload_layout()
+        self.refresh_shortcut_badges()
+        # 快捷键改动立刻对当前截图生效，不必退出重开截图
+        if host is not None and hasattr(host, "reload_shortcut_bindings"):
+            host.reload_shortcut_bindings()
         # 宽度变了，重新贴到选区右下角（手动拖过位置的不会动）
         if hasattr(host, "update_toolbar_position"):
             host.update_toolbar_position()
-        
+
+    def _save_shortcut_entries(self, entries):
+        """把自定义工具栏里的快捷键改动写入配置（只在点「确定」后调用一次）。"""
+        from settings import get_tool_settings_manager
+        from core.shortcut_manager import is_reserved_inapp_shortcut
+
+        manager = get_tool_settings_manager()
+        if manager is None:
+            return
+        for cfg_key, value in entries.items():
+            value = (value or "").strip()
+            if value.endswith("+"):
+                continue  # 未录完的组合键，丢弃
+            if is_reserved_inapp_shortcut(value):
+                value = ""  # Esc 是截图取消的固定键，不让它被绑到别的动作上
+            if manager.get_inapp_shortcut(cfg_key) != value:
+                manager.set_inapp_shortcut(cfg_key, value)
+
     def init_settings_panels(self):
         """初始化所有工具的设置面板"""
         from .paint_settings_panel import PaintSettingsPanel
@@ -784,8 +893,9 @@ class Toolbar(QWidget):
         self._manual_positioned = False
         self._dragging = False
         self.drag_handle.set_manual_mode(False)
-        # 截图窗口复用同一个工具栏，排布可能在上次会话之后改过（比如在设置里重置）
+        # 截图窗口复用同一个工具栏，排布与快捷键可能在上次会话之后改过（比如在设置里重置）
         self.reload_layout()
+        self.refresh_shortcut_badges()
         # 隐藏自身（选区确认后再显示）
         self.hide()
 
@@ -801,13 +911,60 @@ class Toolbar(QWidget):
                 if button is not None:
                     button.setEnabled(enabled)
 
-    def _retranslate(self, _lang_code: str = None):
-        """语言切换后刷新所有按钮提示与二级面板文本。"""
+    # ========================================================================
+    # 应用内快捷键角标 / 提示
+    # ========================================================================
+
+    def _shortcut_value(self, key, manager=None) -> str:
+        """按钮当前绑定的应用内快捷键配置值；固定键或未登记的按钮返回空串。"""
+        from settings.tool_settings import TOOLBAR_SHORTCUT_BINDINGS
+
+        cfg_key = TOOLBAR_SHORTCUT_BINDINGS.get(key)
+        if not cfg_key:
+            return ""
+        if manager is None:
+            from settings import get_tool_settings_manager
+            manager = get_tool_settings_manager()
+        if manager is None:
+            return ""
+        return (manager.get_inapp_shortcut(cfg_key) or "").strip()
+
+    def _apply_button_tooltips(self):
+        """tooltip = 翻译后的原始提示 + 当前实际快捷键（没绑定就不追加）。
+
+        快捷键文本不写进翻译源，语言切换只重算提示前缀，键位始终是配置里的真实值。
+        """
+        from core.shortcut_manager import inapp_shortcut_display_text
+
         for button, source in self._tooltip_sources.items():
+            text = self.tr(source)
+            key = self._shortcut_key_by_button.get(button) if self.SHOW_SHORTCUT_BADGES else None
+            if key is not None:
+                value = self._shortcut_value(key)
+                if value:
+                    text = f"{text} ({inapp_shortcut_display_text(value)})"
             try:
-                button.setToolTip(self.tr(source))
+                button.setToolTip(text)
             except RuntimeError:
                 continue
+
+    def refresh_shortcut_badges(self):
+        """按当前配置刷新每个按钮的快捷键角标与 tooltip。
+
+        角标只显示单字符键位（1~9、单个字母）——组合键塞不进这么小的角标，其真实
+        快捷键只体现在 tooltip 里。配置在这里读一次，不在 paintEvent 里反复读。
+        """
+        from core.shortcut_manager import inapp_shortcut_display_text
+
+        for key, badge in getattr(self, "_badges", {}).items():
+            value = self._shortcut_value(key)
+            display = inapp_shortcut_display_text(value) if value else ""
+            badge.set_shortcut(display if len(display) == 1 else "")
+        self._apply_button_tooltips()
+
+    def _retranslate(self, _lang_code: str = None):
+        """语言切换后刷新所有按钮提示与二级面板文本。"""
+        self._apply_button_tooltips()
         # 二级面板的文本在构造时一次性设置，这里补一次刷新
         for attr in ("mosaic_panel", "text_panel", "note_panel"):
             panel = getattr(self, attr, None)

@@ -24,6 +24,10 @@ class PinToolbar(Toolbar):
         "undo", "redo",
     )
 
+    # 钉图工具栏的按钮由钉图自己的快捷键控制（inapp_copy_pin 等），
+    # 不吃截图作用域的工具快捷键，所以不显示那套角标。
+    SHOW_SHORTCUT_BADGES = False
+
     def __init__(self, parent_pin_window=None, config_manager=None):
         super().__init__(parent=None)
 

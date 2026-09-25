@@ -1035,6 +1035,15 @@ class SettingsDialog(FrostedFramelessDialog):
                     pin_ctrl._normal_handler.reload_bindings()
             except Exception as e:
                 log_exception(e, T("重载 Pin 快捷键绑定"))
+            # 截图窗口若正开着，同样让它重新读一次绑定与角标，不必退出重开截图
+            try:
+                screenshot_window = getattr(self.main_window, "screenshot_window", None)
+                if screenshot_window is not None and hasattr(
+                    screenshot_window, "reload_shortcut_bindings"
+                ):
+                    screenshot_window.reload_shortcut_bindings()
+            except Exception as e:
+                log_exception(e, T("重载截图快捷键绑定"))
         if hasattr(self, 'cursor_move_combo'):
             self.config_manager.set_inapp_cursor_move_mode(
                 self.cursor_move_combo.currentData()
