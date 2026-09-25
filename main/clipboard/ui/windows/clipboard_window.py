@@ -263,6 +263,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.window_opacity = self.config.get_clipboard_window_opacity()
         self.display_lines = self.config.get_clipboard_font_size()
         self.group_bar_position = self.config.get_clipboard_group_bar_position()
+        self.display_mode = self.config.get_clipboard_display_mode()
 
     def _current_date_locale(self) -> QLocale:
         try:
@@ -449,6 +450,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
             window_opacity=self.window_opacity,
             show_metadata=show_metadata,
             line_height_padding=line_height_padding,
+            display_mode=getattr(self, "display_mode", "both"),
         )
         self.list_widget.setItemDelegate(self._item_delegate)
         self.list_widget.setMouseTracking(True)
@@ -633,6 +635,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
             close_after_paste=self.config.get_clipboard_close_after_paste(),
             move_to_top=self.config.get_clipboard_move_to_top_on_paste(),
             show_metadata=self.config.get_clipboard_show_metadata(),
+            display_mode=self.display_mode,
             preserve_search=self.config.get_clipboard_preserve_search(),
             window_opacity=self.window_opacity,
             current_font_size=self.config.get_clipboard_font_size(),
@@ -645,6 +648,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
             on_toggle_close_after_paste=self._toggle_close_after_paste,
             on_toggle_move_to_top=self._toggle_move_to_top_on_paste,
             on_toggle_show_metadata=self._toggle_show_metadata,
+            on_set_display_mode=self._set_display_mode,
             on_toggle_preserve_search=self._toggle_preserve_search,
             on_set_opacity=self._set_window_opacity,
             on_set_font_size=self._set_font_size,
@@ -712,6 +716,14 @@ class ClipboardWindow(QWidget, FramelessMixin):
             self._item_delegate.set_show_metadata(checked)
         self.controller.load_history()
 
+    def _set_display_mode(self, mode: str):
+        """切换列表项显示方案（icon / title / both）。"""
+        self.display_mode = mode
+        self.config.set_clipboard_display_mode(mode)
+        if hasattr(self, "_item_delegate"):
+            self._item_delegate.set_display_mode(mode)
+        self._refresh_list()
+
     def _toggle_preserve_search(self, checked: bool):
         self.config.set_clipboard_preserve_search(checked)
 
@@ -767,6 +779,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self._item_delegate.set_display_lines(self.display_lines)
         self._item_delegate.set_window_opacity(self.window_opacity)
         self._item_delegate.set_theme(self.current_theme)
+        self._item_delegate.set_display_mode(self.display_mode)
         self._item_delegate.set_highlighted_id(None)
 
         for item in self.controller.current_items:

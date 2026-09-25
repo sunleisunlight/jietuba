@@ -14,16 +14,27 @@ MORE = "more"   # 收进「…」弹层
 HIDE = "hide"   # 始终隐藏
 MODES = (SHOW, MORE, HIDE)
 
-# 可配置按钮的全集，也是默认顺序
+# 可配置按钮的全集，也是默认顺序。
+# 默认按"先数字、后英文、再无快捷键"排：1~9 数字快捷键的按钮排最前（含收进「…」的
+# 文字识别/截图翻译，它们的 8/9 仍排在数字队列里），接着是单字母快捷键的按钮，再是
+# 组合键/固定键，没有快捷键的按钮垫底；「确定」是固定收尾按钮，始终在最右。
 DEFAULT_ORDER = (
-    "long_screenshot", "save", "screenshot_translate", "text_recognize", "scan_code", "gif",
-    "pen", "highlighter", "mosaic", "spotlight", "arrow", "number", "rect", "ellipse", "text", "note",
-    "eraser", "undo", "redo",
-    "cancel", "pin", "confirm",
+    # 数字 1~9
+    "note", "rect", "arrow", "text", "number", "pin", "mosaic",
+    "text_recognize", "screenshot_translate",
+    # 单字母快捷键
+    "pen", "highlighter", "ellipse", "eraser",
+    # 组合键 / 固定键
+    "undo", "redo", "cancel",
+    # 无快捷键
+    "long_screenshot", "save", "scan_code", "gif", "spotlight",
+    # 固定收尾
+    "confirm",
 )
 
-# 默认收进「…」的按钮，其余默认始终显示。后加的低频功能放这里，免得把工具栏默认宽度越撑越宽
-DEFAULT_MORE = frozenset({"text_recognize", "scan_code", "spotlight"})
+# 默认收进「…」的按钮，其余默认始终显示。后加的低频、无快捷键功能放这里，
+# 免得把工具栏默认宽度越撑越宽；数字 8/9 的识别/翻译给足存在感，拿出来始终显示。
+DEFAULT_MORE = frozenset({"scan_code", "spotlight"})
 
 # 确定按钮固定显示、不可调整，也不出现在工具栏调整界面中：截图必须始终有办法收尾。
 # 其余按钮都是普通编辑操作，用户可以自由排序、收进「…」或隐藏。

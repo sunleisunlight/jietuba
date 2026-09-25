@@ -168,7 +168,7 @@ def test_toolbar_layout_dialog_scales_rows_without_rewriting_the_layout_tree(qap
     from ui.toolbar_layout_dialog import ToolbarLayoutDialog
 
     get_dialog_scale().set_percent(150)
-    dialog = ToolbarLayoutDialog(default_layout(), {key: QIcon() for key in DEFAULT_ORDER})
+    dialog = ToolbarLayoutDialog(default_layout(), {key: QIcon() for key in DEFAULT_ORDER}, {})
     try:
         first_row = next(iter(dialog._rows.values()))
         margins = dialog.layout().contentsMargins()

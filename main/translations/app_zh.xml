@@ -1752,6 +1752,22 @@ Replace it?</source>
         <translation>字体大小</translation>
     </message>
     <message>
+        <source>Display Mode</source>
+        <translation>显示方案</translation>
+    </message>
+    <message>
+        <source>Icon Only</source>
+        <translation>仅图标</translation>
+    </message>
+    <message>
+        <source>Title Only</source>
+        <translation>仅标题</translation>
+    </message>
+    <message>
+        <source>Icon + Title</source>
+        <translation>图标 + 标题</translation>
+    </message>
+    <message>
         <source>Theme</source>
         <translation>主题</translation>
     </message>

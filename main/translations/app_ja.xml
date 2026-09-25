@@ -1717,6 +1717,22 @@ Replace it?</source>
         <translation>文字サイズ</translation>
     </message>
     <message>
+        <source>Display Mode</source>
+        <translation>表示モード</translation>
+    </message>
+    <message>
+        <source>Icon Only</source>
+        <translation>アイコンのみ</translation>
+    </message>
+    <message>
+        <source>Title Only</source>
+        <translation>タイトルのみ</translation>
+    </message>
+    <message>
+        <source>Icon + Title</source>
+        <translation>アイコン + タイトル</translation>
+    </message>
+    <message>
         <source>Theme</source>
         <translation>配色</translation>
     </message>

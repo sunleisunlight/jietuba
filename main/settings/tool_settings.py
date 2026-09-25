@@ -361,6 +361,8 @@ class ToolSettingsManager(QObject):
         "clipboard_window_opacity_options": [0, 20, 30, 40, 50, 60],  # 透明度可选项（可在此调整选项）
         "clipboard_paste_with_html": True,     # 粘贴时是否带 HTML 格式
         "clipboard_show_metadata": True,       # 显示时间和来源信息
+        # 剪贴板列表项显示方案: icon / title / both
+        "clipboard_display_mode": "both",
         "clipboard_font_size": 17,            # 剪贴板项字体大小（像素）
         "clipboard_font_size_options": [15, 16, 17, 18, 19, 20],  # 字体大小可选项
         "clipboard_line_height_padding": 8,   # 多行显示时的额外行高边距（像素，用于确保完整显示）
@@ -1587,6 +1589,20 @@ class ToolSettingsManager(QObject):
     def set_clipboard_show_metadata(self, value: bool):
         """设置是否显示时间和来源信息"""
         self.qsettings.setValue("clipboard/show_metadata", value)
+
+    def get_clipboard_display_mode(self) -> str:
+        """剪贴板列表项显示方案: icon / title / both。非法值回落 both。"""
+        mode = self.qsettings.value(
+            "clipboard/display_mode",
+            self.APP_DEFAULT_SETTINGS["clipboard_display_mode"],
+            type=str,
+        )
+        return mode if mode in ("icon", "title", "both") else "both"
+
+    def set_clipboard_display_mode(self, mode: str):
+        """设置剪贴板列表项显示方案。"""
+        mode = mode if mode in ("icon", "title", "both") else "both"
+        self.qsettings.setValue("clipboard/display_mode", mode)
     
     def get_clipboard_preserve_search(self) -> bool:
         """获取是否在关闭时保留搜索栏内容"""

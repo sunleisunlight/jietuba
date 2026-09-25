@@ -101,7 +101,7 @@ class NoteItem(TextItem):
     }
 
     # 100% UI 比例下的基准像素
-    BASE_GAP = 14.0              # 目标框与文本框之间的间隙
+    BASE_GAP = 24.0              # 目标框与文本框之间的间隙（默认留足，阅读不局促）
     BASE_TEXT_WIDTH = 200.0      # 默认段落宽度
     BASE_MAX_TEXT_WIDTH = 520.0  # 段落宽度上限，避免拖成一条横贯全屏的带子
     BASE_MIN_ROOM = 26.0         # 上下方向至少要有这么高的空间才认为"放得下"

@@ -30,6 +30,7 @@ def show_setting_menu(
     close_after_paste: bool,
     move_to_top: bool,
     show_metadata: bool,
+    display_mode: str = "both",
     preserve_search: bool,
     window_opacity: int,
     current_font_size: int,
@@ -43,6 +44,7 @@ def show_setting_menu(
     on_toggle_close_after_paste: Callable,
     on_toggle_move_to_top: Callable,
     on_toggle_show_metadata: Callable,
+    on_set_display_mode: Callable,
     on_toggle_preserve_search: Callable,
     on_set_opacity: Callable,
     on_set_font_size: Callable,
@@ -93,6 +95,19 @@ def show_setting_menu(
         act.setCheckable(True)
         act.setChecked(current_font_size == size)
         act.triggered.connect(lambda _c, s=size: on_set_font_size(s))
+
+    # ── 显示方案子菜单 ──
+    display_mode_menu = menu.addMenu(tr("Display Mode"))
+    display_mode_menu.setStyleSheet(menu_style)
+    for key, label in (
+        ("icon", tr("Icon Only")),
+        ("title", tr("Title Only")),
+        ("both", tr("Icon + Title")),
+    ):
+        act = display_mode_menu.addAction(label)
+        act.setCheckable(True)
+        act.setChecked(display_mode == key)
+        act.triggered.connect(lambda _c, k=key: on_set_display_mode(k))
 
     # ── 主题子菜单 ──
     theme_menu = menu.addMenu(tr("Theme"))

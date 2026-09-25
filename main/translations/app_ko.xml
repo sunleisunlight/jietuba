@@ -1671,6 +1671,22 @@ Replace it?</source>
         <translation>글꼴 크기</translation>
     </message>
     <message>
+        <source>Display Mode</source>
+        <translation>표시 방식</translation>
+    </message>
+    <message>
+        <source>Icon Only</source>
+        <translation>아이콘만</translation>
+    </message>
+    <message>
+        <source>Title Only</source>
+        <translation>제목만</translation>
+    </message>
+    <message>
+        <source>Icon + Title</source>
+        <translation>아이콘 + 제목</translation>
+    </message>
+    <message>
         <source>Theme</source>
         <translation>테마</translation>
     </message>

@@ -75,6 +75,7 @@ class ClipboardItemDelegate(QStyledItemDelegate):
         show_metadata: bool = True,
         line_height_padding: int = 8,
         show_shortcuts: bool = True,
+        display_mode: str = "both",
     ):
         super().__init__(parent)
         self._theme: Theme = theme
@@ -83,6 +84,7 @@ class ClipboardItemDelegate(QStyledItemDelegate):
         self._show_metadata = show_metadata
         self._line_height_padding = line_height_padding
         self._show_shortcuts = show_shortcuts
+        self._display_mode = display_mode if display_mode in ("icon", "title", "both") else "both"
         self._hide_file_icon = False
         self._highlighted_id: Optional[int] = None
 
@@ -112,6 +114,9 @@ class ClipboardItemDelegate(QStyledItemDelegate):
 
     def set_show_metadata(self, show: bool):
         self._show_metadata = show
+
+    def set_display_mode(self, mode: str):
+        self._display_mode = mode if mode in ("icon", "title", "both") else "both"
 
     def set_show_shortcuts(self, show: bool):
         self._show_shortcuts = show
@@ -236,43 +241,47 @@ class ClipboardItemDelegate(QStyledItemDelegate):
         x_offset = content_left
 
         # ---- 图标 / 缩略图 ----
-        if item_data.content_type == "image" and item_data.thumbnail:
-            pixmap = self._get_thumbnail(item_data.thumbnail)
-            if pixmap:
-                thumb_rect = QRect(x_offset, content_top + 1, 40, 40)
-                painter.drawPixmap(thumb_rect, pixmap)
-                x_offset += 44  # 40 + 4间距
-        elif item_data.icon and not (self._hide_file_icon and item_data.content_type == "file"):
-            painter.setFont(self._font_cache["icon"])
-            painter.setPen(cc["text_primary"])
-            icon_rect = QRect(x_offset, content_top, 24, int(font_size * 1.4))
-            painter.drawText(icon_rect, Qt.AlignmentFlag.AlignVCenter, item_data.icon)
-            x_offset += 24
+        # 仅图标 / 图标+标题 才画；仅标题模式只看文字。
+        if self._display_mode in ("icon", "both"):
+            if item_data.content_type == "image" and item_data.thumbnail:
+                pixmap = self._get_thumbnail(item_data.thumbnail)
+                if pixmap:
+                    thumb_rect = QRect(x_offset, content_top + 1, 40, 40)
+                    painter.drawPixmap(thumb_rect, pixmap)
+                    x_offset += 44  # 40 + 4间距
+            elif item_data.icon and not (self._hide_file_icon and item_data.content_type == "file"):
+                painter.setFont(self._font_cache["icon"])
+                painter.setPen(cc["text_primary"])
+                icon_rect = QRect(x_offset, content_top, 24, int(font_size * 1.4))
+                painter.drawText(icon_rect, Qt.AlignmentFlag.AlignVCenter, item_data.icon)
+                x_offset += 24
 
         # ---- 内容文字 ----
-        content_font = self._font_cache["content"]
-        painter.setFont(content_font)
-        painter.setPen(cc["text_primary"])
+        # 仅标题 / 图标+标题 才画；仅图标模式只看图标，不画标题。
+        if self._display_mode in ("title", "both"):
+            content_font = self._font_cache["content"]
+            painter.setFont(content_font)
+            painter.setPen(cc["text_primary"])
 
-        text_rect = QRect(x_offset, content_top, content_right - x_offset, int(font_size * 1.4))
+            text_rect = QRect(x_offset, content_top, content_right - x_offset, int(font_size * 1.4))
 
-        # 如果有 标记，给右侧留空间
-        pin_width = 0
-        if item_data.is_pinned:
-            pin_width = 24
+            # 如果有 标记，给右侧留空间
+            pin_width = 0
+            if item_data.is_pinned:
+                pin_width = 24
 
-        display_text = item_data.display_text
-        fm = self._fm_cache["content"]
-        elided_text = fm.elidedText(display_text, Qt.TextElideMode.ElideRight, text_rect.width() - pin_width)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter, elided_text)
+            display_text = item_data.display_text
+            fm = self._fm_cache["content"]
+            elided_text = fm.elidedText(display_text, Qt.TextElideMode.ElideRight, text_rect.width() - pin_width)
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter, elided_text)
 
-        # ---- 置顶标记 ----
-        if item_data.is_pinned:
-            pin_rect = QRect(content_right - pin_width, content_top, pin_width, int(font_size * 1.4))
-            painter.drawText(pin_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, "📌")
+            # ---- 置顶标记 ----
+            if item_data.is_pinned:
+                pin_rect = QRect(content_right - pin_width, content_top, pin_width, int(font_size * 1.4))
+                painter.drawText(pin_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, "📌")
 
         # ---- 第二行：元数据 ----
-        if self._show_metadata:
+        if self._show_metadata and self._display_mode in ("title", "both"):
             painter.setFont(self._font_cache["meta"])
             painter.setPen(cc["text_tertiary"])
 
@@ -293,7 +302,8 @@ class ClipboardItemDelegate(QStyledItemDelegate):
         font_size = self._display_lines if self._display_lines >= 10 else 15
         content_height = int(font_size * 1.4) + 2  # 内容行 + 上下边距
 
-        if self._show_metadata:
+        # 只有「图标+标题」模式才显示第二行元数据
+        if self._show_metadata and self._display_mode == "both":
             content_height += 16  # 元数据行高
 
         item_data: ClipboardItem = index.data(ROLE_ITEM_DATA)

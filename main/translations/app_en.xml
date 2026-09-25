@@ -1608,6 +1608,22 @@ Replace it?</translation>
         <translation>Font Size</translation>
     </message>
     <message>
+        <source>Display Mode</source>
+        <translation>Display Mode</translation>
+    </message>
+    <message>
+        <source>Icon Only</source>
+        <translation>Icon Only</translation>
+    </message>
+    <message>
+        <source>Title Only</source>
+        <translation>Title Only</translation>
+    </message>
+    <message>
+        <source>Icon + Title</source>
+        <translation>Icon + Title</translation>
+    </message>
+    <message>
         <source>Theme</source>
         <translation>Theme</translation>
     </message>

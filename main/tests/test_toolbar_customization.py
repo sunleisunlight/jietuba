@@ -76,14 +76,14 @@ class TestNormalizeLayout:
         ]
         keys = [key for key, _mode in normalize_layout(stored)]
         assert keys[0] == "confirm"
-        assert keys[keys.index("highlighter") + 1] == "mosaic"
+        assert keys[keys.index("number") + 1] == "mosaic"
 
     def test_button_missing_from_an_old_config_gets_its_default_mode(self):
         """升级前存下的排布里没有扫码按钮：补回时按默认收进「…」，工具栏不会突然变宽"""
         stored = [(key, SHOW) for key in DEFAULT_ORDER if key != "scan_code"]
         layout = normalize_layout(stored)
         keys = [key for key, _mode in layout]
-        assert keys[keys.index("text_recognize") + 1] == "scan_code"
+        assert keys[keys.index("save") + 1] == "scan_code"
         assert dict(layout)["scan_code"] == MORE
 
     def test_a_layout_saved_before_note_existed_gains_the_note_button(self):
@@ -92,8 +92,7 @@ class TestNormalizeLayout:
         layout = normalize_layout(stored)
         keys = [key for key, _mode in layout]
 
-        assert "note" in keys
-        assert keys[keys.index("text") + 1] == "note", "备注应当补在文字按钮后面"
+        assert keys[0] == "note", "备注是数字 1，默认排在最前"
         assert dict(layout)["note"] == SHOW
         # 去重、保序：原有按钮一个不少也不重复
         assert len(keys) == len(set(keys)) == len(DEFAULT_ORDER)
@@ -116,9 +115,9 @@ class TestScreenshotToolbar:
     def test_default_layout_folds_low_frequency_buttons_and_ends_with_more(self, qapp):
         toolbar = Toolbar()
         assert _toolbar_row(toolbar) == [
-            key for key in DEFAULT_ORDER if key not in ("text_recognize", "scan_code", "spotlight")
+            key for key in DEFAULT_ORDER if key not in ("scan_code", "spotlight")
         ] + ["more"]
-        assert toolbar._folded_keys == ["text_recognize", "scan_code", "spotlight"]
+        assert toolbar._folded_keys == ["scan_code", "spotlight"]
         assert toolbar.copy_btn.isHidden()
         geometries = [toolbar._buttons[key].geometry() for key in _toolbar_row(toolbar)]
         for left, right in zip(geometries, geometries[1:]):
@@ -141,7 +140,7 @@ class TestScreenshotToolbar:
         assert row[0] == "pin"
         assert row[-1] == "more"
         assert "mosaic" not in row and "text" not in row
-        assert toolbar._folded_keys == ["text_recognize", "scan_code", "mosaic"]
+        assert toolbar._folded_keys == ["mosaic", "text_recognize", "scan_code"]
         assert toolbar.width() < default_width
 
     def test_hiding_a_tool_only_hides_its_button(self, qapp):
@@ -151,10 +150,10 @@ class TestScreenshotToolbar:
         assert toolbar.current_tool == "mosaic"
         assert toolbar.mosaic_btn.isChecked()
 
-    def test_note_button_sits_between_text_and_mosaic_and_selects_the_tool(self, qapp):
-        """备注按钮排在文字后面，点它切到 note 工具并弹出备注设置面板"""
+    def test_note_button_is_first_and_selects_the_tool(self, qapp):
+        """备注是数字 1，默认排在所有工具最前；点它切到 note 工具并弹出备注设置面板"""
         toolbar = Toolbar()
-        assert _toolbar_row(toolbar)[_toolbar_row(toolbar).index("text") + 1] == "note"
+        assert _toolbar_row(toolbar)[0] == "note"
         assert toolbar.tool_buttons["note"] is toolbar.note_btn
 
         toolbar.select_tool("note")
@@ -226,7 +225,7 @@ class TestPinToolbar:
 class TestLayoutDialog:
 
     def _dialog(self, layout):
-        dialog = ToolbarLayoutDialog(layout, {key: QIcon() for key in DEFAULT_ORDER})
+        dialog = ToolbarLayoutDialog(layout, {key: QIcon() for key in DEFAULT_ORDER}, {})
         dialog.show()
         QApplication.processEvents()
         return dialog
