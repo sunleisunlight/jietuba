@@ -10,6 +10,7 @@
 
 import ctypes
 import ctypes.wintypes
+import sys
 from typing import List, Tuple, Optional
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QRegion
@@ -36,13 +37,16 @@ class _MonitorInfo(ctypes.Structure):
     ]
 
 
-_user32 = ctypes.windll.user32
-# HMONITOR 是指针宽度的句柄。不声明签名时 ctypes 按 32 位 int 传参，
-# 副屏拿到的大句柄会溢出，整个查询退回虚拟桌面。
-_user32.MonitorFromPoint.argtypes = [ctypes.wintypes.POINT, ctypes.wintypes.DWORD]
-_user32.MonitorFromPoint.restype = ctypes.wintypes.HANDLE
-_user32.GetMonitorInfoW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(_MonitorInfo)]
-_user32.GetMonitorInfoW.restype = ctypes.wintypes.BOOL
+if sys.platform == "win32":
+    _user32 = ctypes.windll.user32
+    # HMONITOR 是指针宽度的句柄。不声明签名时 ctypes 按 32 位 int 传参，
+    # 副屏拿到的大句柄会溢出，整个查询退回虚拟桌面。
+    _user32.MonitorFromPoint.argtypes = [ctypes.wintypes.POINT, ctypes.wintypes.DWORD]
+    _user32.MonitorFromPoint.restype = ctypes.wintypes.HANDLE
+    _user32.GetMonitorInfoW.argtypes = [ctypes.wintypes.HANDLE, ctypes.POINTER(_MonitorInfo)]
+    _user32.GetMonitorInfoW.restype = ctypes.wintypes.BOOL
+else:
+    _user32 = None
 
 
 def get_window_rect_no_shadow(hwnd):
@@ -360,11 +364,6 @@ def is_smart_selection_available() -> bool:
     """
     return WINDOWS_API_AVAILABLE
 
-
-# ============================================================================
-# 便捷接口
-# ============================================================================
-
 def find_window_at_cursor(screen_offset_x: int = 0, screen_offset_y: int = 0) -> Optional[List[int]]:
     """
     快捷方式：查找当前鼠标位置的窗口
@@ -394,4 +393,16 @@ def find_window_at_cursor(screen_offset_x: int = 0, screen_offset_y: int = 0) ->
     except Exception as e:
         log_error(T("查找窗口失败: {e}", e=e), module="SmartSelection")
         return None
- 
+
+
+# ============================================================================
+# 平台分派：macOS 使用 CGWindowList 实现（同一上层接口）
+# ============================================================================
+if sys.platform == "darwin":
+    from platforms.macos.window_finder import (  # noqa: E402
+        MacWindowFinder as _MacWindowFinder,
+        is_smart_selection_available as _mac_is_available,
+    )
+
+    WindowFinder = _MacWindowFinder  # noqa: F811
+    is_smart_selection_available = _mac_is_available  # noqa: F811

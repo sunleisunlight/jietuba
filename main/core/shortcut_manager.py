@@ -1,4 +1,4 @@
-﻿"""
+"""
 统一快捷键管理器
 
 合并了三套机制：
@@ -37,6 +37,7 @@
 from __future__ import annotations
 
 import ctypes
+import sys
 from abc import ABC, abstractmethod
 from ctypes import wintypes
 from typing import Callable, Dict, List, Optional, Set, Tuple
@@ -51,7 +52,7 @@ from core import log_debug, log_error, safe_event
 from core.logger import log_exception, T
 
 # ======================================================================
-# Windows API 常量
+# Windows API 常量（Windows 后端解析用）
 # ======================================================================
 WM_HOTKEY = 0x0312
 MOD_ALT = 0x0001
@@ -59,6 +60,9 @@ MOD_CONTROL = 0x0002
 MOD_SHIFT = 0x0004
 MOD_WIN = 0x0008
 MOD_NOREPEAT = 0x4000
+
+_IS_WINDOWS = sys.platform == "win32"
+_IS_MACOS = sys.platform == "darwin"
 
 
 # ======================================================================
@@ -343,6 +347,10 @@ class ShortcutManager(QObject):
         self._next_hotkey_id = 1
         self._global_hotkeys_suppressed = False
 
+        # ── 平台热键后端（Windows RegisterHotKey / macOS Carbon）──
+        from platforms import get_platform_backend
+        self._hotkey_backend = get_platform_backend().hotkeys
+
         # ── 鼠标侧键 ──
         self._mouse_callbacks: Dict[str, Callable] = {}
         self._mouse_listener = None   # pynput.mouse.Listener，按需启停
@@ -357,8 +365,11 @@ class ShortcutManager(QObject):
         # 按下被消费时置位，好让配对的抬起/双击一起吞掉，见 _filter_inapp_mouse
         self._inapp_mouse_claimed = False
 
-        # 安装原生事件过滤器（WM_HOTKEY）
-        self._native_filter = _HotkeyEventFilter(self, self._id_to_callback)
+        # 安装原生事件过滤器（WM_HOTKEY；macOS 走 Carbon 事件处理器）
+        if _IS_WINDOWS:
+            self._native_filter = _HotkeyEventFilter(self, self._id_to_callback)
+        else:
+            self._native_filter = None
 
     @classmethod
     def instance(cls) -> 'ShortcutManager':
@@ -367,8 +378,9 @@ class ShortcutManager(QObject):
             app = QApplication.instance()
             if app:
                 app.installEventFilter(cls._instance)
-                app.installNativeEventFilter(cls._instance._native_filter)
-                log_debug(T("ShortcutManager 已安装（KeyPress + WM_HOTKEY）"), "Shortcut")
+                if cls._instance._native_filter is not None:
+                    app.installNativeEventFilter(cls._instance._native_filter)
+                log_debug(T("ShortcutManager 已安装（KeyPress + 全局热键）"), "Shortcut")
         return cls._instance
 
     # ==================================================================
@@ -632,24 +644,21 @@ class ShortcutManager(QObject):
     # ==================================================================
 
     def register_hotkey(self, hotkey_str: str, callback: Callable) -> bool:
-        """注册一个全局热键（Windows 键盘热键，或鼠标侧键 token）"""
+        """注册一个全局热键（键盘热键，或鼠标侧键 token）"""
         if is_mouse_button_hotkey(hotkey_str):
             return self._register_mouse_hotkey(hotkey_str.strip().lower(), callback)
-        try:
-            mods, vk = self._parse_hotkey(hotkey_str)
-            hid = self._next_hotkey_id
 
-            if ctypes.windll.user32.RegisterHotKey(None, hid, mods, vk):
-                self._id_to_callback[hid] = callback
-                self._id_to_metadata[hid] = (mods, vk)
-                ShortcutManager._registered_keys_global.add((mods, vk))
-                self._next_hotkey_id += 1
-                return True
-            else:
-                return False
-        except Exception as e:
-            log_error(f"Error registering hotkey {hotkey_str}: {e}", module="Hotkey")
-            return False
+        hid = self._next_hotkey_id
+        # 平台后端注册：Windows=RegisterHotKey，macOS=Carbon RegisterEventHotKey
+        if self._hotkey_backend.register(hid, hotkey_str, callback):
+            self._id_to_callback[hid] = callback
+            try:
+                self._id_to_metadata[hid] = self._parse_hotkey(hotkey_str)
+            except (TypeError, ValueError):
+                self._id_to_metadata[hid] = (0, 0)
+            self._next_hotkey_id += 1
+            return True
+        return False
 
     def _register_mouse_hotkey(self, token: str, callback: Callable) -> bool:
         """登记一个鼠标侧键 token（同进程内去重，语义对齐 RegisterHotKey 不允许重复注册）。"""
@@ -743,13 +752,34 @@ class ShortcutManager(QObject):
             return
         try:
             from pynput import mouse
-            listener = mouse.Listener(win32_event_filter=self._mouse_event_filter)
+            if _IS_WINDOWS:
+                # Windows：WH_MOUSE_LL 低级钩子，可抑制已绑定侧键。
+                listener = mouse.Listener(
+                    win32_event_filter=self._mouse_event_filter
+                )
+            else:
+                # macOS：CGEventTap 回调，pynput 的 darwin 后端不支持
+                # win32_event_filter/suppress_event，只能监听、不能独占抑制。
+                # 侧键权限受 Input Monitoring 限制；失败会在这里被捕获，
+                # 优雅降级为「侧键不可用」，不影响启动。
+                listener = mouse.Listener(
+                    on_click=lambda x, y, button, pressed: (
+                        self._on_mac_mouse_click(button, pressed)
+                    )
+                )
             # filter 在 start() 之后随时可能被钩子线程调用，先赋值再启动。
             self._mouse_listener = listener
             listener.start()
         except Exception as e:
             self._mouse_listener = None
             log_error(f"鼠标侧键监听启动失败: {e}", module="Hotkey")
+
+    def _on_mac_mouse_click(self, button, pressed):
+        """macOS 侧键回调（钩子线程）。只转发按下事件，无法做系统级抑制。"""
+        token = _PYNPUT_BUTTON_NAME_TOKENS.get(getattr(button, "name", ""))
+        if token is None or not pressed:
+            return
+        self._mouse_button_triggered.emit(token)
 
     def _stop_mouse_listener(self):
         """停止侧键监听线程并摘掉钩子（幂等）。"""
@@ -765,35 +795,16 @@ class ShortcutManager(QObject):
             log_exception(e, T("停止鼠标侧键监听"))
 
     def check_hotkey_availability(self, hotkey_str: str) -> bool:
-        """检查快捷键是否可用（通过临时注册测试）"""
+        """检查快捷键是否可用（临时注册测试）"""
         if is_mouse_button_hotkey(hotkey_str):
             # 鼠标侧键没有系统级冲突探测手段（RegisterHotKey 不支持鼠标按键），
             # 只能在真正注册时通过登记表防重复，这里始终视为可用。
             return True
-        try:
-            mods, vk = self._parse_hotkey(hotkey_str)
-
-            if (mods, vk) in ShortcutManager._registered_keys_global:
-                return True
-
-            test_id = 9999
-            success = ctypes.windll.user32.RegisterHotKey(None, test_id, mods, vk)
-            if success:
-                ctypes.windll.user32.UnregisterHotKey(None, test_id)
-                return True
-            return False
-        except Exception as e:
-            log_exception(e, T("检查快捷键可用性"))
-            return False
+        return self._hotkey_backend.check_available(hotkey_str)
 
     def unregister_all_hotkeys(self):
-        """注销所有全局热键（Windows 键盘热键 + 鼠标侧键登记）"""
-        for hid in list(self._id_to_callback.keys()):
-            ctypes.windll.user32.UnregisterHotKey(None, hid)
-            meta = self._id_to_metadata.get(hid)
-            if meta and meta in ShortcutManager._registered_keys_global:
-                ShortcutManager._registered_keys_global.discard(meta)
-
+        """注销所有全局热键（平台键盘热键 + 鼠标侧键登记）"""
+        self._hotkey_backend.unregister_all()
         self._id_to_callback.clear()
         self._id_to_metadata.clear()
 
@@ -961,6 +972,41 @@ def _build_key_tables():
 # 模块级缓存，首次访问时构建
 _QT_KEY_TO_DISPLAY: Optional[Dict[int, str]] = None
 _STR_TO_QT_KEY: Optional[Dict[str, int]] = None
+
+
+# ── 平台化热键字符串显示 ───────────────────────────────
+_MOD_DISPLAY = (
+    ("ctrl", "Control"),
+    ("control", "Control"),
+    ("win", "Cmd"),
+    ("meta", "Cmd"),
+    ("super", "Cmd"),
+    ("cmd", "Cmd"),
+    ("command", "Cmd"),
+    ("alt", "Option"),
+    ("shift", "Shift"),
+)
+
+
+def display_hotkey_str(hotkey: str) -> str:
+    """设置/欢迎页展示用：macOS 上把 win/ctrl/alt 显示为 Cmd/Control/Option。
+
+    只影响显示，不改变存储格式（配置跨平台保持 ctrl+1 等原样）。
+    """
+    import sys
+    if sys.platform != "darwin" or not hotkey:
+        return hotkey
+    parts = [p.strip() for p in hotkey.split("+") if p.strip()]
+    out = []
+    for p in parts:
+        lp = p.lower()
+        mapped = None
+        for mod, disp in _MOD_DISPLAY:
+            if lp == mod:
+                mapped = disp
+                break
+        out.append(mapped if mapped else p)
+    return "+".join(out)
 
 
 def get_key_display_map() -> Dict[int, str]:

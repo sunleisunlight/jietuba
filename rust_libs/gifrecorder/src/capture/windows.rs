@@ -1,4 +1,4 @@
-//! Win32 GDI 屏幕截取 — BitBlt 方案
+//! Win32 GDI 屏幕截取 — BitBlt 方案（Windows Backend）
 //!
 //! 优势：
 //!   - 纯 Rust，零 Python 依赖（替代 mss）
@@ -60,24 +60,33 @@ struct BITMAPINFO {
 extern "system" {
     fn GetDC(hWnd: HWND) -> HDC;
     fn ReleaseDC(hWnd: HWND, hDC: HDC) -> i32;
-    fn CreateCompatibleDC(hdc: HDC) -> HDC;
-    fn DeleteDC(hdc: HDC) -> BOOL;
-    fn CreateCompatibleBitmap(hdc: HDC, cx: i32, cy: i32) -> HBITMAP;
-    fn SelectObject(hdc: HDC, h: HGDIOBJ) -> HGDIOBJ;
+    fn CreateCompatibleDC(hDC: HDC) -> HDC;
+    fn CreateCompatibleBitmap(hDC: HDC, width: i32, height: i32) -> HBITMAP;
+    fn SelectObject(hDC: HDC, h: HGDIOBJ) -> HGDIOBJ;
     fn DeleteObject(h: HGDIOBJ) -> BOOL;
+    fn DeleteDC(hDC: HDC) -> BOOL;
     fn BitBlt(
-        hdc: HDC, x: i32, y: i32, cx: i32, cy: i32,
-        hdcSrc: HDC, x1: i32, y1: i32, rop: DWORD,
+        hdcDest: HDC,
+        xDest: i32,
+        yDest: i32,
+        width: i32,
+        height: i32,
+        hdcSrc: HDC,
+        xSrc: i32,
+        ySrc: i32,
+        rop: DWORD,
     ) -> BOOL;
     fn GetDIBits(
-        hdc: HDC, hbm: HBITMAP, start: u32, cLines: u32,
-        lpvBits: *mut u8, lpbmi: *mut BITMAPINFO, usage: u32,
+        hdc: HDC,
+        hbm: HBITMAP,
+        start: u32,
+        lines: u32,
+        lpvBits: *mut u8,
+        lpbmi: *mut BITMAPINFO,
+        usage: u32,
     ) -> i32;
 }
 
-// ── 截屏上下文（可复用，避免每帧重新创建 GDI 对象）──
-
-/// 屏幕截取器 — 持有 GDI 资源，可重复截屏同一区域
 pub(crate) struct ScreenCapture {
     left: i32,
     top: i32,
@@ -87,7 +96,7 @@ pub(crate) struct ScreenCapture {
     hdc_mem: HDC,
     hbitmap: HBITMAP,
     hbitmap_old: HGDIOBJ,
-    buffer: Vec<u8>,     // BGRA 像素缓冲区（复用）
+    buffer: Vec<u8>, // BGRA 像素缓冲区（复用）
 }
 
 // GDI 句柄可跨线程使用（在同一线程创建和操作）

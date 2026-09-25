@@ -2,16 +2,29 @@
 build/
 dist/
 *.spec
+*.spec.bak
 
 # 会话数据
 .workbuddy/
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
+.venv/
+venv/
+*.egg-info/
 
 # 测试临时产物
 main/out.gif
 main/scaled.gif
 main/odd.gif
+
+# macOS
+.DS_Store
+
+# Rust / maturin
+target/
+*.so
+*.dylib
+wheels/

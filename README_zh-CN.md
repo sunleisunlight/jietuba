@@ -1,8 +1,8 @@
 **[中文](README_zh-CN.md)** | [English](README.md) | [日本語](README_JA.md)
 
-# 截图吧 — Windows 截图、OCR、钉图、翻译与剪贴板工具
+# 截图吧 — Windows / macOS 截图、OCR、钉图、翻译与剪贴板工具
 
-[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4?style=flat-square)
+[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
 [下载 Windows 版](https://github.com/1003129155/jietuba/releases/latest) · [源码运行](#source-setup) · [开发与测试](#development)
 
@@ -10,11 +10,13 @@
 
 ## 项目简介
 
-截图吧是一款免费开源的 Windows 截图工具：区域与窗口截图、滚动长截图拼接、标注、OCR 文字识别、翻译、钉图、GIF 录制、二维码/条形码识别、PDF 导出，以及完整的剪贴板历史管理。所有功能本地运行。
+截图吧是一款免费开源的跨平台截图工具，Windows 与 macOS 共用同一套代码：区域与窗口截图、滚动长截图拼接、标注、OCR 文字识别、翻译、钉图、GIF 录制、二维码/条形码识别、PDF 导出，以及完整的剪贴板历史管理。所有功能本地运行。
 
-界面使用 PySide6 构建，图像处理、剪贴板操作和 OCR 由 Rust 实现，支持 Windows x86_64 与 ARM64。
+界面使用 PySide6 构建，图像处理、剪贴板操作和 OCR 由 Rust 实现。Windows 支持 x86_64 与 ARM64；macOS 支持 Apple Silicon（arm64）。
 
-提供可直接运行的 Windows 发行包，也支持从源码运行。
+底层系统能力（截图、窗口枚举、全局快捷键、剪贴板、辅助功能、权限等）按平台实现（`main/platforms/windows` 与 `main/platforms/macos`），其余 UI 与业务逻辑完全共享。开发/构建规范见 [AGENTS.md](AGENTS.md)。
+
+Windows 发行包可直接运行；macOS 目前支持从源码构建 `.app` / `.dmg`（见 `scripts/setup_macos.sh`、`build_macos.py`）。
 
 ---
 
@@ -679,6 +681,7 @@ ui/
 │   ├── page_capture.py      # 截图设置页
 │   ├── page_clipboard.py    # 剪贴板设置页
 │   ├── page_hotkey.py       # 快捷键设置页
+│   ├── page_permissions.py  # 系统权限页（macOS 屏幕录制/辅助功能/输入监控）
 │   ├── page_translation.py  # 翻译设置页
 │   ├── provider_fields.py   # 服务商字段的读写（按声明）
 │   ├── page_log.py          # 日志设置页

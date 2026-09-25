@@ -1,11 +1,25 @@
 # -*- coding: utf-8 -*-
-"""平台相关工具函数（Windows Win32 API 等）"""
-# 跨模块调用的平台相关功能集中在这里，避免分散在各个模块中直接调用 Win32 API 导致的重复代码和维护困难。
+"""平台相关工具函数（Windows Win32 API / macOS 等价能力）。
+
+跨模块调用的平台相关功能集中在这里，避免分散在各个模块中直接调用
+Win32 API 导致的重复代码和维护困难。macOS 上 Win32 函数保持调用点
+不变但内部安全降级（返回默认值/记录日志），需要 macOS 原生能力的
+部分转发到 platforms.macos。
+"""
 import os
+import sys
 import ctypes
 import math
 
 from core.logger import log_exception, T
+
+
+def is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def is_macos() -> bool:
+    return sys.platform == "darwin"
 
 
 # ──────────────────────────────────────────────
@@ -13,7 +27,10 @@ from core.logger import log_exception, T
 # ──────────────────────────────────────────────
 
 def trim_working_set():
-    """释放进程工作集，降低任务管理器显示的内存占用（Windows）"""
+    """释放进程工作集，降低任务管理器显示的内存占用（Windows）。
+    macOS 无对应概念，为空操作。"""
+    if not is_windows():
+        return
     try:
         from ctypes import wintypes
         # 必须正确声明参数/返回类型，否则 64 位系统上句柄会被截断
@@ -34,6 +51,8 @@ _trim_timer = None  # 延迟初始化，避免在 QApplication 创建前导入�
 
 def request_trim_working_set(delay_ms: int = 1500):
     """请求释放工作集（去抖）。多次调用只执行最后一次，避免 page fault 风暴。"""
+    if not is_windows():
+        return
     global _trim_timer
     if _trim_timer is None:
         from PySide6.QtCore import QTimer
@@ -49,9 +68,10 @@ def request_trim_working_set(delay_ms: int = 1500):
 
 def set_dpi_awareness():
     """设置进程 DPI 感知（必须在 QApplication 创建之前调用）。
-    优先使用 Per-Monitor DPI Aware（PMv1，SetProcessDpiAwareness(2)），
-    失败时回退到旧版 SetProcessDPIAware（System DPI Aware）。
+    仅 Windows 生效；macOS 使用系统 Retina 点坐标体系，无需此调用。
     """
+    if not is_windows():
+        return
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
     except Exception as e:
@@ -63,12 +83,12 @@ def set_dpi_awareness():
 
 
 def get_system_dpi(default: float = 96.0) -> float:
-    """返回 Windows 主显示器使用的有效 DPI。
+    """返回主显示器使用的有效 DPI。
 
+    Windows 下优先读取 Win32（GetDpiForSystem），macOS 使用系统缩放系数。
     本项目通过 ``QT_ENABLE_HIGHDPI_SCALING=0`` 关闭了 Qt 的自动缩放，
     因此 ``QScreen.logicalDotsPerInch()`` 通常只会返回 96，不能拿来判断
-    Windows 设置里的 125% / 150% 缩放。这里优先直接读取 Win32；旧版
-    Windows 没有 ``GetDpiForSystem`` 时再回退到设备上下文。
+    Windows 设置里的 125% / 150% 缩放。
     """
     try:
         fallback = float(default)
@@ -77,7 +97,15 @@ def get_system_dpi(default: float = 96.0) -> float:
     if not math.isfinite(fallback) or fallback <= 0:
         fallback = 96.0
 
-    if os.name != "nt":
+    if not is_windows():
+        # macOS：返回基于主屏 devicePixelRatio 的等效 DPI（96 * dpr）
+        try:
+            from PySide6.QtGui import QGuiApplication
+            screen = QGuiApplication.primaryScreen()
+            if screen is not None:
+                return 96.0 * float(screen.devicePixelRatio())
+        except Exception:
+            pass
         return fallback
 
     try:
@@ -123,7 +151,10 @@ def get_system_dpi(default: float = 96.0) -> float:
 # ──────────────────────────────────────────────
 
 def set_app_user_model_id(app_id: str = "jietuba.app"):
-    """设置 AppUserModelID，确保任务栏图标正确分组（必须在 QApplication 创建之前调用）。"""
+    """设置 AppUserModelID，确保任务栏图标正确分组（必须在 QApplication 创建之前调用）。
+    仅 Windows 生效。"""
+    if not is_windows():
+        return
     try:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
     except Exception as e:
@@ -141,14 +172,12 @@ _kernel32_ref = None
 
 
 def _kernel32():
-    """惰性获取 kernel32 并声明函数签名（只做一次）。
-
-    必须显式声明 argtypes/restype：ctypes 默认按 c_int 解释返回值，
-    64 位下 HANDLE 会被截断，导致 CloseHandle 失败、句柄泄漏。
-    """
+    """惰性获取 kernel32 并声明函数签名（只做一次）。仅 Windows。"""
     global _kernel32_ref
     if _kernel32_ref is not None:
         return _kernel32_ref
+    if not is_windows():
+        raise RuntimeError("kernel32 仅存在于 Windows")
 
     from ctypes import wintypes
 
@@ -185,9 +214,30 @@ def get_process_identity(pid: int):
     Windows 会回收复用 PID，所以 PID 本身不足以标识一个进程，
     (PID, 创建时间) 才是唯一标识。创建时间取自 GetProcessTimes 的
     FILETIME，拼成 64 位整数返回，可直接用于相等比较。
+    macOS 上无进程创建时间查询等价物，退回 (pid, 可执行文件名)。
     """
     if pid <= 0:
         return None
+
+    if not is_windows():
+        try:
+            import psutil  # macOS 用 psutil（可选）
+            proc = psutil.Process(pid)
+            create_time = int(proc.create_time() * 10_000_000)
+            image_name = os.path.basename(proc.exe() or "") or ""
+            return create_time, image_name
+        except Exception:
+            try:
+                import subprocess
+                out = subprocess.run(
+                    ["ps", "-o", "command=", "-p", str(pid)],
+                    capture_output=True, text=True, timeout=2,
+                )
+                if out.returncode != 0:
+                    return None
+                return pid, os.path.basename((out.stdout or "").strip())
+            except Exception:
+                return None
 
     from ctypes import wintypes
 
@@ -236,7 +286,18 @@ def terminate_process_by_pid(pid: int) -> bool:
 
     本函数不校验目标身份。Windows 会回收复用 PID，调用方必须先用
     get_process_identity() 确认目标确实是预期的那个进程，否则可能误杀无关进程。
+    macOS 用 os.kill(pid, SIGKILL) 等价实现。
     """
+    if not is_windows():
+        try:
+            os.kill(pid, 9)
+            return True
+        except ProcessLookupError:
+            return False
+        except Exception as e:
+            log_exception(e, T("终止进程"))
+            return False
+
     try:
         k = _kernel32()
         handle = k.OpenProcess(PROCESS_TERMINATE, False, pid)
@@ -262,8 +323,11 @@ WDA_EXCLUDEFROMCAPTURE = 0x00000011  # Windows 10 2004+
 def set_window_exclude_from_capture(hwnd: int, exclude: bool) -> bool:
     """设置窗口是否从屏幕截图中排除（mss/BitBlt/DXGI 均生效）。
     窗口在屏幕上仍正常显示，仅对截图不可见。
-    返回 Win32 调用是否成功。
+    Windows 返回 Win32 调用是否成功；macOS 无等价 API，返回 False（
+    截图浮层在捕获之后才显示，且 GIF 录制由 ScreenCaptureKit 内容过滤排除）。
     """
+    if not is_windows():
+        return False
     try:
         affinity = WDA_EXCLUDEFROMCAPTURE if exclude else WDA_NONE
         result = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, affinity)
@@ -274,7 +338,10 @@ def set_window_exclude_from_capture(hwnd: int, exclude: bool) -> bool:
 
 
 def get_last_error() -> int:
-    """返回当前线程的 Win32 LastError 值（用于诊断 Win32 API 失败原因）。"""
+    """返回当前线程的 Win32 LastError 值（用于诊断 Win32 API 失败原因）。
+    非 Windows 平台返回 -1。"""
+    if not is_windows():
+        return -1
     try:
         return ctypes.windll.kernel32.GetLastError()
     except Exception as e:

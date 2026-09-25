@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """快捷键设置页 — Fluent Design"""
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
@@ -18,6 +18,7 @@ from ..inapp_key_edit import InAppKeyEdit
 from settings.tool_settings import ALL_TOOL_SHORTCUTS, SCREENSHOT_ACTION_SHORTCUTS
 from core.shortcut_manager import (
     inapp_shortcut_display_text, is_reserved_inapp_shortcut,
+    display_hotkey_str,
 )
 
 
@@ -136,14 +137,14 @@ def create_hotkey_page(dialog) -> QWidget:
     ss_v = QVBoxLayout()
     ss_v.setSpacing(dialog_scaled(5))
     dialog.hotkey_input = HotkeyEdit()
-    dialog.hotkey_input.setText(dialog.current_hotkey)
+    dialog.hotkey_input.setText(display_hotkey_str(dialog.current_hotkey))
     dialog.hotkey_input.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.hotkey_input.setFixedWidth(dialog_scaled(200))
     dialog.hotkey_input.setStyleSheet(input_style)
     ss_v.addWidget(dialog.hotkey_input)
 
     dialog.hotkey_input_2 = HotkeyEdit()
-    dialog.hotkey_input_2.setText(dialog.config_manager.get_hotkey_2())
+    dialog.hotkey_input_2.setText(display_hotkey_str(dialog.config_manager.get_hotkey_2()))
     dialog.hotkey_input_2.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.hotkey_input_2.setFixedWidth(dialog_scaled(200))
     dialog.hotkey_input_2.setStyleSheet(input_style)
@@ -166,14 +167,14 @@ def create_hotkey_page(dialog) -> QWidget:
     cb_v = QVBoxLayout()
     cb_v.setSpacing(dialog_scaled(5))
     dialog.clipboard_hotkey_edit = HotkeyEdit()
-    dialog.clipboard_hotkey_edit.setText(dialog.config_manager.get_clipboard_hotkey())
+    dialog.clipboard_hotkey_edit.setText(display_hotkey_str(dialog.config_manager.get_clipboard_hotkey()))
     dialog.clipboard_hotkey_edit.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.clipboard_hotkey_edit.setFixedWidth(dialog_scaled(200))
     dialog.clipboard_hotkey_edit.setStyleSheet(input_style)
     cb_v.addWidget(dialog.clipboard_hotkey_edit)
 
     dialog.clipboard_hotkey_edit_2 = HotkeyEdit()
-    dialog.clipboard_hotkey_edit_2.setText(dialog.config_manager.get_clipboard_hotkey_2())
+    dialog.clipboard_hotkey_edit_2.setText(display_hotkey_str(dialog.config_manager.get_clipboard_hotkey_2()))
     dialog.clipboard_hotkey_edit_2.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.clipboard_hotkey_edit_2.setFixedWidth(dialog_scaled(200))
     dialog.clipboard_hotkey_edit_2.setStyleSheet(input_style)
@@ -197,7 +198,7 @@ def create_hotkey_page(dialog) -> QWidget:
     pin_v.setSpacing(dialog_scaled(5))
     dialog.pin_clipboard_hotkey_edit = HotkeyEdit()
     dialog.pin_clipboard_hotkey_edit.setText(
-        dialog.config_manager.get_pin_clipboard_hotkey()
+        display_hotkey_str(dialog.config_manager.get_pin_clipboard_hotkey())
     )
     dialog.pin_clipboard_hotkey_edit.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.pin_clipboard_hotkey_edit.setFixedWidth(dialog_scaled(200))
@@ -206,7 +207,7 @@ def create_hotkey_page(dialog) -> QWidget:
 
     dialog.pin_clipboard_hotkey_edit_2 = HotkeyEdit()
     dialog.pin_clipboard_hotkey_edit_2.setText(
-        dialog.config_manager.get_pin_clipboard_hotkey_2()
+        display_hotkey_str(dialog.config_manager.get_pin_clipboard_hotkey_2())
     )
     dialog.pin_clipboard_hotkey_edit_2.setPlaceholderText(dialog.tr("e.g.: ctrl+shift+a"))
     dialog.pin_clipboard_hotkey_edit_2.setFixedWidth(dialog_scaled(200))
@@ -231,7 +232,7 @@ def create_hotkey_page(dialog) -> QWidget:
     tr_v.setSpacing(dialog_scaled(5))
     dialog.translation_hotkey_edit = HotkeyEdit()
     dialog.translation_hotkey_edit.setText(
-        dialog.config_manager.get_translation_hotkey()
+        display_hotkey_str(dialog.config_manager.get_translation_hotkey())
     )
     dialog.translation_hotkey_edit.setPlaceholderText(
         dialog.tr("e.g.: ctrl+shift+a")
@@ -242,7 +243,7 @@ def create_hotkey_page(dialog) -> QWidget:
 
     dialog.translation_hotkey_edit_2 = HotkeyEdit()
     dialog.translation_hotkey_edit_2.setText(
-        dialog.config_manager.get_translation_hotkey_2()
+        display_hotkey_str(dialog.config_manager.get_translation_hotkey_2())
     )
     dialog.translation_hotkey_edit_2.setPlaceholderText(
         dialog.tr("e.g.: ctrl+shift+a")
@@ -296,7 +297,9 @@ def create_hotkey_page(dialog) -> QWidget:
             edit.setFixedSize(dialog_scaled(_EDIT_W), dialog_scaled(_EDIT_H))
             edit.setStyleSheet(input_style)
             value = dialog.config_manager.get_inapp_shortcut(cfg_key)
-            edit.setText("" if is_reserved_inapp_shortcut(value) else value)
+            edit.setText(
+                "" if is_reserved_inapp_shortcut(value) else display_hotkey_str(value)
+            )
             dialog._inapp_edits[cfg_key] = edit
             dialog._inapp_groups[cfg_key] = group_name
 
@@ -428,7 +431,9 @@ def _on_shortcut_changed(dialog, changed_key: str, new_text: str, base_style: st
     else:
         # 撤销本次输入，恢复旧值
         old_val = dialog.config_manager.get_inapp_shortcut(changed_key)
-        current_edit.setText("" if is_reserved_inapp_shortcut(old_val) else old_val)
+        current_edit.setText(
+            "" if is_reserved_inapp_shortcut(old_val) else display_hotkey_str(old_val)
+        )
 
     current_edit.blockSignals(False)
     conflict_edit.blockSignals(False)

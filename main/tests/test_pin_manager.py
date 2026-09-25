@@ -15,6 +15,8 @@ __init__ 的重入保护是分开写的），二是截图时把贴图窗口的�
 单例状态是跨用例共享的，每个用例前后都把 PinManager._instance 清成 None，
 否则前一个用例注册的假窗口会漏进后一个用例。
 """
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -97,6 +99,13 @@ class _FakePin:
 
     def winId(self):
         return self._hwnd
+
+    def setWindowFlag(self, flag, on=True):
+        """Qt 跨平台窗口标志（macOS 置顶压制/恢复分支使用）。"""
+        if on:
+            self._flags = self._flags | flag
+        else:
+            self._flags = self._flags & ~flag
 
     # ── 批量操作 ──
     def close_window(self):
@@ -375,7 +384,7 @@ class TestSaveAllToDirectory:
         manager.pin_windows.extend(pins)
         saved, failed = manager.save_all_to_directory(str(tmp_path), prefix="shot")
         assert (saved, failed) == (3, 0)
-        names = [p.saved_paths[0].rsplit("\\", 1)[-1] for p in pins]
+        names = [Path(p.saved_paths[0]).name for p in pins]
         assert names == ["shot_001.png", "shot_002.png", "shot_003.png"]
 
     def test_default_prefix_is_pins(self, manager, tmp_path):
@@ -420,6 +429,7 @@ class TestSaveAllToDirectory:
 # 置顶压制
 # ============================================================================
 
+@pytest.mark.skipif(sys.platform != "win32", reason="SetWindowPos/HWND_NOTOPMOST 置顶语义为 Windows 专属")
 class TestSuppressTopmost:
 
     def test_only_windows_that_are_actually_topmost_get_demoted(self, manager, fake_user32):

@@ -1,8 +1,8 @@
 [中文](README_zh-CN.md) | [English](README.md) | **[日本語](README_JA.md)**
 
-# jietuba — Windows 向けスクリーンショット・OCR・ピン留め・翻訳・クリップボードツール
+# jietuba — Windows / macOS 向けスクリーンショット・OCR・ピン留め・翻訳・クリップボードツール
 
-[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4?style=flat-square)
+[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
 [Windows 版をダウンロード](https://github.com/1003129155/jietuba/releases/latest) · [ソースから実行](#source-setup) · [開発とテスト](#development)
 
@@ -10,11 +10,13 @@
 
 ## 概要
 
-jietuba は Windows 向けの無料・オープンソースのスクリーンショットツールです。領域/ウィンドウキャプチャ、スクロール（長い）スクリーンショット、注釈、OCR 文字認識、翻訳、画像のピン留め、GIF 録画、QR コード/バーコード読み取り、PDF エクスポート、そして完全なクリップボード履歴管理を備えています。すべてローカルで動作します。
+jietuba は Windows と macOS が同一コードベースを共有する、無料・オープンソースのクロスプラットフォーム・スクリーンショットツールです。領域/ウィンドウキャプチャ、スクロール（長い）スクリーンショット、注釈、OCR 文字認識、翻訳、画像のピン留め、GIF 録画、QR コード/バーコード読み取り、PDF エクスポート、そして完全なクリップボード履歴管理を備えています。すべてローカルで動作します。
 
-UI は PySide6、画像処理・クリップボード操作・OCR は Rust で実装しています。Windows x86_64 および ARM64 に対応。
+UI は PySide6、画像処理・クリップボード操作・OCR は Rust で実装しています。Windows は x86_64 / ARM64、macOS は Apple Silicon（arm64）に対応します。
 
-すぐに使える Windows 版の配布パッケージと、ソースからの実行方法を用意しています。
+OS 固有の機能（キャプチャ、ウィンドウ列挙、グローバルホットキー、クリップボード、アクセシビリティ、権限）は `main/platforms/windows` と `main/platforms/macos` にプラットフォーム別実装として分離し、UI とビジネスロジックは全て共有します。開発・ビルド規則は [AGENTS.md](AGENTS.md) を参照。
+
+Windows 版はすぐに使える配布パッケージを用意しています。macOS は現在ソースから `.app` / `.dmg` をビルドする形で対応しています（`scripts/setup_macos.sh`、`build_macos.py`）。
 
 ---
 
@@ -601,6 +603,7 @@ ui/
 │   ├── page_capture.py      # キャプチャ設定
 │   ├── page_clipboard.py    # クリップボード設定
 │   ├── page_hotkey.py       # ホットキー設定
+│   ├── page_permissions.py  # システム権限ページ（macOS 画面収録/アクセシビリティ/入力監視）
 │   ├── page_translation.py  # 翻訳設定
 │   ├── provider_fields.py   # 服务商字段的读写（按声明）
 │   ├── page_log.py          # ログ設定

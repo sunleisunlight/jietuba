@@ -59,6 +59,17 @@ def test_check_button_reports_when_current_version_is_latest(monkeypatch, qapp, 
     dialog.deleteLater()
 
 
+def _newer_version_tag() -> str:
+    """构造一个必然比当前 APP_VERSION 新的 tag。
+
+    旧用例硬编码 "v2.1.0"，APP_VERSION 涨到 2.4.0 之后它就不再"更新"了，
+    is_newer_version() 返回 False，代码走进"已是最新"分支弹真实模态框，
+    整个测试会话被卡死。这里按当前版本的 MAJOR+1 现算，永远不会过期。
+    """
+    major = int(page_about.APP_VERSION.split(".")[0])
+    return f"v{major + 1}.0.0"
+
+
 def test_new_release_shows_notes_and_download_address(monkeypatch, qapp, qtbot):
     update_calls = []
     monkeypatch.setattr(
@@ -68,10 +79,11 @@ def test_new_release_shows_notes_and_download_address(monkeypatch, qapp, qtbot):
     )
     dialog, page, button, checker = _create_page(monkeypatch, qapp)
 
+    latest_tag = _newer_version_tag()
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
     checker.release_found.emit(
         ReleaseInfo(
-            "v2.1.0",
+            latest_tag,
             "Version 2.1",
             "Added update checking.",
             PROJECT_RELEASES_LATEST_URL,
@@ -82,7 +94,7 @@ def test_new_release_shows_notes_and_download_address(monkeypatch, qapp, qtbot):
     _, title, content, download_caption, url, action_text = update_calls[0]
     assert title == "Update Available"
     assert f"Current version: {page_about.APP_VERSION}" in content
-    assert "Latest version: v2.1.0" in content
+    assert f"Latest version: {latest_tag}" in content
     assert "Added update checking." in content
     assert download_caption == "Download:"
     assert url == PROJECT_RELEASES_LATEST_URL

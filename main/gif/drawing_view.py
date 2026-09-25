@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """GIF 录制绘制层 — 完整复用截图 CanvasView + SmartEditController
 
 gdigrab 直接抓屏幕像素，因此本窗口画出的内容会被自动录进 GIF。
@@ -56,8 +56,18 @@ SWP_NOZORDER      = 0x0004
 SWP_FRAMECHANGED  = 0x0020
 
 
-def _set_click_through(hwnd: int, enable: bool):
-    """设置/取消 WS_EX_TRANSPARENT"""
+def _set_click_through(hwnd: int, enable: bool, widget=None):
+    """设置/取消鼠标穿透。
+
+    Windows: WS_EX_TRANSPARENT；macOS: Qt WA_TransparentForMouseEvents。
+    """
+    import sys
+    if sys.platform == "darwin":
+        if widget is not None:
+            widget.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable
+            )
+        return
     try:
         user32 = ctypes.windll.user32
         style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
@@ -360,7 +370,7 @@ class GifDrawingView(CanvasView):
         self._passthrough = enable
         self._gif_scene.set_hit_test_visible(not enable)
         hwnd = int(self.winId())
-        _set_click_through(hwnd, enable)
+        _set_click_through(hwnd, enable, widget=self)
         if not enable:
             self.activateWindow()
             self.raise_()

@@ -1,22 +1,36 @@
-﻿# 截图吧 (Jietuba) - Python 依赖
-# Python 3.11 + Windows x86_64 / ARM64
+# 截图吧 (Jietuba) - Python 依赖
+# Python 3.11 + Windows x86_64 / ARM64 / macOS Apple Silicon (arm64)
+#
+# Windows 专属依赖用 `; sys_platform == "win32"` 标记，macOS 专属依赖用
+# `; sys_platform == "darwin"` 标记，保证同一份 requirements.txt 在两端都
+# 能 `pip install -r requirements.txt` 直接通过。
 
-# ===== 核心依赖 =====
+# ===== 核心依赖（跨平台）=====
 PySide6==6.11.0
 PySideSix-Frameless-Window==0.8.1
 pillow==12.1.1
 mss==10.1.0
 pynput==1.8.1
-pywin32==311
-comtypes==1.4.16
 darkdetect==0.8.0
 emoji==2.15.0
 av==17.0.0
 colorama==0.4.6
 zxing-cpp==3.1.1
 
+# ===== Windows 专属依赖 =====
+pywin32==311 ; sys_platform == "win32"
+comtypes==1.4.16 ; sys_platform == "win32"
+
+# ===== macOS 专属依赖（PyObjC 系统框架绑定）=====
+pyobjc-framework-Cocoa==10.3.2 ; sys_platform == "darwin"
+pyobjc-framework-Quartz==10.3.2 ; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices==10.3.2 ; sys_platform == "darwin"
+pyobjc-framework-ScreenCaptureKit==10.3.2 ; sys_platform == "darwin"
+
 # ===== 自制 Rust 库（PyPI 发行名，import 名不同——见各包 README）=====
-j-gif==0.3.1
-j-stitch==0.4.0
-j-clipboard==0.4.2
-j-ppocr==0.2.0
+# Windows 从 PyPI 安装预编译 wheel；macOS 由 scripts/setup_macos.sh 用
+# maturin 从 rust_libs/ 源码本地构建（PyPI 暂未发布 macOS arm64 wheel）。
+j-gif==0.3.1 ; sys_platform == "win32"
+j-stitch==0.4.0 ; sys_platform == "win32"
+j-clipboard==0.4.2 ; sys_platform == "win32"
+j-ppocr==0.2.0 ; sys_platform == "win32"

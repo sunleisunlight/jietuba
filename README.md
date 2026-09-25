@@ -1,8 +1,8 @@
 [中文](README_zh-CN.md) | **[English](README.md)** | [日本語](README_JA.md)
 
-# jietuba — Screenshot, OCR, Pin, Translation & Clipboard Tool for Windows
+# jietuba — Screenshot, OCR, Pin, Translation & Clipboard Tool for Windows and macOS
 
-[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4?style=flat-square)
+[![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
 [Download for Windows](https://github.com/1003129155/jietuba/releases/latest) · [Run from Source](#source-setup) · [Development and Tests](#development)
 
@@ -10,11 +10,13 @@
 
 ## Overview
 
-jietuba is a free, open-source screenshot tool for Windows: region and window capture, scrolling (long) screenshots, annotation, OCR text recognition, translation, image pinning, GIF recording, QR code and barcode scanning, PDF export, and a full clipboard history manager. Everything runs locally.
+jietuba is a free, open-source cross-platform screenshot tool: Windows and macOS share one codebase — region and window capture, scrolling (long) screenshots, annotation, OCR text recognition, translation, image pinning, GIF recording, QR code and barcode scanning, PDF export, and a full clipboard history manager. Everything runs locally.
 
-The interface is built with PySide6; image processing, clipboard access, and OCR are implemented in Rust. Runs on Windows x86_64 and ARM64.
+The interface is built with PySide6; image processing, clipboard access, and OCR are implemented in Rust. Windows runs on x86_64 and ARM64; macOS runs on Apple Silicon (arm64).
 
-Download a ready-to-run Windows release or run the application from source.
+OS-level capabilities (capture, window enumeration, global hotkeys, clipboard, accessibility, permissions) are implemented per platform under `main/platforms/windows` and `main/platforms/macos`; all UI and business logic is shared. See [AGENTS.md](AGENTS.md) for development and build rules.
+
+A ready-to-run Windows release is available; on macOS the app is currently built from source as `.app` / `.dmg` (see `scripts/setup_macos.sh`, `build_macos.py`).
 
 ---
 
@@ -602,6 +604,7 @@ ui/
 │   ├── page_capture.py      # Capture settings
 │   ├── page_clipboard.py    # Clipboard settings
 │   ├── page_hotkey.py       # Hotkey settings
+│   ├── page_permissions.py  # System permissions page (macOS)
 │   ├── page_translation.py  # Translation settings
 │   ├── provider_fields.py   # 服务商字段的读写（按声明）
 │   ├── page_log.py          # Log settings

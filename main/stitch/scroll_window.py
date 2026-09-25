@@ -1,4 +1,4 @@
-﻿"""
+"""
 jietuba_scroll.py - 滚动截图窗口模块
 
 实现滚动长截图功能的窗口类,用于捕获滚动页面的多张截图。
@@ -131,6 +131,13 @@ class PreviewPanel(QWidget):
     
     def _setup_mouse_transparent(self):
         """设置窗口鼠标穿透，不拦截滚轮事件"""
+        import sys
+        if sys.platform == "darwin":
+            self.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+            )
+            self._capture_excluded = False
+            return
         try:
             hwnd = int(self.winId())
             user32 = ctypes.windll.user32
@@ -688,96 +695,102 @@ class ScrollCaptureWindow(QWidget):
         self._show_preview_warning(message)
         
     def _setup_mouse_hook(self):
-        """设置Windows鼠标钩子以监听全局滚轮事件"""
-        try:
-            # 使用Windows API设置窗口透明鼠标事件（需在主线程执行）
-            hwnd = int(self.transparent_area.winId())
-            user32 = ctypes.windll.user32
-            ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-            _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式"))
+        """设置鼠标钩子以监听全局滚轮事件（Windows: WS_EX_TRANSPARENT；macOS: Qt 属性 + pynput）"""
+        import sys
+        if sys.platform == "darwin":
+            self.transparent_area.setAttribute(
+                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+            )
+            _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式 (Qt)"))
+        else:
+            try:
+                # 使用Windows API设置窗口透明鼠标事件（需在主线程执行）
+                hwnd = int(self.transparent_area.winId())
+                user32 = ctypes.windll.user32
+                ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+                _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式"))
+            except Exception as e:
+                _log_stitch(T("[ERROR] 设置窗口鼠标穿透时出错: {e}", e=e), force=True)
+                import traceback
+                traceback.print_exc()
 
-            # 将可能较慢的模块导入与监听器启动放到后台线程，避免首次阻塞UI
-            import threading
+        # 将可能较慢的模块导入与监听器启动放到后台线程，避免首次阻塞UI
+        import threading
 
-            def _init_listener_bg():
-                try:
-                    from pynput import mouse  # 首次导入较慢，放后台
+        def _init_listener_bg():
+            try:
+                from pynput import mouse  # 首次导入较慢，放后台
 
-                    def on_scroll(x, y, dx, dy):
-                        """滚轮事件回调（在pynput线程中）
-                        dx: 横向滚动量（正值向右，负值向左）
-                        dy: 纵向滚动量（正值向上，负值向下）
-                        
-                        注意:
-                        - 横向模式: 监听 dx (横向滚轮) 和 dy (Shift+滚轮会产生横向滚动)
-                        - 竖向模式: 只监听 dy (竖向滚轮)
-                        """
-                        if self._is_mouse_in_capture_area(x, y):
-                            # 根据当前方向决定使用哪个滚动值
-                            if self.scroll_direction == "horizontal":
-                                # 横向模式：优先使用dx，也接受dy（Shift+滚轮）
-                                scroll_val = dx if dx != 0 else (-dy if dy != 0 else 0)
+                def on_scroll(x, y, dx, dy):
+                    """滚轮事件回调（在pynput线程中）
+                    dx: 横向滚动量（正值向右，负值向左）
+                    dy: 纵向滚动量（正值向上，负值向下）
+                    
+                    注意:
+                    - 横向模式: 监听 dx (横向滚轮) 和 dy (Shift+滚轮会产生横向滚动)
+                    - 竖向模式: 只监听 dy (竖向滚轮)
+                    """
+                    if self._is_mouse_in_capture_area(x, y):
+                        # 根据当前方向决定使用哪个滚动值
+                        if self.scroll_direction == "horizontal":
+                            # 横向模式：优先使用dx，也接受dy（Shift+滚轮）
+                            scroll_val = dx if dx != 0 else (-dy if dy != 0 else 0)
+                            
+                            if scroll_val != 0:
+                                # 横向模式：方向由自动检测处理，所有方向都接受
+                                scroll_pixels = int(abs(scroll_val) * 25)
                                 
-                                if scroll_val != 0:
-                                    # 横向模式：方向由自动检测处理，所有方向都接受
-                                    scroll_pixels = int(abs(scroll_val) * 25)
-                                    
-                                    if self.scroll_locked_direction is None:
-                                        is_right = scroll_val > 0
-                                        self.scroll_locked_direction = "down" if is_right else "up"
-                                        arrow = "➡️" if is_right else "⬅️"
-                                        if is_right:
-                                            _log_stitch(T("{arrow} 锁定横向滚动方向: 向右", arrow=arrow))
-                                        else:
-                                            _log_stitch(T("{arrow} 锁定横向滚动方向: 向左", arrow=arrow))
-
-                                    if ("down" if scroll_val > 0 else "up") == self.scroll_locked_direction:
-                                        try:
-                                            self.scroll_detected.emit(scroll_pixels)
-                                        except Exception as e:
-                                            _log_stitch(T("[ERROR] 触发滚动信号失败: {e}", e=e), force=True)
-                            else:
-                                # 竖向模式：第一次滚动锁定方向，之后只接受同方向
-                                if dy != 0:
-                                    is_scroll_down = dy < 0  # pynput: dy<0=向下
-                                    direction = "down" if is_scroll_down else "up"
-                                    
-                                    if self.scroll_locked_direction is None:
-                                        # 第一次滚动，锁定方向
-                                        self.scroll_locked_direction = direction
-                                        arrow = "⬇️" if is_scroll_down else "⬆️"
-                                        if is_scroll_down:
-                                            _log_stitch(T("{arrow} 锁定滚动方向: 向下", arrow=arrow))
-                                        else:
-                                            _log_stitch(T("{arrow} 锁定滚动方向: 向上", arrow=arrow))
-
-                                    if direction == self.scroll_locked_direction:
-                                        scroll_pixels = int(abs(dy) * 25)
-                                        try:
-                                            self.scroll_detected.emit(scroll_pixels)
-                                        except Exception as e:
-                                            _log_stitch(T("[ERROR] 触发滚动信号失败: {e}", e=e), force=True)
+                                if self.scroll_locked_direction is None:
+                                    is_right = scroll_val > 0
+                                    self.scroll_locked_direction = "down" if is_right else "up"
+                                    arrow = "➡️" if is_right else "⬅️"
+                                    if is_right:
+                                        _log_stitch(T("{arrow} 锁定横向滚动方向: 向右", arrow=arrow))
                                     else:
-                                        # 反向滚动，忽略
-                                        pass
+                                        _log_stitch(T("{arrow} 锁定横向滚动方向: 向左", arrow=arrow))
 
-                    # 创建并启动监听器（pynput内部也会使用线程）
-                    self.mouse_listener = mouse.Listener(on_scroll=on_scroll)
-                    self.mouse_listener.start()
-                    _log_stitch(T("[OK] 全局滚轮监听器已启动（竖向仅响应向下滚动，横向响应向右滚动和Shift+滚轮）"))
-                except Exception as e:
-                    _log_stitch(T("[ERROR] 设置鼠标钩子失败: {e}", e=e), force=True)
-                    import traceback
-                    traceback.print_exc()
+                                if ("down" if scroll_val > 0 else "up") == self.scroll_locked_direction:
+                                    try:
+                                        self.scroll_detected.emit(scroll_pixels)
+                                    except Exception as e:
+                                        _log_stitch(T("[ERROR] 触发滚动信号失败: {e}", e=e), force=True)
+                        else:
+                            # 竖向模式：第一次滚动锁定方向，之后只接受同方向
+                            if dy != 0:
+                                is_scroll_down = dy < 0  # pynput: dy<0=向下
+                                direction = "down" if is_scroll_down else "up"
+                                
+                                if self.scroll_locked_direction is None:
+                                    # 第一次滚动，锁定方向
+                                    self.scroll_locked_direction = direction
+                                    arrow = "⬇️" if is_scroll_down else "⬆️"
+                                    if is_scroll_down:
+                                        _log_stitch(T("{arrow} 锁定滚动方向: 向下", arrow=arrow))
+                                    else:
+                                        _log_stitch(T("{arrow} 锁定滚动方向: 向上", arrow=arrow))
 
-            threading.Thread(target=_init_listener_bg, daemon=True).start()
+                                if direction == self.scroll_locked_direction:
+                                    scroll_pixels = int(abs(dy) * 25)
+                                    try:
+                                        self.scroll_detected.emit(scroll_pixels)
+                                    except Exception as e:
+                                        _log_stitch(T("[ERROR] 触发滚动信号失败: {e}", e=e), force=True)
+                                else:
+                                    # 反向滚动，忽略
+                                    pass
 
-        except Exception as e:
-            _log_stitch(T("[ERROR] 设置窗口鼠标穿透时出错: {e}", e=e), force=True)
-            import traceback
-            traceback.print_exc()
-    
+                # 创建并启动监听器（pynput内部也会使用线程）
+                self.mouse_listener = mouse.Listener(on_scroll=on_scroll)
+                self.mouse_listener.start()
+                _log_stitch(T("[OK] 全局滚轮监听器已启动（竖向仅响应向下滚动，横向响应向右滚动和Shift+滚轮）"))
+            except Exception as e:
+                _log_stitch(T("[ERROR] 设置鼠标钩子失败: {e}", e=e), force=True)
+                import traceback
+                traceback.print_exc()
+
+        threading.Thread(target=_init_listener_bg, daemon=True).start()
+
     def _toggle_direction(self):
         """切换截图方向（竖向/横向）"""
         if self.scroll_direction == "vertical":
@@ -801,20 +814,33 @@ class ScrollCaptureWindow(QWidget):
     
     def _send_horizontal_scroll(self):
         """发送横向滚动指令（向右滚动）"""
+        import sys
         try:
-            import win32api
-            import win32con
-            
-            # 使用Windows API发送横向滚动事件
-            # MOUSEEVENTF_HWHEEL: 横向滚动事件
-            # amount * 120: WHEEL_DELTA标准值
             amount = 1  # 向右滚动
-            win32api.mouse_event(
-                win32con.MOUSEEVENTF_HWHEEL,
-                0, 0,
-                amount * 120,  # WHEEL_DELTA
-                0
-            )
+            if sys.platform == "darwin":
+                # macOS: Quartz 横向滚轮事件（deltaY=0, deltaX>0 向右）
+                import Quartz
+                ev = Quartz.CGEventCreateScrollWheelEvent(
+                    None,
+                    Quartz.kCGScrollEventUnitLine,
+                    1,
+                    0,
+                    amount * 3,
+                )
+                Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
+            else:
+                import win32api
+                import win32con
+
+                # 使用Windows API发送横向滚动事件
+                # MOUSEEVENTF_HWHEEL: 横向滚动事件
+                # amount * 120: WHEEL_DELTA标准值
+                win32api.mouse_event(
+                    win32con.MOUSEEVENTF_HWHEEL,
+                    0, 0,
+                    amount * 120,  # WHEEL_DELTA
+                    0
+                )
             _log_stitch(T("[OK] 发送横向滚动指令: 向右滚动 {amount} 格", amount=amount))
 
         except Exception as e:

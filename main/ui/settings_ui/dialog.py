@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 设置对话框主类 — Fluent 风格
 
@@ -28,6 +28,7 @@ from ui.fluent_lite import FluentTitleBar, scrollbar_qss
 from ui.fluent_lite.theme import ACCENT, ACCENT_HOVER, ACCENT_PRESSED
 
 from core import log_info, safe_event
+from core.shortcut_manager import display_hotkey_str
 from core.logger import log_exception, T
 from core.constants import CSS_FONT_FAMILY, DEFAULT_FONT_FAMILY
 from core.ui_scale import configure_dialog_control, configure_dialog_controls, dialog_scaled
@@ -44,6 +45,7 @@ from .page_misc import create_misc_page
 from .page_appearance import create_appearance_page
 from .page_developer import create_developer_page
 from .page_about import create_about_page
+from .page_permissions import create_permissions_page, _status_text
 from .components import (
     theme_surface_color, theme_sidebar_color,
     theme_input_background, theme_popup_background,
@@ -229,6 +231,12 @@ class SettingsDialog(FrostedFramelessDialog):
         self.content_stack.addWidget(create_misc_page(self))             # 6
         self.content_stack.addWidget(create_developer_page(self))        # 7
         self.content_stack.addWidget(create_about_page(self))            # 8
+        # macOS：追加"系统权限"页（Windows 不创建，保持原 UI）
+        self._permissions_stack_index = -1
+        import sys as _sys
+        if _sys.platform == "darwin":
+            self._permissions_stack_index = 9
+            self.content_stack.addWidget(create_permissions_page(self))   # 9
 
         # 九个分页都是一次性建完、切换只换可见性（不是懒加载/动态重建），
         # 建完后统一扫一遍即可覆盖全部分页里的 fluent_lite 控件。
@@ -264,6 +272,13 @@ class SettingsDialog(FrostedFramelessDialog):
             ("other", FluentIcon.APPLICATION, self.tr("Other"), 6, NavigationItemPosition.TOP),
             ("about", FluentIcon.INFO, self.tr("About"), 8, NavigationItemPosition.BOTTOM),
         ]
+        import sys as _sys2
+        if _sys2.platform == "darwin":
+            # 权限页索引：__init__ 中 content_stack 构建时固定为 9
+            self._nav_items.append(
+                ("permissions", FluentIcon.SETTING, self.tr("System Permissions"),
+                 getattr(self, "_permissions_stack_index", 9), NavigationItemPosition.BOTTOM),
+            )
 
         for route_key, icon, text, stack_index, position in self._nav_items:
             nav.addItem(
@@ -279,6 +294,35 @@ class SettingsDialog(FrostedFramelessDialog):
     def _set_current_nav(self, route_key: str):
         if hasattr(self, 'nav_list') and self.nav_list is not None:
             self.nav_list.setCurrentItem(route_key)
+
+    # ── macOS 系统权限页 ──────────────────────────────
+    def _refresh_mac_permissions(self):
+        try:
+            from platforms import get_platform_backend
+            perm = get_platform_backend().permissions
+            rows = getattr(self, "_mac_permission_rows", {})
+            queries = {
+                "screen_capture": perm.screen_capture_status,
+                "accessibility": perm.accessibility_status,
+                "input_monitoring": perm.input_monitoring_status,
+            }
+            for kind, query in queries.items():
+                status = query()
+                card = rows.get(kind)
+                if card is None:
+                    continue
+                label = card.findChild(QLabel, "PermissionStatus")
+                if label is not None:
+                    label.setText(_status_text(self, status.value))
+        except Exception as e:
+            log_exception(e, T("刷新系统权限状态"))
+
+    def _open_system_permission(self, kind: str):
+        try:
+            from platforms import get_platform_backend
+            get_platform_backend().permissions.open_system_settings(kind)
+        except Exception as e:
+            log_exception(e, T("打开系统权限设置"))
 
     # ================================================================
     # 辅助方法
@@ -642,25 +686,25 @@ class SettingsDialog(FrostedFramelessDialog):
 
     def _reset_hotkey_page(self):
         defaults = self.config_manager.APP_DEFAULT_SETTINGS
-        self.hotkey_input.setText(defaults["hotkey"])
+        self.hotkey_input.setText(display_hotkey_str(defaults["hotkey"]))
         if hasattr(self, 'hotkey_input_2'):
-            self.hotkey_input_2.setText(defaults["hotkey_2"])
+            self.hotkey_input_2.setText(display_hotkey_str(defaults["hotkey_2"]))
         if hasattr(self, 'clipboard_hotkey_edit'):
-            self.clipboard_hotkey_edit.setText(defaults["clipboard_hotkey"])
+            self.clipboard_hotkey_edit.setText(display_hotkey_str(defaults["clipboard_hotkey"]))
         if hasattr(self, 'clipboard_hotkey_edit_2'):
-            self.clipboard_hotkey_edit_2.setText(defaults["clipboard_hotkey_2"])
+            self.clipboard_hotkey_edit_2.setText(display_hotkey_str(defaults["clipboard_hotkey_2"]))
         if hasattr(self, 'pin_clipboard_hotkey_edit'):
-            self.pin_clipboard_hotkey_edit.setText(defaults["pin_clipboard_hotkey"])
+            self.pin_clipboard_hotkey_edit.setText(display_hotkey_str(defaults["pin_clipboard_hotkey"]))
         if hasattr(self, 'pin_clipboard_hotkey_edit_2'):
-            self.pin_clipboard_hotkey_edit_2.setText(defaults["pin_clipboard_hotkey_2"])
+            self.pin_clipboard_hotkey_edit_2.setText(display_hotkey_str(defaults["pin_clipboard_hotkey_2"]))
         if hasattr(self, 'translation_hotkey_edit'):
-            self.translation_hotkey_edit.setText(defaults["translation_hotkey"])
+            self.translation_hotkey_edit.setText(display_hotkey_str(defaults["translation_hotkey"]))
         if hasattr(self, 'translation_hotkey_edit_2'):
-            self.translation_hotkey_edit_2.setText(defaults["translation_hotkey_2"])
-        # 应用内快捷键
+            self.translation_hotkey_edit_2.setText(display_hotkey_str(defaults["translation_hotkey_2"]))
+        # 应用内快捷键（macOS 按平台习惯显示修饰键，存储格式不变）
         if hasattr(self, '_inapp_edits'):
             for cfg_key, edit in self._inapp_edits.items():
-                edit.setText(defaults.get(cfg_key, ""))
+                edit.setText(display_hotkey_str(defaults.get(cfg_key, "")))
         if hasattr(self, 'cursor_move_combo'):
             idx = self.cursor_move_combo.findData(defaults["inapp_cursor_move_mode"])
             if idx >= 0:

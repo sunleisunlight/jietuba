@@ -1,4 +1,4 @@
-﻿"""应用主程序 - 系统托盘集成和全局快捷键管理
+"""应用主程序 - 系统托盘集成和全局快捷键管理
 
 负责一次性初始化和管理应用的生命周期，包括系统托盘图标、快捷键钩子、
 多窗口实例管理和启动流程。
@@ -456,7 +456,24 @@ class MainApp(QObject):
         # 新截图窗口的输入。此时不创建截图层，转而把现有模态窗口提到前面。
         if self._activate_blocking_modal():
             return
-        
+
+        # macOS：截图前主动检查/请求屏幕录制权限。
+        # mss 在无权限时返回黑屏而不抛异常，所以必须先预检并主动请求——
+        # CGRequestScreenCaptureAccess() 会弹系统授权框；用户未授予时给出引导。
+        if sys.platform == "darwin":
+            try:
+                from platforms import get_platform_backend
+                from platforms.base.permissions import PermissionStatus
+                perm = get_platform_backend().permissions
+                if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                    perm.request_screen_capture()
+                    # request 立即返回，不等待用户操作；此时仍未授权就弹引导框
+                    if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                        self._on_capture_failed("屏幕录制")
+                        return
+            except Exception as e:
+                log_exception(e, T("检查屏幕录制权限"))
+
         # 后台截图线程正在运行时也忽略重复触发
         if getattr(self, '_capture_thread', None) and self._capture_thread.isRunning():
             log_debug(T("后台截图线程进行中，忽略重复触发"), "MainApp")
@@ -484,6 +501,7 @@ class MainApp(QObject):
 
         class CaptureThread(QThread):
             captured = Signal(object, object)  # (QImage, QRectF)
+            failed = Signal(str)              # 失败原因（含权限错误）
 
             def run(self):
                 try:
@@ -492,10 +510,50 @@ class MainApp(QObject):
                     self.captured.emit(image, rect)
                 except Exception as e:
                     log_exception(e, T("后台截图失败"))
+                    self.failed.emit(str(e))
 
         self._capture_thread = CaptureThread()
         self._capture_thread.captured.connect(self._on_capture_ready)
+        self._capture_thread.failed.connect(self._on_capture_failed)
         self._capture_thread.start()
+
+    def _on_capture_failed(self, message: str):
+        """截图失败（含 macOS 屏幕录制权限未授予）的统一提示入口。"""
+        from core.i18n import make_tr
+        _tr = make_tr("ScreenCapturePermission")
+
+        # 权限错误：给出明确引导 + 一键打开系统设置
+        if isinstance(message, str) and ("屏幕录制" in message or "ScreenCapture" in message):
+            from PySide6.QtWidgets import QPushButton, QMessageBox
+
+            dlg = QMessageBox(self.app.activeWindow() if hasattr(self, 'app') else None)
+            dlg.setIcon(QMessageBox.Icon.Warning)
+            dlg.setWindowTitle(_tr("屏幕录制权限"))
+            dlg.setText(_tr(
+                "需要“屏幕与系统音频录制/屏幕录制”权限才能截图。\n\n"
+                "请在系统设置中允许本应用录制屏幕。"
+            ))
+            dlg.setInformativeText(_tr("未授权时截图会失败或显示黑屏。"))
+
+            open_btn = QPushButton(_tr("打开系统设置"))
+            open_btn.clicked.connect(
+                lambda: self._open_screen_recording_settings()
+            )
+            dlg.addButton(open_btn, QMessageBox.ButtonRole.ActionRole)
+            dlg.addButton(QMessageBox.StandardButton.Close)
+            dlg.exec()
+            return
+
+        from ui.dialogs import show_error_dialog
+        show_error_dialog(_tr("截图失败"), message)
+
+    def _open_screen_recording_settings(self):
+        """打开 macOS 屏幕录制权限设置页。"""
+        try:
+            from platforms import get_platform_backend
+            get_platform_backend().permissions.open_system_settings("screen_capture")
+        except Exception as e:
+            log_exception(e, T("打开屏幕录制设置"))
 
     def _on_capture_ready(self, image, rect):
         """后台截图完成后，在主线程创建或复用截图窗口"""

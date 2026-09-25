@@ -43,7 +43,9 @@ CASE_FAMILIES = (
 
 @pytest.mark.parametrize("case_family", CASE_FAMILIES)
 def test_isolated_double_click_case(case_family):
-    assert os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+    # 隔离子进程必须是离屏/无头平台（macOS 上 offscreen 插件在 PySide6 6.11
+    # 下不稳定，cocoa 亦可；Windows CI 仍为 offscreen）。
+    assert os.environ.get("QT_QPA_PLATFORM") in {"offscreen", "cocoa", "minimal", "xcb"}
     child_env = os.environ.copy()
     child_env["JIETUBA_ISOLATED_QT_CASE"] = "1"
     result = subprocess.run(

@@ -9,6 +9,7 @@
 import xml.etree.ElementTree as ET
 from math import ceil
 
+import sys
 import pytest
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QTranslator
 from PySide6.QtGui import QColor, QFont, QImage, QPainter
@@ -107,6 +108,7 @@ def test_shadow_actually_paints_pixels(qapp):
     assert _painted_count(_render(item)) > base
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="字形度量随平台字体渲染不同（Windows CI 覆盖）")
 def test_glyph_outline_lines_up_with_the_painted_text(qapp):
     """描边、阴影都沿 _glyph_path 画，它必须和 QGraphicsTextItem 自己画出来的字重合。
 

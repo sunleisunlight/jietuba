@@ -6,7 +6,13 @@ import threading
 import time
 from types import SimpleNamespace
 
+import sys
+
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32", reason="UIA 控件树为 Windows 专属"
+)
 
 from capture.uia_element_finder import (
     ElementIndex, UIAElementFinder, UIAElementSnapshot, _Request, _ScanService,

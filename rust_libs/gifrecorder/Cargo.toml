@@ -10,7 +10,7 @@ name = "gifrecorder"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
+pyo3 = { version = "0.22", features = ["abi3-py311"] }
 
 # JPEG 编解码 (纯 Rust, 无需 NASM / libjpeg-turbo)
 jpeg-encoder = "0.6"
@@ -30,3 +30,9 @@ rayon = "1.7"
 
 # 有界 channel (decoder ↔ Python)
 crossbeam-channel = "0.5"
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+cc = "1"
+
+[features]
+extension-module = ["pyo3/extension-module"]
