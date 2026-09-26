@@ -187,6 +187,10 @@ def hotkey_identity(hotkey_str: str):
         return None
     if is_mouse_button_hotkey(normalized):
         return ("mouse", normalized)
+    if _IS_MACOS:
+        from platforms.macos.hotkey import MacOSHotkeyBackend
+        parsed = MacOSHotkeyBackend.parse_hotkey(normalized)
+        return ("keyboard", *parsed) if parsed else ("invalid", normalized)
     try:
         mods, vk = ShortcutManager._parse_hotkey(normalized)
         return ("keyboard", mods, vk)

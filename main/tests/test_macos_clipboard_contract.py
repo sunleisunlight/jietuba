@@ -67,3 +67,4 @@ def test_macos_display_aliases_round_trip_in_both_parsers(monkeypatch):
         displayed = shortcut_manager.display_hotkey_str(stored)
         assert MacOSHotkeyBackend.parse_hotkey(displayed) == MacOSHotkeyBackend.parse_hotkey(stored)
         assert shortcut_manager.parse_shortcut_to_qt(displayed) == shortcut_manager.parse_shortcut_to_qt(stored)
+        assert shortcut_manager.hotkey_identity(displayed) == shortcut_manager.hotkey_identity(stored)
