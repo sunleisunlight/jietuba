@@ -30,6 +30,9 @@ def stack(qapp):
     """底层 view + 遮罩 + 选区装饰浮层，层序与 ScreenshotWindow 一致。"""
     host = QWidget()
     host.resize(W, H)
+    # 此 fixture 的场景原点为 (0,0)；Cocoa 默认把顶层窗口居中，
+    # 浮层按真实桌面位置换算后会落到窗口外。显式给定测试所用的屏幕原点。
+    host.move(0, 0)
     bg = QImage(W, H, QImage.Format.Format_ARGB32)
     bg.fill(0xFF1E1E1E)
     scene = CanvasScene(bg, QRectF(0, 0, W, H))
@@ -195,6 +198,7 @@ def _armed(stack, qapp):
     model.set_rect(SEL)
     model.confirm()
     qapp.processEvents()
+    _compose(host, scene, mask, overlay, qapp)  # 显式完成绘制，不依赖窗口系统投递时机
     painted = QRect(overlay._painted)
     assert not painted.isEmpty(), "前置条件：浮层应已画出装饰"
     return model, overlay, painted
@@ -222,6 +226,7 @@ def test_clearing_the_selection_erases_the_last_chrome(stack, qapp):
     assert spy.union().contains(before), "失效区域没盖住最后一帧装饰"
 
     qapp.processEvents()
+    _compose(stack[0], stack[1], stack[3], overlay, qapp)
     assert overlay._painted.isEmpty(), "选区已清空，浮层不该再记着画过的区域"
 
 
