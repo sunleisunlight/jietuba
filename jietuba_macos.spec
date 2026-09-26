@@ -103,11 +103,20 @@ hiddenimports = [
     "darkdetect",
     "platforms",
 ]
-hiddenimports += collect_submodules("pynput")
-hiddenimports += collect_submodules("mss")
+def _mac_module(name):
+    return not any(part in {"_win32", "_xorg", "_uinput", "win32", "xorg", "uinput", "linux", "windows"}
+                   for part in name.split("."))
+
+
+hiddenimports += collect_submodules("pynput", filter=_mac_module)
+hiddenimports += collect_submodules("mss", filter=_mac_module)
 
 # ── 排除（Windows 专用/无关大包）──
 excludes = [
+    "mss.linux", "mss.windows",
+    "pynput._util.win32", "pynput._util.xorg", "pynput._util.uinput",
+    "pynput.keyboard._win32", "pynput.keyboard._xorg", "pynput.keyboard._uinput",
+    "pynput.mouse._win32", "pynput.mouse._xorg",
     "av",
     "matplotlib",
     "scipy",
