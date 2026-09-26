@@ -61,10 +61,53 @@ jobs:
         run: |
           pytest main/tests/test_platform_imports.py main/tests/test_platform_factory.py             main/tests/test_macos_coordinates.py main/tests/test_macos_permissions.py             -c main/tests/pytest.ini -v
 
+      - name: macOS packaging contract tests
+        # 静态契约：APP_VERSION 唯一源、Mac 打包链不得写死版本号、
+        # 不得 exclude ppocr_rust、OCR 模型必须作为正式构建要求。
+        run: |
+          pytest main/tests/test_macos_packaging_contract.py -c main/tests/pytest.ini -v
+
+      - name: OCR import and model presence (macOS)
+        # 只验证 ppocr_rust 可导入 + det/rec 模型存在；真实 OCR 推理留给 Mac 真机。
+        run: |
+          python - <<'PY'
+          import pathlib
+          import ppocr_rust
+
+          repo = pathlib.Path.cwd()
+          for name in ("PP-OCRv6_det_small.onnx", "PP-OCRv6_rec_small.onnx"):
+              path = repo / "models" / name
+              assert path.is_file(), f"缺少 OCR 模型: {path}"
+              print("[OK] model", path, path.stat().st_size)
+          print("[OK] ppocr_rust", ppocr_rust.__file__)
+          PY
+
       - name: Core logic tests (macOS)
         # 无桌面会话下只跑不依赖真实窗口的核心逻辑测试
         run: |
           pytest main/tests/test_clipboard_api.py main/tests/test_clipboard_data.py             main/tests/test_clipboard_pagination.py main/tests/test_clipboard_move_to_top.py             main/tests/test_stitch_unified_shell.py             -c main/tests/pytest.ini -q
+
+      - name: Shared note/text logic tests (macOS)
+        # Note / Text 属于跨平台共享逻辑，macOS 无头 runner 可安全执行
+        run: |
+          pytest main/tests/test_note_annotation.py             main/tests/test_text_tool_modes.py             main/tests/test_text_item_undo_safe_clear.py             main/tests/test_undo_stack.py             main/tests/test_tool_settings.py             main/tests/test_core_utils.py             -c main/tests/pytest.ini -q
+
+      - name: Build macOS .app (smoke)
+        # 证明 Mac 安装包真的能构建：ad-hoc 签名 + build_macos.py 内置资源/依赖校验
+        run: python build_macos.py
+
+      - name: Verify macOS .app bundle
+        run: |
+          set -euo pipefail
+          APP=dist/Jietuba.app
+          test -x "$APP/Contents/MacOS/Jietuba"
+          codesign --verify --deep --strict "$APP"
+          VERSION="$(python scripts/version_utils.py)"
+          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+          test "$PLIST_VERSION" = "$VERSION"
+          echo "Info.plist version = $PLIST_VERSION"
+          ls "$APP/Contents/Frameworks" | grep -i ppocr_rust
+          ls "$APP/Contents/MacOS/models"
 
   test:
     name: test (${{ matrix.arch }})

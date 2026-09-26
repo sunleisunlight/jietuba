@@ -16,7 +16,7 @@
 
 底层系统能力（截图、窗口枚举、全局快捷键、剪贴板、辅助功能、权限等）按平台实现（`main/platforms/windows` 与 `main/platforms/macos`），其余 UI 与业务逻辑完全共享。开发/构建规范见 [AGENTS.md](AGENTS.md)。
 
-Windows 发行包可直接运行；macOS 目前支持从源码构建 `.app` / `.dmg`（见 `scripts/setup_macos.sh`、`build_macos.py`）。
+Windows 发行包可直接运行；macOS 目前支持从源码构建 `.app` / `.dmg`（见 `scripts/setup_macos.sh`、`build_macos.py`），要求 Apple Silicon（arm64）与 **macOS 12.3 及以上**——GIF 录制的原生实现依赖 ScreenCaptureKit（macOS 12.3+ 才提供），项目没有更早系统的 fallback。
 
 ---
 

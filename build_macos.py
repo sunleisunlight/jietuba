@@ -26,7 +26,28 @@ SPEC = REPO / "jietuba_macos.spec"
 ASSETS = REPO / "assets"
 ICNS = ASSETS / "Jietuba.icns"
 ENTITLEMENTS = REPO / "packaging" / "entitlements.plist"
-VERSION = "2.0.6"
+
+sys.path.insert(0, str(REPO / "scripts"))
+from version_utils import read_app_version  # noqa: E402
+
+# 版本唯一源：main/main_app.py 的 APP_VERSION（AGENTS.md 版本规则）
+VERSION = read_app_version()
+
+# PyInstaller / 图标生成都用这个解释器：优先项目虚拟环境，
+# CI（无 .venv）等场景回退到当前解释器。
+PYTHON = VENV_PY if VENV_PY.exists() else Path(sys.executable)
+
+# OCR 模型：Mac 正式构建与 Windows 功能对齐，缺失即构建失败
+MODELS = ("PP-OCRv6_det_small.onnx", "PP-OCRv6_rec_small.onnx")
+
+# otool 依赖检查时视为系统库的前缀（无需打包进 .app）
+SYSTEM_DYLIB_PREFIXES = (
+    "/usr/lib/",
+    "/System/Library/",
+    "/System/iOSSupport/",
+    # Apple / 系统级 framework 安装位置（macOS runner 与真机均存在）
+    "/Library/Frameworks/",
+)
 
 
 def run(cmd, **kw):
@@ -58,7 +79,7 @@ for s in (16, 32, 64, 128, 256, 512, 1024):
     if s >= 32:
         im.save(f"{iconset}/icon_{{s//2}}x{{s//2}}@2x.png")
 """
-    run([VENV_PY, "-c", code])
+    run([PYTHON, "-c", code])
     run(["iconutil", "-c", "icns", iconset, "-o", ICNS])
     print("icns ready:", ICNS)
 
@@ -106,18 +127,69 @@ def sign_app():
 
 
 def ensure_resources():
-    """OCR 模型双位置（可选）。仓库 models/ 存在才拷贝；否则构建不带 OCR。"""
-    if not (REPO / "models").exists():
-        print("models/ 不存在，跳过 OCR（构建为无 OCR 版本）")
-        return
+    """OCR 模型：正式 Mac 构建必需（与 Windows 功能对齐），缺失直接失败。
+
+    双位置拷贝（Contents/Resources + Contents/MacOS）：应用运行时按
+    ``sys.executable`` 同级的 ``models/`` 查找（即 Contents/MacOS/models），
+    Resources/models 作为惯例位置一并保留。
+    """
+    src_dir = REPO / "models"
+    missing = [name for name in MODELS if not (src_dir / name).is_file()]
+    if missing:
+        print("!! 缺少 OCR 模型: %s" % ", ".join(missing))
+        print("   仓库 models/ 必须包含: %s" % ", ".join(MODELS))
+        print("   Mac 正式构建要求 OCR 与 Windows 对齐，模型不是可选项。")
+        sys.exit(1)
     for rel in ("Contents/Resources/models", "Contents/MacOS/models"):
         dst = APP / rel
         dst.mkdir(parents=True, exist_ok=True)
-        for model in ("PP-OCRv6_det_small.onnx", "PP-OCRv6_rec_small.onnx"):
-            src = REPO / "models" / model
-            if src.exists() and not (dst / model).exists():
-                shutil.copy2(src, dst / model)
-    print("models copied")
+        for name in MODELS:
+            shutil.copy2(src_dir / name, dst / name)
+    print("models copied:", ", ".join(MODELS))
+
+
+def _app_contains(filename):
+    """.app 内是否已存在同名文件（用于依赖是否被 PyInstaller 打包的判定）。"""
+    return any(p.name == filename for p in APP.rglob(filename))
+
+
+def check_native_dependencies():
+    """用 otool 检查 .app 内原生扩展/动态库的非系统依赖是否都已打包。
+
+    重点覆盖 ppocr_rust 在 macOS 上依赖的 ONNX Runtime dylib：若它只被链接
+    但没进 .app，源码环境能跑、真实 .app 却会 import 失败。此处发现即判定构建
+    失败，避免产出"看似构建成功但 OCR 不可用"的包。
+    """
+    ok = True
+    binaries = []
+    for sub in ("Contents/Frameworks", "Contents/Resources", "Contents/MacOS"):
+        base = APP / sub
+        if not base.exists():
+            continue
+        binaries += [p for p in base.rglob("*") if p.suffix in (".so", ".dylib")]
+    for lib in binaries:
+        out = subprocess.run(
+            ["otool", "-L", str(lib)], capture_output=True, text=True
+        )
+        if out.returncode != 0:
+            continue
+        for line in out.stdout.splitlines()[1:]:
+            dep = line.strip().split(" ", 1)[0]
+            if not dep:
+                continue
+            if dep.startswith(SYSTEM_DYLIB_PREFIXES) or dep.startswith("/usr/lib"):
+                continue
+            # @rpath/@loader_path/@executable_path：由 PyInstaller 重写并随包携带，
+            # 只需确认同名文件确实在 .app 内
+            name = os.path.basename(dep)
+            if not name:
+                continue
+            if not _app_contains(name):
+                print(f"  [UNRESOLVED] {lib.name} -> {dep}")
+                ok = False
+    if ok:
+        print("  [OK] native dependencies resolved inside .app")
+    return ok
 
 
 def verify_app():
@@ -127,39 +199,42 @@ def verify_app():
         ("icon", APP / "Contents/Resources/Jietuba.icns"),
         ("svg", APP / "Contents/Resources/svg/托盘.svg"),
         ("qm", APP / "Contents/Resources/translations/app_zh.qm"),
-    ]
-    optional_models = [
-        ("det model", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
-        ("rec model", APP / "Contents/Resources/models/PP-OCRv6_rec_small.onnx"),
+        ("det model (Resources)", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
+        ("rec model (Resources)", APP / "Contents/Resources/models/PP-OCRv6_rec_small.onnx"),
+        ("det model (MacOS)", APP / "Contents/MacOS/models/PP-OCRv6_det_small.onnx"),
+        ("rec model (MacOS)", APP / "Contents/MacOS/models/PP-OCRv6_rec_small.onnx"),
     ]
     for name, p in checks:
         exists = p.exists()
         ok = ok and exists
         print(f"  [{'OK' if exists else 'MISSING'}] {name}: {p}")
-    for name, p in optional_models:
-        print(f"  [{'OK' if p.exists() else 'SKIP(无OCR)'}] {name}: {p}")
-    # Info.plist 关键键
+    # Info.plist 关键键 + 版本必须等于 APP_VERSION
     plist = APP / "Contents/Info.plist"
     if plist.exists():
         import plistlib
         with open(plist, "rb") as f:
             info = plistlib.load(f)
         for key in ("CFBundleIdentifier", "NSScreenCaptureUsageDescription",
-                    "CFBundleShortVersionString"):
+                    "CFBundleShortVersionString", "CFBundleVersion"):
             print(f"  [{'OK' if key in info else 'MISSING'}] Info.plist {key} = {info.get(key)}")
         if info.get("CFBundleIdentifier") != "cc.jilei.jietuba":
             ok = False
+        for key in ("CFBundleShortVersionString", "CFBundleVersion"):
+            if info.get(key) != VERSION:
+                print(f"  !! Info.plist {key}={info.get(key)!r} != APP_VERSION={VERSION!r}")
+                ok = False
     else:
         ok = False
-    # Rust 扩展与关键 dylib
+    # Rust 扩展：Mac 与 Windows 功能对齐后 ppocr_rust 也是必需项
     for so, required in (("gifrecorder", True), ("longstitch", True),
-                          ("pyclipboard", True), ("ppocr_rust", False)):
+                          ("pyclipboard", True), ("ppocr_rust", True)):
         found = list((APP / "Contents/Frameworks").rglob(f"{so}*.so"))
         found += list((APP / "Contents/Resources").rglob(f"{so}*.so"))
-        tag = "OK" if found else ("MISSING" if required else "SKIP(无OCR)")
+        tag = "OK" if found else "MISSING"
         print(f"  [{tag}] rust ext {so}: {found[0].name if found else ''}")
         if required:
             ok = ok and bool(found)
+    ok = check_native_dependencies() and ok
     return ok
 
 
@@ -169,8 +244,8 @@ def main():
         shutil.rmtree(APP)
     if (DIST / "Jietuba").exists():
         shutil.rmtree(DIST / "Jietuba")
-    # PyInstaller 必须用 venv python 运行（含依赖）
-    run([VENV_PY, "-m", "PyInstaller", "--noconfirm", "--clean", str(SPEC)],
+    # PyInstaller 必须用带依赖的解释器运行
+    run([PYTHON, "-m", "PyInstaller", "--noconfirm", "--clean", str(SPEC)],
         cwd=REPO)
     ensure_resources()
     sign_app()

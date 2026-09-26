@@ -16,7 +16,7 @@ UI は PySide6、画像処理・クリップボード操作・OCR は Rust で�
 
 OS 固有の機能（キャプチャ、ウィンドウ列挙、グローバルホットキー、クリップボード、アクセシビリティ、権限）は `main/platforms/windows` と `main/platforms/macos` にプラットフォーム別実装として分離し、UI とビジネスロジックは全て共有します。開発・ビルド規則は [AGENTS.md](AGENTS.md) を参照。
 
-Windows 版はすぐに使える配布パッケージを用意しています。macOS は現在ソースから `.app` / `.dmg` をビルドする形で対応しています（`scripts/setup_macos.sh`、`build_macos.py`）。
+Windows 版はすぐに使える配布パッケージを用意しています。macOS は現在ソースから `.app` / `.dmg` をビルドする形で対応しています（`scripts/setup_macos.sh`、`build_macos.py`）。Apple Silicon (arm64) と **macOS 12.3 以降**が必要です。GIF 録画のネイティブ実装が ScreenCaptureKit（macOS 12.3 以降）に依存しており、それより古い OS 向けのフォールバックはありません。
 
 ---
 

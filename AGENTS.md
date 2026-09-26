@@ -11,6 +11,8 @@
 默认分支：master2
 Windows 构建：python build_with_ocr_onefile.py
 macOS 构建：scripts/setup_macos.sh → python build_macos.py → scripts/package_macos.sh
+macOS 目标：Apple Silicon(arm64) + macOS 12.3 及以上（GIF 录制依赖 ScreenCaptureKit，无低版本 fallback）
+Python：仅支持 3.11（scripts/setup_macos.sh 会强制校验，Windows 用 venv311）
 Git 远端：origin
 ```
 
@@ -95,6 +97,12 @@ Git 远端：origin
 
 - 版本唯一源：`main/main_app.py` 中的 `APP_VERSION`，其他地方（关于页、欢迎向导、macOS 打包）
   均从此导入，禁止在别处再人工维护版本号。
+- macOS 打包链（`build_macos.py`、`jietuba_macos.spec`、`scripts/package_macos.sh`、
+  `scripts/notarize_macos.sh`）统一通过 `scripts/version_utils.py`（`ast` 静态解析，
+  不 import main_app.py 以避免副作用）读取 `APP_VERSION`；Info.plist 版本、DMG 文件名、
+  公证脚本寻找的 DMG 全部由此派生，禁止在其中写死版本号。
+- `pyproject.toml` 的 `project.version` 只是 Python 工程元数据，**不是** `APP_VERSION`，
+  不参与正式发布版本。
 - **Windows 与 macOS 共用同一个 `APP_VERSION`，同一次正式发布必须是同一个版本号。**
 - 所有正式软件版本统一采用 Semantic Versioning：MAJOR.MINOR.PATCH。
 - 必须始终使用三段式，例如 2.4.0，不使用 2.1 这种两段式版本。

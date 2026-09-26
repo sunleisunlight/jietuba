@@ -16,7 +16,7 @@ The interface is built with PySide6; image processing, clipboard access, and OCR
 
 OS-level capabilities (capture, window enumeration, global hotkeys, clipboard, accessibility, permissions) are implemented per platform under `main/platforms/windows` and `main/platforms/macos`; all UI and business logic is shared. See [AGENTS.md](AGENTS.md) for development and build rules.
 
-A ready-to-run Windows release is available; on macOS the app is currently built from source as `.app` / `.dmg` (see `scripts/setup_macos.sh`, `build_macos.py`).
+A ready-to-run Windows release is available; on macOS the app is currently built from source as `.app` / `.dmg` (see `scripts/setup_macos.sh`, `build_macos.py`). macOS requires Apple Silicon (arm64) and **macOS 12.3 or later** — the native GIF recorder uses ScreenCaptureKit, which is only available from macOS 12.3, and there is no older-OS fallback.
 
 ---
 

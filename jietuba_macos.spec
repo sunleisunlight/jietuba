@@ -7,9 +7,21 @@
 
 产物：dist/Jietuba.app（windowed，Apple Silicon arm64）
 """
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_dynamic_libs
+import glob
+import os
+import sys
+import sysconfig
 
 block_cipher = None
+
+# ── 版本唯一源：main/main_app.py 的 APP_VERSION（AGENTS.md 版本规则）──
+# spec 由 PyInstaller 执行，SPECPATH 指向本文件所在目录（仓库根）。
+_SPEC_DIR = globals().get("SPECPATH") or os.getcwd()
+sys.path.insert(0, os.path.join(_SPEC_DIR, "scripts"))
+from version_utils import read_app_version  # noqa: E402
+
+APP_VERSION = read_app_version()
 
 # ── 数据资源 ──
 datas = [
@@ -17,8 +29,53 @@ datas = [
     ("main/translations", "translations"),
 ]
 
+# ── 二进制依赖 ──
+binaries = []
+
+# ppocr_rust（Rust + ort 的 PP-OCR 引擎）在 Mac 上与 Windows 功能对齐，是正式
+# 必需项。除扩展自身外还必须把 ONNX Runtime 动态库一起带进 .app，否则源码环境
+# 能跑、真实 .app 里 import ppocr_rust 会失败。
+try:
+    binaries += collect_dynamic_libs("ppocr_rust")
+except Exception as _exc:  # pragma: no cover - 打包环境分支
+    print("collect_dynamic_libs('ppocr_rust') 跳过:", _exc)
+
+
+def _find_onnxruntime_dylibs():
+    """定位本机 ort/ONNX Runtime 动态库（静态链接时返回空列表）。"""
+    patterns = []
+    for key in ("purelib", "platlib"):
+        base = sysconfig.get_paths().get(key)
+        if base:
+            patterns.append(os.path.join(base, "**", "libonnxruntime*.dylib"))
+    # maturin 本地构建时 ort-sys 的产物落在 cargo target 目录
+    patterns.append(os.path.join(_SPEC_DIR, "rust_libs", "target", "**", "libonnxruntime*.dylib"))
+    # ort-sys 下载缓存
+    patterns.append(os.path.expanduser("~/.cache/ort/**/libonnxruntime*.dylib"))
+    found = set()
+    for pattern in patterns:
+        found.update(glob.glob(pattern, recursive=True))
+    return sorted(found)
+
+
+_ort_dylibs = _find_onnxruntime_dylibs()
+for _dylib in _ort_dylibs:
+    binaries.append((_dylib, "."))
+print("onnxruntime dylibs:", _ort_dylibs or "(静态链接/无外部 dylib)")
+
 # PySide6 插件：cocoa 平台、SVG 与图片格式
 datas += collect_data_files("PySide6", includes=["plugins/**"])
+
+# ── OCR 模型：Mac 正式构建必需（与 Windows 功能对齐），缺失即构建失败 ──
+OCR_MODELS = ("PP-OCRv6_det_small.onnx", "PP-OCRv6_rec_small.onnx")
+for _model in OCR_MODELS:
+    _model_path = os.path.join(_SPEC_DIR, "models", _model)
+    if not os.path.isfile(_model_path):
+        raise SystemExit(
+            f"缺少 OCR 模型 {_model_path}；Mac 正式构建要求 OCR 与 Windows 对齐，"
+            "模型不是可选项。"
+        )
+    datas.append((_model_path, "models"))
 
 # ── 隐藏导入 ──
 hiddenimports = [
@@ -31,6 +88,7 @@ hiddenimports = [
     "pyclipboard",
     "longstitch",
     "gifrecorder",
+    "ppocr_rust",
     "zxingcpp",
     "PIL",
     "PIL.Image",
@@ -51,7 +109,6 @@ hiddenimports += collect_submodules("mss")
 # ── 排除（Windows 专用/无关大包）──
 excludes = [
     "av",
-    "ppocr_rust",
     "matplotlib",
     "scipy",
     "pandas",
@@ -136,7 +193,7 @@ excludes = [
 a = Analysis(
     ["main/main_app.py"],
     pathex=["main"],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -192,10 +249,13 @@ app = BUNDLE(
         "CFBundleExecutable": "Jietuba",
         "CFBundleIconFile": "Jietuba.icns",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "2.0.6",
-        "CFBundleVersion": "206",
+        # 版本来自 main/main_app.py 的 APP_VERSION（禁止在此写死）
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": APP_VERSION,
         "CFBundleInfoDictionaryVersion": "6.0",
-        "LSMinimumSystemVersion": "11.0",
+        # GIF 录制依赖 ScreenCaptureKit（macOS 12.3+），最低系统版本必须与
+        # 真实实现一致，不能声称支持实际跑不起来的更低版本。
+        "LSMinimumSystemVersion": "12.3",
         "NSHighResolutionCapable": True,
         "NSPrincipalClass": "NSApplication",
         "NSScreenCaptureUsageDescription": "用于截图、区域捕获和屏幕录制。",

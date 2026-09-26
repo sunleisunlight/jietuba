@@ -13,7 +13,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 PROFILE="${1:-jietuba}"
 APP="dist/Jietuba.app"
-DMG="dist/Jietuba-2.0.6-arm64.dmg"
+
+# 版本唯一源：main/main_app.py 的 APP_VERSION（经 scripts/version_utils.py 读取）。
+# 禁止在此写死版本号——必须与 package_macos.sh 产出的 DMG 名一致。
+PY=".venv/bin/python"
+[ -x "$PY" ] || PY="python3"
+VERSION="$("$PY" scripts/version_utils.py)"
+if [ -z "$VERSION" ]; then
+  echo "!! 无法从 main/main_app.py 读取 APP_VERSION"
+  exit 1
+fi
+DMG="dist/Jietuba-${VERSION}-arm64.dmg"
+
+if [ ! -f "$DMG" ]; then
+  echo "!! 找不到 DMG: $DMG（请先运行 scripts/package_macos.sh）"
+  exit 1
+fi
 
 if ! xcrun notarytool --version >/dev/null 2>&1; then
   echo "!! xcrun notarytool 不可用（需要 Xcode 命令行工具）"
