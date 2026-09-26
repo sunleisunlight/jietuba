@@ -35,7 +35,11 @@ def main():
                     f"--cov-config={root / '.coveragerc'}"]
         print(f"\n=== {module.name} ===", flush=True)
         result = subprocess.run(cmd, cwd=root, env=env, check=False)
-        if result.returncode:
+        # pytest 5 means this file contains no collected tests (the repository
+        # includes a manual translation comparison script named test_*.py).
+        if result.returncode == 5:
+            print(f"No pytest cases in {module.name}; not a passing test.", flush=True)
+        elif result.returncode:
             failures.append((module.name, result.returncode))
     if args.coverage:
         for extra in (["xml", "-o", str(root / "coverage.xml")],

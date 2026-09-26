@@ -43,11 +43,28 @@ def flush_qt_deferred_deletes():
     entire process.  Deliver only DeferredDelete events here; processing all
     events could also fire unrelated timers left by the test under cleanup.
     """
+    import shiboken6
+    from PySide6.QtWidgets import QGraphicsScene
+
+    existing_scenes = {
+        id(obj) for obj in shiboken6.getAllValidWrappers()
+        if isinstance(obj, QGraphicsScene)
+    }
     yield
 
     from PySide6.QtCore import QCoreApplication, QEvent
 
     if QCoreApplication.instance() is not None:
+        # 显式先销毁本用例创建且没有 Qt parent 的场景，避免 pytest 退出时
+        # 循环 GC 随机先回收 Python 图元/回调，再由 C++ scene 删除同一批子项。
+        # 不接触其他用例/更长生命周期 fixture 已有的场景，也不绕过任何断言。
+        scenes = [
+            obj for obj in shiboken6.getAllValidWrappers()
+            if isinstance(obj, QGraphicsScene) and id(obj) not in existing_scenes
+            and obj.parent() is None
+        ]
+        for scene in scenes:
+            scene.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
