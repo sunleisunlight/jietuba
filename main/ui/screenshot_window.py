@@ -20,9 +20,31 @@ from ui.selection_info import SelectionInfoPanel, SelectionInfoController
 from tools.action import ActionTools
 from settings import get_tool_settings_manager
 from settings.tool_settings import SMART_SELECTION_MODES
-from core.logger import log_debug, log_info, log_exception, T
+from core.logger import log_debug, log_info, log_warning, log_exception, T
 from core import safe_event
 from core.shortcut_manager import ShortcutManager, ShortcutHandler
+
+
+# 历史状态的防抖落盘延迟：鼠标停手 500ms 之后才序列化一次，避免每个
+# mouseMove 都写磁盘。关键出口（确认/保存/钉图/按 H/结束会话）会强制 flush。
+HISTORY_FLUSH_DELAY_MS = 500
+
+
+def _status_ready() -> str:
+    """history 包的"有效历史"状态常量（延迟导入，避免顶层多拖一份依赖）。"""
+    from history.models import STATUS_READY
+    return STATUS_READY
+
+
+def _is_alive(widget) -> bool:
+    """Qt 对象是否还没被销毁（历史窗口持有的是可能已失效的壳）。"""
+    if widget is None:
+        return False
+    try:
+        import shiboken6
+        return bool(shiboken6.isValid(widget))
+    except Exception:
+        return True
 
 
 
@@ -127,6 +149,14 @@ class ScreenshotShortcutHandler(ShortcutHandler):
         if self._match(event, "inapp_restore_last_region"):
             if self._restore_last_region():
                 return True
+
+        # 继续标注：打开标注历史，把过去的截图工程重新载入继续编辑。
+        # 刻意不要求 selection 已确认——刚进截图、还没框选时也要能翻历史。
+        # 按住不放只消费自动重复的那几次，避免叠出多个历史窗口。
+        if self._match(event, "inapp_continue_annotate"):
+            if not event_is_auto_repeat(event):
+                w.open_annotation_history()
+            return True
 
         # 确认截图
         if self._match(event, "inapp_confirm"):
@@ -280,6 +310,17 @@ class ScreenshotWindow(QWidget):
         # 关闭标记，防止已销毁窗口继续响应回调
         self._is_closing = False
         self._session_active = False
+
+        # ── 历史（继续标注）相关的持久状态 ──
+        # 窗口是复用的，这些字段跟着窗口活；每次会话开始时重新绑定 history_id。
+        self.history_id = None            # 当前会话对应的历史记录 id
+        self.is_history_session = False   # True = 本次会话是从历史恢复出来的
+        self._history_dialog = None       # 已打开的历史窗口（防重复创建）
+        self._history_offscreen = False   # 历史桌面不在当前屏幕范围内（只记日志）
+        self._history_timer = QTimer(self)
+        self._history_timer.setSingleShot(True)
+        self._history_timer.setInterval(HISTORY_FLUSH_DELAY_MS)
+        self._history_timer.timeout.connect(self._flush_history_state)
         
         import time
         _t0 = time.perf_counter()
@@ -405,6 +446,9 @@ class ScreenshotWindow(QWidget):
         
         # Ensure focus after a short delay (workaround for Windows focus stealing prevention)
         QTimer.singleShot(50, self._safe_activate_and_focus)
+
+        # 历史会话：立刻把完整虚拟桌面母片交给后台保存（不阻塞截图 UI）
+        self._attach_history_session(self._start_history_session(self.original_image, rect))
         
         # 初始状态：进入选区模式
         # CanvasView 默认处理鼠标按下进入选区
@@ -440,12 +484,52 @@ class ScreenshotWindow(QWidget):
         """
         import time
         _t0 = time.perf_counter()
+
+        self._install_session(prefetched_image, prefetched_rect)
+
+        # 历史会话：把这张完整虚拟桌面母片交给后台保存，并挂上自动落盘
+        self._attach_history_session(
+            self._start_history_session(prefetched_image, prefetched_rect)
+        )
         
+        _elapsed = (time.perf_counter() - _t0) * 1000
+        log_debug(T("[计时] 复用窗口会话准备完成 | 耗时={elapsed:.1f}ms", elapsed=_elapsed), "ScreenshotWindow")
+
+    def prepare_history_session(self, image, rect, state, history_id):
+        """复用截图窗口，把一条历史截图工程重新载入继续编辑。
+
+        视觉原理和钉图一样是"把过去那一刻的桌面冻结在最上方"，但底层继续用
+        ScreenshotWindow：选区模型、放大镜、工具栏、全部标注工具、OCR/翻译/
+        扫码/GIF/长截图/保存/复制/钉图 这些流程都是现成的，不需要第二套编辑器。
+
+        与 prepare_new_session 的唯一区别是数据来源：这里不调用
+        CaptureService（不能重新截当前桌面），背景直接用历史母片，并额外还原
+        当时的选区与全部矢量标注。
+        """
+        import time
+        _t0 = time.perf_counter()
+
+        self._install_session(image, rect)
+        self._restore_history_state(state)
+
+        # 恢复过程本身会触发大量 changed 信号，这里挂上监听前先落一次干净的基线
+        self._attach_history_session(history_id, is_restored=True)
+        self._flush_history_state()
+
+        _elapsed = (time.perf_counter() - _t0) * 1000
+        log_debug(T("[计时] 历史会话载入完成 | history_id={history_id} | 耗时={elapsed:.1f}ms",
+                    history_id=history_id, elapsed=_elapsed), "ScreenshotWindow")
+
+    def _install_session(self, image, rect):
+        """把一副图像 + 虚拟桌面几何装成一次可交互的截图会话。
+
+        prepare_new_session（实时截图）与 prepare_history_session（历史恢复）
+        共用这一份：Scene/View/遮罩/选区装饰/信息面板/放大镜/工具栏/快捷键的
+        创建顺序只有一套，两条路径不会各自漂移。
+        """
         self._is_closing = False
-        
-        image = prefetched_image
-        rect = prefetched_rect
-        
+        self.is_history_session = False
+
         self.original_image = image
         self.virtual_x = rect.x()
         self.virtual_y = rect.y()
@@ -523,9 +607,6 @@ class ScreenshotWindow(QWidget):
         self.raise_()
         self.setFocus()
         QTimer.singleShot(50, self._safe_activate_and_focus)
-        
-        _elapsed = (time.perf_counter() - _t0) * 1000
-        log_debug(T("[计时] 复用窗口会话准备完成 | 耗时={elapsed:.1f}ms", elapsed=_elapsed), "ScreenshotWindow")
 
     # ------------------------------------------------------------------
     # 会话结束：释放重数据，保留 UI 壳
@@ -537,6 +618,11 @@ class ScreenshotWindow(QWidget):
         if not self._session_active:
             return
         self._session_active = False
+
+        # 历史：离开会话之前必须把最后的工程状态落盘。放在 _is_closing 置位
+        # 之前——flush 要读写 scene，而 _is_closing 会让一部分路径提前返回。
+        self._finalize_history_session()
+
         self._is_closing = True
         
         # 立即隐藏窗口
@@ -650,6 +736,355 @@ class ScreenshotWindow(QWidget):
         safe_disconnect(self.toolbar.text_shadow_changed, controller.on_text_shadow_changed)
 
     # ------------------------------------------------------------------
+    # 历史 / 继续标注
+    # ------------------------------------------------------------------
+    def _start_history_session(self, image, rect):
+        """把完整虚拟桌面母片交给 HistoryManager 后台保存，返回 history_id。
+
+        历史是增强功能：任何一步失败都只记日志并返回 None，截图本身照常可用。
+        """
+        try:
+            from history import get_history_manager
+            return get_history_manager().begin_session(image, rect)
+        except Exception as e:
+            log_exception(e, T("创建历史会话"))
+            return None
+
+    def _attach_history_session(self, history_id, *, is_restored=False):
+        """把当前会话与一条历史记录绑起来，并挂上"状态变化 → 防抖落盘"。"""
+        self.history_id = history_id
+        self.is_history_session = bool(is_restored) and history_id is not None
+        if not history_id:
+            return
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return
+        # 标注增删/移动、样式修改都会让 scene 变脏；选区调整单独也走一路。
+        # 两个信号都只负责"重置防抖计时器"，不在这里做任何序列化。
+        scene.changed.connect(self._on_history_scene_changed)
+        scene.selection_model.rectChanged.connect(self._on_history_selection_changed)
+
+    def _on_history_scene_changed(self, *_args):
+        if self.history_id:
+            self._history_timer.start()
+
+    def _on_history_selection_changed(self, *_args):
+        if self.history_id:
+            self._history_timer.start()
+
+    def _finalize_history_session(self):
+        """会话收尾：把最后的工程状态落盘，或丢弃一条从未确认选区的草稿。"""
+        history_id = self.history_id
+        self.history_id = None
+        timer = getattr(self, '_history_timer', None)
+        if timer is not None:
+            timer.stop()
+        if not history_id:
+            return
+
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return
+
+        try:
+            from history import get_history_manager
+            manager = get_history_manager()
+        except Exception as e:
+            log_exception(e, T("获取历史管理器"))
+            return
+
+        try:
+            confirmed = bool(scene.selection_model.is_confirmed)
+        except Exception:
+            confirmed = False
+
+        # 没有确认过选区 = 用户只是误触了一下截图，不该在历史里留记录
+        if not confirmed:
+            manager.discard(history_id)
+            return
+
+        state = self._build_history_state()
+        if state is None:
+            manager.mark_ready(history_id)
+            return
+        manager.persist(history_id, state, self._render_history_preview(),
+                        status=_status_ready())
+
+    def _flush_history_state(self, *_args):
+        """强制把当前工程状态写进历史（关键出口调用，不走防抖）。"""
+        history_id = self.history_id
+        timer = getattr(self, '_history_timer', None)
+        if timer is not None:
+            timer.stop()
+        if not history_id:
+            return
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return
+        state = self._build_history_state()
+        if state is None:
+            return
+        try:
+            from history import get_history_manager
+            confirmed = bool(scene.selection_model.is_confirmed)
+            get_history_manager().persist(
+                history_id, state, self._render_history_preview(),
+                status=_status_ready() if confirmed else None,
+            )
+        except Exception as e:
+            log_exception(e, T("保存历史状态"))
+
+    def _build_history_state(self) -> dict:
+        """把当前场景序列化成一份可 JSON 化的工程状态。
+
+        source.png 不在这里——那是母片，一条历史只写一次。这里存的是"编辑工程"：
+        选区 + 全部矢量标注 + 序号计数 + 聚光灯暗度。
+        """
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return None
+        try:
+            from history.annotation_codec import AnnotationCodec
+            from history.models import SCHEMA_VERSION
+
+            codec = AnnotationCodec()
+            annotations = codec.serialize_all(scene.get_annotation_items())
+
+            selection_rect = scene.selection_model.rect()
+            scene_rect = scene.scene_rect
+            state = {
+                "schema_version": SCHEMA_VERSION,
+                "scene_rect": {
+                    "x": float(scene_rect.x()), "y": float(scene_rect.y()),
+                    "width": float(scene_rect.width()),
+                    "height": float(scene_rect.height()),
+                },
+                "selection": {
+                    "confirmed": bool(scene.selection_model.is_confirmed),
+                    "x": float(selection_rect.x()), "y": float(selection_rect.y()),
+                    "width": float(selection_rect.width()),
+                    "height": float(selection_rect.height()),
+                },
+                "annotations": annotations,
+            }
+
+            # 序号：记下"下一个该用几"，继续标注以后新增的序号从它接着走
+            try:
+                from tools.number import NumberTool
+                state["number_next"] = int(NumberTool.get_next_number(scene))
+            except Exception as e:
+                log_debug(T("记录序号计数器失败: {error}", error=str(e)), "ScreenshotWindow")
+
+            # 聚光灯的暗度属于整张幕布而不是某个孔，单独记一份
+            try:
+                from canvas.items import SpotlightCurtain
+                curtain = SpotlightCurtain.find(scene)
+                if curtain is not None:
+                    state["spotlight_darkness"] = float(curtain.opacity())
+            except Exception as e:
+                log_debug(T("记录聚光灯暗度失败: {error}", error=str(e)), "ScreenshotWindow")
+
+            return state
+        except Exception as e:
+            log_exception(e, T("序列化历史状态"))
+            return None
+
+    def _render_history_preview(self):
+        """历史列表用的缩略图：背景 + 当前标注的扁平预览。
+
+        selection 还没确认时退化成母片本身——列表里总得有个东西可看，而
+        这时候也确实没有"选区内容"可言。
+        """
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return None
+        try:
+            if scene.selection_model.is_confirmed:
+                rect = scene.selection_model.rect()
+                if not rect.isEmpty():
+                    image = self.action_handler.export_service.export(rect)
+                    if image is not None and not image.isNull():
+                        return image
+        except Exception as e:
+            log_debug(T("生成历史预览失败: {error}", error=str(e)), "ScreenshotWindow")
+
+        image = getattr(self, 'original_image', None)
+        if image is not None and not image.isNull():
+            from PySide6.QtGui import QImage
+            return QImage(image)
+        return None
+
+    def _restore_history_state(self, state):
+        """把历史工程状态还原进刚建好的场景。
+
+        Undo 栈在最后被清空：载入的这 N 个标注是"这张历史工程的初始状态"，
+        不是用户刚做的 N 次操作。恢复之后 Ctrl+Z 只撤销新动作。
+        """
+        scene = getattr(self, 'scene', None)
+        if scene is None:
+            return
+        state = state if isinstance(state, dict) else {}
+
+        annotations = state.get("annotations") or []
+        if annotations:
+            try:
+                from history.annotation_codec import AnnotationCodec
+                AnnotationCodec().restore_all(scene, annotations)
+            except Exception as e:
+                log_exception(e, T("恢复历史标注"))
+
+        self._restore_history_selection(state.get("selection"))
+        self._restore_number_counter(state.get("number_next"))
+        self._restore_spotlight_darkness(state.get("spotlight_darkness"))
+
+        # 旧标注视为基线：清掉撤销栈，用户之后的操作才进新的撤销栈
+        try:
+            if hasattr(scene, 'undo_stack') and scene.undo_stack is not None:
+                scene.undo_stack.clear()
+        except Exception as e:
+            log_debug(T("清空撤销栈失败: {error}", error=str(e)), "ScreenshotWindow")
+
+        # 默认回到光标工具：不要保留按 H 之前的矩形/备注工具，避免一回来就误画
+        if hasattr(self, 'toolbar') and self.toolbar is not None:
+            self.toolbar.select_tool("cursor", toggle=False)
+        if hasattr(scene, 'activate_tool'):
+            scene.activate_tool("cursor")
+
+    def _restore_history_selection(self, selection):
+        if not isinstance(selection, dict) or not selection.get("confirmed"):
+            return
+        try:
+            rect = QRectF(
+                float(selection.get("x", 0.0) or 0.0),
+                float(selection.get("y", 0.0) or 0.0),
+                float(selection.get("width", 0.0) or 0.0),
+                float(selection.get("height", 0.0) or 0.0),
+            )
+        except (TypeError, ValueError):
+            return
+        if rect.width() < 1.0 or rect.height() < 1.0:
+            return
+        self.scene.selection_model.initialize_confirmed_rect(rect)
+        self.scene.selection_item.show()
+        # selection_model.confirmed 没有对外接线，这里显式走窗口自己的确认收尾
+        self.on_selection_confirmed()
+
+    def _restore_number_counter(self, number_next):
+        if not isinstance(number_next, int) or number_next < 1:
+            return
+        try:
+            from tools.number import NumberTool
+            NumberTool.set_next_number_and_refresh(
+                self.scene, number_next, force_cursor=False
+            )
+        except Exception as e:
+            log_debug(T("恢复序号计数器失败: {error}", error=str(e)), "ScreenshotWindow")
+
+    def _restore_spotlight_darkness(self, darkness):
+        if not isinstance(darkness, (int, float)):
+            return
+        try:
+            from canvas.items import SpotlightCurtain
+            curtain = SpotlightCurtain.find(self.scene)
+            if curtain is not None:
+                curtain.setOpacity(max(0.0, min(1.0, float(darkness))))
+        except Exception as e:
+            log_debug(T("恢复聚光灯暗度失败: {error}", error=str(e)), "ScreenshotWindow")
+
+    def open_annotation_history(self):
+        """H：先保存当前工程，再打开标注历史窗口。
+
+        H 不要求选区已确认——刚进截图、还没框选时也要能翻历史。
+        """
+        if self._is_closing:
+            return
+
+        # 已经开着就别再开第二个（长按 H 的自动重复也走这条，见快捷键处理器）
+        existing = getattr(self, '_history_dialog', None)
+        if existing is not None and _is_alive(existing) and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return
+
+        # 打开之前先 flush：历史列表里必须能看到"我现在这张"的最新状态
+        self._flush_history_state()
+
+        from ui.annotation_history_dialog import AnnotationHistoryDialog
+
+        dialog = AnnotationHistoryDialog(self, current_history_id=self.history_id)
+        self._history_dialog = dialog
+        try:
+            # 模态执行：截图快捷键处理器靠 activeModalWidget() 让出键盘，
+            # 1~9 / H / Enter / Esc 不会穿透到下面的截图窗口。
+            dialog.exec()
+        except Exception as e:
+            log_exception(e, T("打开标注历史窗口"))
+        finally:
+            self._history_dialog = None
+
+        chosen = getattr(dialog, 'chosen_history_id', None)
+        if chosen and chosen != self.history_id:
+            self._switch_to_history(chosen)
+
+    def _switch_to_history(self, history_id):
+        """从当前会话切换到另一条历史：先把 A 落盘销毁，再载入 B。"""
+        try:
+            from history import get_history_manager
+            manager = get_history_manager()
+            record = manager.get_record(history_id)
+            if record is None:
+                show_modeless_warning_dialog(
+                    self, T("继续标注"), T("这条历史不存在或已损坏。"))
+                return
+            state = manager.load_state(history_id)
+            image = manager.load_source_image(history_id)
+            if state is None or image is None or image.isNull():
+                show_modeless_warning_dialog(
+                    self, T("继续标注"), T("这条历史的母片或工程状态已损坏，无法继续标注。"))
+                return
+
+            rect = QRectF(float(record.virtual_x), float(record.virtual_y),
+                          float(record.virtual_width), float(record.virtual_height))
+            if rect.width() < 1.0 or rect.height() < 1.0:
+                rect = QRectF(0.0, 0.0, float(image.width()), float(image.height()))
+            self._warn_if_history_offscreen(rect)
+
+            log_info(T("切换到历史记录: {history_id}", history_id=history_id), "ScreenshotWindow")
+            self._teardown_session()          # 内部会 flush A（未确认选区则丢弃）
+            self.prepare_history_session(image, rect, state, history_id)
+        except Exception as e:
+            log_exception(e, T("切换历史记录"))
+
+    def _warn_if_history_offscreen(self, rect: QRectF):
+        """历史桌面不在当前屏幕范围内时留一条明确日志。
+
+        数据坐标一律保持原始（不为了适应当前屏幕去改标注几何），窗口本身仍按
+        历史的虚拟桌面几何摆放，所以桌面布局变了也只会"有一部分看不到"，
+        不会损坏内容，也不会把窗口甩到屏幕外导致完全不可用。
+        """
+        self._history_offscreen = False
+        try:
+            from PySide6.QtGui import QGuiApplication
+            screens = QGuiApplication.screens()
+            if not screens:
+                return
+            bounds = QRectF(screens[0].geometry())
+            for screen in screens[1:]:
+                bounds = bounds.united(QRectF(screen.geometry()))
+            intersection = QRectF(rect).intersected(bounds)
+            if intersection.width() >= rect.width() - 1.0 and \
+                    intersection.height() >= rect.height() - 1.0:
+                return
+            self._history_offscreen = True
+            log_warning(
+                T("历史桌面 {history_rect} 超出当前屏幕范围 {screen_rect}，只能在可见区域内继续标注",
+                  history_rect=rect, screen_rect=bounds),
+                "ScreenshotWindow",
+            )
+        except Exception as e:
+            log_debug(T("检查历史桌面可见性失败: {error}", error=str(e)), "ScreenshotWindow")
+
+    # ------------------------------------------------------------------
     # 窗口截图可见性控制
     # ------------------------------------------------------------------
     def _set_exclude_from_capture(self, exclude: bool):
@@ -728,19 +1163,25 @@ class ScreenshotWindow(QWidget):
             self.toolbar.text_shadow_changed.connect(controller.on_text_shadow_changed)
 
     # -- action_handler wrapper 方法（toolbar 信号的稳定接收端）--
+    # 这四个出口都会结束或输出当前截图，先强制 flush 一次历史状态：
+    # 用户"刚移动完一个备注就马上 Ctrl+C"时，历史里记的必须是移动后的位置。
     def _handle_confirm(self):
+        self._flush_history_state()
         if self.action_handler:
             self.action_handler.handle_confirm()
 
     def _handle_copy(self):
+        self._flush_history_state()
         if self.action_handler:
             self.action_handler.handle_copy()
 
     def _handle_save(self):
+        self._flush_history_state()
         if self.action_handler:
             self.action_handler.handle_save()
 
     def _handle_pin(self):
+        self._flush_history_state()
         if self.action_handler:
             self.action_handler.handle_pin()
 
@@ -824,6 +1265,10 @@ class ScreenshotWindow(QWidget):
         # 确保主窗口保持焦点
         self.activateWindow()
         self.setFocus()
+
+        # 选区一确认，这条历史就从 draft 变成有效记录：此刻落一次盘，之后
+        # 即使异常退出也不会被当成"误触草稿"清掉。
+        self._flush_history_state()
 
     @safe_event
     def showEvent(self, event):

@@ -63,6 +63,7 @@ SCREENSHOT_ACTION_SHORTCUTS = (
     ("inapp_redo", "Redo"),
     ("inapp_delete", "Delete Selected"),
     ("inapp_restore_last_region", "Restore Last Region"),
+    ("inapp_continue_annotate", "Continue Annotating"),
     ("inapp_zoom_in", "Magnifier Zoom In"),
     ("inapp_zoom_out", "Magnifier Zoom Out"),
     ("inapp_translate", "Screenshot Translate"),
@@ -291,6 +292,7 @@ class ToolSettingsManager(QObject):
         "inapp_redo": "ctrl+y",                # 重做
         "inapp_delete": "delete",              # 删除选中图元
         "inapp_restore_last_region": "l",      # 选区未确认/无绘制工具激活时，还原为上次截图的区域
+        "inapp_continue_annotate": "h",        # 继续标注：打开标注历史，把过去的截图工程重新载入继续编辑
         "inapp_copy_pin": "ctrl+c",            # 复制钉图内容
         "inapp_copy_pin_text": "ctrl+shift+c", # 复制钉图识别到的全部文字
         "inapp_pin_reset_size": "mousemiddle", # 钉图恢复 100% 大小

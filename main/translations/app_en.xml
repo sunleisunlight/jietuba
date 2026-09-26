@@ -308,6 +308,10 @@ Replace it?</translation>
         <translation>Restore Last Region</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>Continue Annotating</translation>
+    </message>
+    <message>
         <source>Copy Pinned Image</source>
         <translation>Copy Pinned Image</translation>
     </message>
@@ -3675,5 +3679,35 @@ Replace it?</translation>
         <source>GIF Recording</source>
         <translation>GIF Recording</translation>
     </message>
+</context>
+
+<!-- ========== Annotation history / Continue annotating ========== -->
+<context>
+    <name>AnnotationHistory</name>
+    <message><source>继续标注</source><translation>Continue Annotating</translation></message>
+    <message><source>全部</source><translation>All</translation></message>
+    <message><source>截图</source><translation>Screenshot</translation></message>
+    <message><source>导入图片</source><translation>Imported image</translation></message>
+    <message><source>剪贴来源</source><translation>From clipboard</translation></message>
+    <message><source>最近</source><translation>Recent</translation></message>
+    <message><source>收藏</source><translation>Favorite</translation></message>
+    <message><source>取消收藏</source><translation>Unfavorite</translation></message>
+    <message><source>删除</source><translation>Delete</translation></message>
+    <message><source>当前</source><translation>Current</translation></message>
+    <message><source>当前正在编辑</source><translation>Currently editing</translation></message>
+    <message><source>未标注</source><translation>No annotations</translation></message>
+    <message><source>{n} 个标注</source><translation>{n} annotation(s)</translation></message>
+    <message><source>预览缺失</source><translation>No preview</translation></message>
+    <message><source>还没有保存过的截图历史。</source><translation>No saved screenshot history yet.</translation></message>
+    <message><source>删除历史</source><translation>Delete history</translation></message>
+    <message><source>这条历史正在编辑中，请先退出继续标注再删除。</source><translation>This history is being edited. Leave it before deleting.</translation></message>
+    <message><source>删除后，这条历史的母片、标注工程与缩略图都会被清除，且无法恢复。
+
+确定删除吗？</source><translation>Deleting removes this history's source image, annotation project and thumbnail. This cannot be undone.
+
+Delete it?</translation></message>
+    <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>This history's source image is missing; it cannot be continued.</translation></message>
+    <message><source>这条历史不存在或已损坏。</source><translation>This history does not exist or is damaged.</translation></message>
+    <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>This history's source image or project state is damaged; it cannot be continued.</translation></message>
 </context>
 </TS>

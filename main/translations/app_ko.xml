@@ -307,6 +307,10 @@ Replace it?</source>
         <translation>이전 선택 영역 복원</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>주석 이어서 달기</translation>
+    </message>
+    <message>
         <source>Copy Pinned Image</source>
         <translation>고정 이미지 복사</translation>
     </message>
@@ -3773,5 +3777,35 @@ Replace it?</source>
         <source>GIF Recording</source>
         <translation>GIF 녹화</translation>
     </message>
+</context>
+
+<!-- ========== 주석 기록 / 주석 이어서 달기 ========== -->
+<context>
+    <name>AnnotationHistory</name>
+    <message><source>继续标注</source><translation>주석 이어서 달기</translation></message>
+    <message><source>全部</source><translation>전체</translation></message>
+    <message><source>截图</source><translation>스크린샷</translation></message>
+    <message><source>导入图片</source><translation>이미지 가져오기</translation></message>
+    <message><source>剪贴来源</source><translation>클립보드에서</translation></message>
+    <message><source>最近</source><translation>최근</translation></message>
+    <message><source>收藏</source><translation>즐겨찾기</translation></message>
+    <message><source>取消收藏</source><translation>즐겨찾기 해제</translation></message>
+    <message><source>删除</source><translation>삭제</translation></message>
+    <message><source>当前</source><translation>현재</translation></message>
+    <message><source>当前正在编辑</source><translation>현재 편집 중</translation></message>
+    <message><source>未标注</source><translation>주석 없음</translation></message>
+    <message><source>{n} 个标注</source><translation>주석 {n}개</translation></message>
+    <message><source>预览缺失</source><translation>미리보기 없음</translation></message>
+    <message><source>还没有保存过的截图历史。</source><translation>저장된 스크린샷 기록이 없습니다.</translation></message>
+    <message><source>删除历史</source><translation>기록 삭제</translation></message>
+    <message><source>这条历史正在编辑中，请先退出继续标注再删除。</source><translation>이 기록은 편집 중입니다. 주석 이어서 달기를 종료한 뒤 삭제하세요.</translation></message>
+    <message><source>删除后，这条历史的母片、标注工程与缩略图都会被清除，且无法恢复。
+
+确定删除吗？</source><translation>삭제하면 이 기록의 원본 이미지, 주석 프로젝트, 미리보기가 모두 지워지며 되돌릴 수 없습니다.
+
+삭제할까요?</translation></message>
+    <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>이 기록의 원본 이미지가 없어 이어서 편집할 수 없습니다.</translation></message>
+    <message><source>这条历史不存在或已损坏。</source><translation>이 기록이 없거나 손상되었습니다.</translation></message>
+    <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>이 기록의 원본 이미지 또는 프로젝트 상태가 손상되어 이어서 편집할 수 없습니다.</translation></message>
 </context>
 </TS>

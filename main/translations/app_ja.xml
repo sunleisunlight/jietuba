@@ -314,6 +314,10 @@ Replace it?</source>
         <translation>前回の選択範囲を復元</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>注釈の続き</translation>
+    </message>
+    <message>
         <source>Copy Pinned Image</source>
         <translation>ピン画像をコピー</translation>
     </message>
@@ -3814,5 +3818,35 @@ Replace it?</source>
         <source>GIF Recording</source>
         <translation>GIF録画</translation>
     </message>
+</context>
+
+<!-- ========== 注釈履歴 / 注釈の続き ========== -->
+<context>
+    <name>AnnotationHistory</name>
+    <message><source>继续标注</source><translation>注釈の続き</translation></message>
+    <message><source>全部</source><translation>すべて</translation></message>
+    <message><source>截图</source><translation>スクリーンショット</translation></message>
+    <message><source>导入图片</source><translation>画像を読み込む</translation></message>
+    <message><source>剪贴来源</source><translation>クリップボード由来</translation></message>
+    <message><source>最近</source><translation>最近</translation></message>
+    <message><source>收藏</source><translation>お気に入り</translation></message>
+    <message><source>取消收藏</source><translation>お気に入りを解除</translation></message>
+    <message><source>删除</source><translation>削除</translation></message>
+    <message><source>当前</source><translation>現在</translation></message>
+    <message><source>当前正在编辑</source><translation>現在編集中</translation></message>
+    <message><source>未标注</source><translation>注釈なし</translation></message>
+    <message><source>{n} 个标注</source><translation>注釈 {n} 件</translation></message>
+    <message><source>预览缺失</source><translation>プレビューがありません</translation></message>
+    <message><source>还没有保存过的截图历史。</source><translation>保存されたスクリーンショット履歴はまだありません。</translation></message>
+    <message><source>删除历史</source><translation>履歴を削除</translation></message>
+    <message><source>这条历史正在编辑中，请先退出继续标注再删除。</source><translation>この履歴は編集中です。注釈の続きを終了してから削除してください。</translation></message>
+    <message><source>删除后，这条历史的母片、标注工程与缩略图都会被清除，且无法恢复。
+
+确定删除吗？</source><translation>削除すると、この履歴の元画像・注釈プロジェクト・サムネイルがすべて消え、元に戻せません。
+
+削除しますか？</translation></message>
+    <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>この履歴の元画像が失われているため、続きを編集できません。</translation></message>
+    <message><source>这条历史不存在或已损坏。</source><translation>この履歴は存在しないか破損しています。</translation></message>
+    <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>この履歴の元画像またはプロジェクト状態が破損しており、続きを編集できません。</translation></message>
 </context>
 </TS>

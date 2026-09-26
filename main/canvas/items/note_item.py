@@ -1025,8 +1025,18 @@ class NoteItem(TextItem):
         布局模式也跟着复制：用户手工摆成"目标框在左上、文字在右下"之后钉图，钉图
         里的备注必须还是那个样子，不能又按方向自动排回目标框右边。
         """
-        state = self.export_state()
-        clone = NoteItem(
+        return self.from_export_state(self.export_state(), pos=self.pos())
+
+    @classmethod
+    def from_export_state(cls, state: dict, pos: QPointF = None) -> "NoteItem":
+        """按 export_state() 的快照重建一条备注。
+
+        与 clone() 是同一份重建逻辑，只是调用方不同：钉图克隆要"照着现在的自己
+        再做一个"，历史恢复要"照着存下来的样子做一个"（pos 来自快照而不是当前
+        图元）。几何、样式、布局模式全部按快照还原，没有任何按方向重新排版的
+        机会——老历史里手工摆过的位置必须原样回来。
+        """
+        clone = cls(
             target_rect=QRectF(state["target_rect_local"]),
             font=QFont(state["font"]),
             color=QColor(state["color"]),
@@ -1046,14 +1056,18 @@ class NoteItem(TextItem):
         clone._arrow_start_local = QPointF(state["arrow_start_local"])
         clone._arrow_end_local = QPointF(state["arrow_end_local"])
         clone._arrow_item.set_positions(clone._arrow_start_local, clone._arrow_end_local)
-        clone.setPos(self.pos())
-        clone.setZValue(self.zValue())
-        clone.setOpacity(float(self.opacity()))
-        if state["outline"]:
-            clone.set_outline(*state["outline"])
-        if state["shadow"]:
-            clone.set_shadow(*state["shadow"])
-        enabled, background_color = state["background"]
-        clone.set_background(enabled, QColor(background_color), background_color.alpha())
+        if pos is not None:
+            clone.setPos(QPointF(pos))
+        outline = state.get("outline")
+        if outline:
+            clone.set_outline(*outline)
+        shadow = state.get("shadow")
+        if shadow:
+            clone.set_shadow(*shadow)
+        background = state.get("background")
+        if background:
+            enabled, background_color = background
+            clone.set_background(enabled, QColor(background_color),
+                                 background_color.alpha())
         clone.update()
         return clone

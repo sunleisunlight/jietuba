@@ -312,6 +312,10 @@ Replace it?</source>
         <translation>恢复上次选区</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>继续标注</translation>
+    </message>
+    <message>
         <source>Copy Pinned Image</source>
         <translation>复制钉图内容</translation>
     </message>

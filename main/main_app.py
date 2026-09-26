@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 
 
 def create_fallback_app_icon():
@@ -190,6 +190,12 @@ class MainApp(QObject):
 
     def _on_about_to_quit(self):
         """应用退出前收尾"""
+        try:
+            from history import shutdown_history_manager
+            # 先把还没落盘的历史工程写出去，再收线程（内部会等队列排空）
+            shutdown_history_manager()
+        except Exception as e:
+            log_exception(e, T("收尾历史后台线程"))
         try:
             from translation import TranslationManager
 

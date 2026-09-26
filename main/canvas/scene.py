@@ -1,4 +1,4 @@
-﻿"""
+"""
 画布场景 - 管理所有图层和绘图工具
 """
 
@@ -180,6 +180,30 @@ class CanvasScene(QGraphicsScene):
         Returns:
             list: 选区内的绘制项目列表（按绘制顺序，先绘制的在前）
         """
+        items_in_rect = self.items(rect, Qt.ItemSelectionMode.IntersectsItemBoundingRect)
+        return self.filter_annotation_items(items_in_rect)
+
+    def get_annotation_items(self):
+        """场景里全部顶级标注图元（按绘制顺序，先绘制的在前）。
+
+        与 get_drawing_items_in_rect 共用同一套排除规则，区别只是不按矩形粗筛：
+        历史保存/恢复要的是"这张工程里现在有哪些标注"，不该受包围盒相交的影响。
+        """
+        return self.filter_annotation_items(self.items())
+
+    def filter_annotation_items(self, items):
+        """从一批场景图元里挑出真正的顶级标注，并按绘制顺序排列。
+
+        排除：背景、选区框、备注的子图元（目标框/箭头）、画笔指示器、聚光灯幕布。
+
+        备注（NoteItem）把目标框和箭头挂成自己的子图元，好让整条备注对外
+        只有一个逻辑身份（一次选中、一次撤销、一次克隆）。它们对场景同样是
+        可见的图元，不排掉的话一条备注会被当成"根 + 子图元"共三条标注导出、
+        克隆三份，钉图里就散架了。
+
+        判断用标志位而不是 item.parentItem()：后者会让绑定层放弃那些"只被
+        场景持有"的顶层图元的所有权，图元随即被回收（详见 is_composite_child）。
+        """
         from PySide6.QtWidgets import QGraphicsEllipseItem
 
         from canvas.items import is_composite_child
@@ -188,23 +212,11 @@ class CanvasScene(QGraphicsScene):
         # SelectionItem 不画东西了，但仍在场景里接收鼠标事件，
         # 所以枚举标注图元时依然要排除它（否则会被当成标注克隆进钉图）
         excluded_items = {self.background, self.selection_item}
-        
-        # 使用场景的 items() 方法查找矩形范围内的项目
-        # IntersectsItemBoundingRect: 只要边界框相交就算
-        items_in_rect = self.items(rect, Qt.ItemSelectionMode.IntersectsItemBoundingRect)
-        
-        for item in items_in_rect:
-            # 排除基础UI元素
+
+        for item in items:
             if item in excluded_items:
                 continue
 
-            # 备注（NoteItem）把目标框和箭头挂成自己的子图元，好让整条备注对外
-            # 只有一个逻辑身份（一次选中、一次撤销、一次克隆）。它们对场景同样是
-            # 可见的图元，不排掉的话一条备注会被当成"根 + 子图元"共三条标注导出、
-            # 克隆三份，钉图里就散架了。
-            #
-            # 判断用标志位而不是 item.parentItem()：后者会让绑定层放弃那些"只被
-            # 场景持有"的顶层图元的所有权，图元随即被回收（详见 is_composite_child）。
             if is_composite_child(item):
                 continue
 
@@ -215,12 +227,12 @@ class CanvasScene(QGraphicsScene):
             # 幕布是从聚光灯派生出来的，不是独立的标注：克隆聚光灯时新场景会自己长出幕布
             if isinstance(item, SpotlightCurtain):
                 continue
-            
+
             drawing_items.append(item)
-        
+
         # 反转列表，使其按绘制顺序（先绘制的在前）
         # scene.items() 返回的是Z-order排序（上层在前），但我们需要绘制顺序
         drawing_items.reverse()
-        
+
         log_debug(T("选区内绘制项目: {item_count} 个（已按绘制顺序排列）", item_count=len(drawing_items)), "Scene")
         return drawing_items
