@@ -258,11 +258,15 @@ class TestLayoutDialog:
         dialog = self._dialog(default_layout())
         screen_height = QApplication.primaryScreen().availableGeometry().height()
         content_height = dialog._card.sizeHint().height() + 2
-        if content_height <= screen_height - 40:
+        from core.ui_scale import dialog_scaled
+        # 是否放得下要算上提示、快捷键说明、按钮和外边距，不能只算列表。
+        non_list_height = dialog.height() - dialog._scroll.height()
+        if content_height + non_list_height <= screen_height - dialog_scaled(40):
             assert dialog._scroll.viewport().height() >= dialog._card.sizeHint().height()
             assert not dialog._scroll.verticalScrollBar().isVisible()
         else:
             assert dialog.height() <= screen_height
+            assert dialog._scroll.verticalScrollBar().maximum() > 0
         dialog.close()
 
     def test_restore_defaults_resets_order_and_modes(self, qapp):

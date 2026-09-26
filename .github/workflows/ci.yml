@@ -193,14 +193,7 @@ jobs:
         # 从仓库根目录运行，保证 .coveragerc 里的相对路径能正确解析。
         # --cov-fail-under 是一个只升不降的棘轮：覆盖率掉下去 CI 就红，
         # 补完测试后把这个数字往上调。
-        run: >
-          pytest main/tests -v -s
-          -c main/tests/pytest.ini
-          --cov --cov-config=.coveragerc
-          --cov-report=term:skip-covered
-          --cov-report=xml
-          --cov-fail-under=37
-          --junitxml=test-results.xml
+        run: python scripts/run_platform_tests.py --coverage
 
       - name: Build current Windows software
         run: python build_with_ocr_onefile.py
@@ -269,7 +262,7 @@ jobs:
         with:
           name: coverage-xml-${{ matrix.arch }}
           path: |
-            test-results.xml
+            build/test-reports/**/*.xml
             coverage.xml
             diff-coverage.html
           if-no-files-found: warn

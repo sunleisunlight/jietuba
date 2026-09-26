@@ -7,11 +7,29 @@ mss 依赖真实的操作系统屏幕会话，在无桌面的 CI runner 上不�
 因此用 unittest.mock 模拟 mss.mss() 上下文管理器和其返回的截图对象。
 """
 from unittest.mock import MagicMock, patch
+import pytest
 
 from PySide6.QtGui import QImage
 from PySide6.QtCore import QRectF
 
 from capture.capture_service import CaptureService
+
+
+@pytest.fixture(autouse=True)
+def allow_mock_capture(monkeypatch):
+    # 这里验证模拟 mss 帧的共享几何/内存契约，不依赖 CI 的真实 TCC 授权。
+    # 拒绝授权路径由单独的权限测试覆盖。
+    monkeypatch.setattr("platforms.macos.capture._cg_preflight", lambda: True)
+
+
+def test_macos_denied_permission_never_captures(monkeypatch):
+    from platforms.macos.capture import MacOSCaptureBackend, ScreenCapturePermissionError
+
+    monkeypatch.setattr("platforms.macos.capture._cg_preflight", lambda: False)
+    with patch("mss.mss") as mock_mss:
+        with pytest.raises(ScreenCapturePermissionError):
+            MacOSCaptureBackend().capture_all_screens()
+        mock_mss.assert_not_called()
 
 
 def _make_fake_screenshot(width, height):
