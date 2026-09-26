@@ -11,7 +11,7 @@ import mss  # 跨平台依赖（Windows/macOS 均使用；模块级导入供测�
 from PySide6.QtGui import QImage
 from PySide6.QtCore import QRectF
 
-from core.logger import T, log_exception, log_warning
+from core.logger import T
 
 
 class ScreenCapturePermissionError(RuntimeError):

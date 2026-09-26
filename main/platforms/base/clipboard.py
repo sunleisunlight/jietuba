@@ -19,8 +19,9 @@ class ClipboardBackend(ABC):
     def copy_image(self, image: QImage, file_reference: Optional[str] = None) -> None:
         """把 QImage（及可选的文件路径引用）写入系统剪贴板。"""
 
+    @abstractmethod
     def paste_to_target(self, target: object) -> None:
         """把焦点还给目标窗口/应用后补发粘贴快捷键（Windows=Ctrl+V，Mac=Command+V）。
 
-        target 为 None 时按当前前台窗口处理。默认实现：不处理。
+        target 为 None 时按当前前台窗口处理。
         """

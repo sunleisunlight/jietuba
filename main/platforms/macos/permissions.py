@@ -45,7 +45,6 @@ def _ax_is_trusted() -> bool:
 def _ax_is_trusted_with_options() -> bool:
     """带提示的辅助功能检查（首次会弹系统提示）。"""
     try:
-        import Quartz
         from ApplicationServices import (
             AXIsProcessTrustedWithOptions,
             kAXTrustedCheckOptionPrompt,

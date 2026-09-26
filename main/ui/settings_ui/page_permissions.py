@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 
 from core.ui_scale import dialog_scaled
-from core import log_exception, T
 from .components import SettingCardGroup, WhiteCard, apply_theme_text_style
 
 _STATUS_ZH = {"granted": "已授权", "denied": "未授权", "not_requested": "未请求", "unknown": "未知"}

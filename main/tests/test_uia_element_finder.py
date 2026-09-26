@@ -6,8 +6,6 @@ import threading
 import time
 from types import SimpleNamespace
 
-import sys
-
 import pytest
 
 pytestmark = pytest.mark.skipif(

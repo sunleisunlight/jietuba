@@ -6,8 +6,6 @@
 """
 from __future__ import annotations
 
-import ctypes
-from ctypes import wintypes
 import io
 import struct
 from typing import Optional

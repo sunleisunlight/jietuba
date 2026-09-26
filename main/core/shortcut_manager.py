@@ -36,7 +36,6 @@
 
 from __future__ import annotations
 
-import ctypes
 import sys
 from abc import ABC, abstractmethod
 from ctypes import wintypes

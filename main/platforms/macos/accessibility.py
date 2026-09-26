@@ -14,7 +14,7 @@ request_refresh_if_needed / prewarm / close / cache_updated 信号）。
 from __future__ import annotations
 
 import threading
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QObject, Signal
 

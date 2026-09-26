@@ -7,13 +7,6 @@ accessibility/coordinates/permissions），业务代码通过
 """
 import sys
 
-from .base.capture import CaptureBackend
-from .base.hotkey import GlobalHotkeyBackend
-from .base.clipboard import ClipboardBackend
-from .base.window import WindowBackend
-from .base.accessibility import AccessibilityBackend
-from .base.coordinates import CoordinateMapper
-from .base.permissions import PermissionBackend
 
 
 class PlatformBackend:

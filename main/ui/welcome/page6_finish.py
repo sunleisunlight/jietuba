@@ -5,6 +5,7 @@
 克制的完成动画 + 最终设置
 """
 
+import io
 import math
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
@@ -12,7 +13,7 @@ from PySide6.QtCore import Qt, QTimer, QElapsedTimer, QEasingCurve, QPointF
 from PySide6.QtGui import QPainter, QColor, QPen, QPainterPath
 from core import safe_event
 from core.i18n import make_tr
-from core.logger import log_info, log_exception, T
+from core.logger import log_info, log_exception, log_warning, T
 
 if __package__:
     from .base_page import (

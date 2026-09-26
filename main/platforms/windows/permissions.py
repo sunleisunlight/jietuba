@@ -2,7 +2,6 @@
 """Windows 权限后端 — 无系统截图/辅助功能权限概念，全部返回不适用。"""
 from __future__ import annotations
 
-import os
 import subprocess
 
 from ..base.permissions import PermissionBackend, PermissionStatus

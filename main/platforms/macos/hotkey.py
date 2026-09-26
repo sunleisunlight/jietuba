@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import Structure, c_int32, c_uint32, c_void_p, byref, sizeof
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 from ..base.hotkey import GlobalHotkeyBackend
 

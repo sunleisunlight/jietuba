@@ -10,6 +10,12 @@
 
 ## Overview
 
+> The unified tree is under validation on `integration/unified-platform`; stable `master2` is unchanged.
+> Merging back requires Windows and macOS manual acceptance, not just a successful CI build.
+> The Windows 2.4.0 baseline is retained: AUTO/FREE notes with independently movable target/text,
+> point/paragraph text with width/font-size handles, numeric shortcuts and customizable toolbar,
+> and three clipboard list display modes. Both platforms read the same `APP_VERSION`.
+
 jietuba is a free, open-source cross-platform screenshot tool: Windows and macOS share one codebase — region and window capture, scrolling (long) screenshots, annotation, OCR text recognition, translation, image pinning, GIF recording, QR code and barcode scanning, PDF export, and a full clipboard history manager. Everything runs locally.
 
 The interface is built with PySide6; image processing, clipboard access, and OCR are implemented in Rust. Windows runs on x86_64 and ARM64; macOS runs on Apple Silicon (arm64).

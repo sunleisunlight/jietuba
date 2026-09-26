@@ -18,22 +18,24 @@ class WindowsAccessibilityBackend(AccessibilityBackend):
             return False
 
     def scan_window(self, handle: int, max_elements: int = 4096) -> Tuple[ElementSnapshot, ...]:
-        try:
-            from capture.uia_element_finder import (
-                get_snapshot_generator,
-                is_uia_available,
-            )
-            if not is_uia_available():
-                return ()
-            generator = get_snapshot_generator()
-            snapshots = generator(handle, max_elements=max_elements)
-            return tuple(ElementSnapshot(s.rect, s.order) for s in snapshots)
-        except Exception:
+        """同步扫描接口，仅供工作线程调用；UI 继续使用原有异步 finder。
+
+        COM 后端必须在同一线程创建、扫描和释放。不能把接口接线错误吞成空选区。
+        """
+        from capture.uia_element_finder import _UIABackend, is_uia_available
+
+        if not is_uia_available() or max_elements <= 0:
             return ()
+        backend = _UIABackend()
+        try:
+            snapshots = backend.scan(handle)[:max_elements]
+            return tuple(sorted(
+                (ElementSnapshot(s.rect, s.order) for s in snapshots),
+                key=lambda s: (s.area, -s.order),
+            ))
+        finally:
+            backend.close()
 
     def is_handle_hung(self, handle: int) -> bool:
-        try:
-            from capture.uia_element_finder import is_hwnd_hung
-            return is_hwnd_hung(handle)
-        except Exception:
-            return False
+        from capture.uia_element_finder import is_hung_window
+        return is_hung_window(handle)

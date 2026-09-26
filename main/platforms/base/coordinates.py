@@ -11,14 +11,13 @@
 """
 from __future__ import annotations
 
-from abc import ABC
 from typing import Tuple
 
-from PySide6.QtCore import QPoint, QRect, QRectF
+from PySide6.QtCore import QRect, QRectF
 from PySide6.QtGui import QGuiApplication, QCursor
 
 
-class CoordinateMapper(ABC):
+class CoordinateMapper:
     """坐标映射器（平台差异集中在实现类）。"""
 
     # ── 比例 ──────────────────────────────────────────────

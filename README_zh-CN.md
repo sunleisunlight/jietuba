@@ -10,6 +10,11 @@
 
 ## 项目简介
 
+> 统一代码树目前在 `integration/unified-platform` 验证，尚未替换稳定的 `master2`。
+> Windows 与 macOS 人工验收完成后才决定合回；CI 构建成功不等于功能验收通过。
+> 保留 Windows 2.4.0 基线：Note 的 AUTO/FREE 与目标框/文字独立移动、文字双模式与宽度/字号缩放、
+> 数字快捷键与可定制工具栏、剪贴板列表三种显示方案。两端读取同一个 `APP_VERSION`。
+
 截图吧是一款免费开源的跨平台截图工具，Windows 与 macOS 共用同一套代码：区域与窗口截图、滚动长截图拼接、标注、OCR 文字识别、翻译、钉图、GIF 录制、二维码/条形码识别、PDF 导出，以及完整的剪贴板历史管理。所有功能本地运行。
 
 界面使用 PySide6 构建，图像处理、剪贴板操作和 OCR 由 Rust 实现。Windows 支持 x86_64 与 ARM64；macOS 支持 Apple Silicon（arm64）。

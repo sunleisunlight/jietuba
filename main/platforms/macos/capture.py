@@ -13,7 +13,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtCore import QRectF
 
 from ..base.capture import CaptureBackend
-from .permissions import MacOSPermissionBackend, _cg_preflight
+from .permissions import _cg_preflight
 
 
 class ScreenCapturePermissionError(RuntimeError):
