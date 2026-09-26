@@ -107,15 +107,15 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
             # macOS 跨平台键位约定：Windows 配置里的 "ctrl" 在 Mac 上对应
             # Command(⌘) 键（Mac 的 Command ≈ Windows 的 Ctrl）；"win"/"meta"
             # 在 Mac 上也是 Command。Control(⌃) 需显式写 "lctrl" 才注册。
-            if p in ("ctrl", "control"):
+            if p == "ctrl":
                 mods |= cmdKey
-            elif p == "lctrl":
+            elif p in ("lctrl", "control"):
                 mods |= controlKey
-            elif p == "alt":
+            elif p in ("alt", "option"):
                 mods |= optionKey
             elif p == "shift":
                 mods |= shiftKey
-            elif p in ("win", "meta", "super", "cmd"):
+            elif p in ("win", "meta", "super", "cmd", "command"):
                 mods |= cmdKey
             else:
                 key = p

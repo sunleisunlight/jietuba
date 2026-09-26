@@ -55,3 +55,15 @@ def test_macos_display_matches_registered_modifier(monkeypatch):
     assert shortcut_manager.display_hotkey_str("lctrl+a") == "Control+a"
     assert MacOSHotkeyBackend.parse_hotkey("ctrl+a")[1] == cmdKey
     assert MacOSHotkeyBackend.parse_hotkey("lctrl+a")[1] == controlKey
+
+
+def test_macos_display_aliases_round_trip_in_both_parsers(monkeypatch):
+    from core import shortcut_manager
+    from platforms.macos.hotkey import MacOSHotkeyBackend
+
+    monkeypatch.setattr(shortcut_manager, "_IS_MACOS", True)
+    monkeypatch.setattr(shortcut_manager.sys, "platform", "darwin")
+    for stored in ("ctrl+shift+a", "alt+a", "lctrl+a"):
+        displayed = shortcut_manager.display_hotkey_str(stored)
+        assert MacOSHotkeyBackend.parse_hotkey(displayed) == MacOSHotkeyBackend.parse_hotkey(stored)
+        assert shortcut_manager.parse_shortcut_to_qt(displayed) == shortcut_manager.parse_shortcut_to_qt(stored)

@@ -119,6 +119,15 @@ def _split_modifiers(text: str):
         "shift": _Qt.KeyboardModifier.ShiftModifier,
         "alt": _Qt.KeyboardModifier.AltModifier,
     }
+    if _IS_MACOS:
+        # Qt 的 ControlModifier 在 macOS 对应 Command，MetaModifier 对应 Control。
+        mod_map.update({
+            "cmd": _Qt.KeyboardModifier.ControlModifier,
+            "command": _Qt.KeyboardModifier.ControlModifier,
+            "option": _Qt.KeyboardModifier.AltModifier,
+            "control": _Qt.KeyboardModifier.MetaModifier,
+            "lctrl": _Qt.KeyboardModifier.MetaModifier,
+        })
     mods = _Qt.KeyboardModifier.NoModifier
     rest = []
     for part in [p.strip() for p in (text or "").lower().split("+") if p.strip()]:
@@ -976,7 +985,7 @@ _STR_TO_QT_KEY: Optional[Dict[str, int]] = None
 # ── 平台化热键字符串显示 ───────────────────────────────
 _MOD_DISPLAY = (
     ("ctrl", "Cmd"),
-    ("control", "Cmd"),
+    ("control", "Control"),
     ("lctrl", "Control"),
     ("win", "Cmd"),
     ("meta", "Cmd"),
