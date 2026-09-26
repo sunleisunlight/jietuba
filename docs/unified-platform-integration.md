@@ -67,6 +67,20 @@ Canvas、tools、Note 面板、截图工具栏、钉图画布/工具栏和翻译
 
 本轮 Windows / macOS 测试与构建仍在执行；以下人工项均未自动判定通过。
 
+### macOS 本轮证据（真实 Apple Silicon 环境）
+
+- Python 3.11 独立 `.venv`，依赖按 requirements 安装，`pip check` 无冲突；四个 Rust wheel 从本 worktree 源码构建并可导入。
+- Python 分文件隔离全量：132 个文件、2408 项，2280 passed / 128 skipped / 0 failures / 0 errors。
+  XML：`build/test-reports/run-zj9klxam/`；完整日志：`/tmp/jietuba-unified-macos-final.log`。
+- 隔离不是跳过：每个 test_*.py 都执行；原有人工翻译比较脚本没有 pytest 用例（exit 5），单独记录，不计为通过。Qt 退出回收问题通过测试场景显式释放处理，未改 Note/Canvas 生产代码。
+- Rust workspace 实跑：gifrecorder 17 passed / 2 failed，失败为真实 ScreenCaptureKit 录屏被 TCC 拒绝（-3801），没有 skip。包含本轮新增最新帧回归测试通过；workspace 因 gifrecorder 失败提前结束，不能称全部 Rust 测试通过。
+- 源码 `main_app` 导入成功，版本 2.4.0；未据此声称完整 UI 启动/截图验收通过。
+- `.app`：`dist/Jietuba.app`；DMG：`dist/Jietuba-2.4.0-arm64.dmg`。
+- Apple Development 签名，`codesign --verify --deep --strict` 通过；Info.plist 两个版本键均 2.4.0；四个 Rust 扩展、两份 OCR 模型与原生库依赖检查通过。
+- 首次构建因误带 Linux X11 后端失败；限制 Mac spec 的平台模块收集后重新构建通过，没有放宽动态库校验。
+- DMG：116598395 bytes，SHA-256 `7a1c99095d355b68626a8fb0dcbf8e79f8d073adfad16ec1bd94d4fc210c1017`；`hdiutil verify` 通过。
+- 仅本地开发签名，未 Developer ID 公证；TCC 持久、多屏、真实 GIF 与全部人工功能项仍未通过验收。
+
 首轮 Windows ARM64（`9a490b9`）实际结果：2377 passed / 7 failed / 13 skipped，覆盖率 61.57%。
 七项失败为：快捷键表默认值三项、OCR 工具栏升级顺序一项、工具栏排序/拖动两项、工具栏会话替身缺失刷新方法一项。
 修复方式：截图快捷键表从唯一配置默认源取值；允许合法的未绑定空字符串；按 2.4.0 数字顺序检查升级与拖动；补齐替身并断言刷新调用。未删除或 skip 失败测试。
