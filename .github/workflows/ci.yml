@@ -131,6 +131,7 @@ jobs:
       # PySide6 GUI 组件在无桌面会话的 CI Runner 上需要离屏渲染
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: "1"
+      PYTHONFAULTHANDLER: "1"
 
     steps:
       - name: Checkout
@@ -193,7 +194,7 @@ jobs:
         # --cov-fail-under 是一个只升不降的棘轮：覆盖率掉下去 CI 就红，
         # 补完测试后把这个数字往上调。
         run: >
-          pytest main/tests -v
+          pytest main/tests -v -s
           -c main/tests/pytest.ini
           --cov --cov-config=.coveragerc
           --cov-report=term:skip-covered
