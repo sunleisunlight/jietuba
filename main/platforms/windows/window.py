@@ -171,32 +171,12 @@ class WindowsWindowBackend(WindowBackend):
 
     def enum_windows(self, *, offset_x: int = 0, offset_y: int = 0) -> List[Tuple[int, List[int], str]]:
         """枚举可见顶层窗口（与 WindowFinder 同语义）。"""
-        results: List[Tuple[int, List[int], str]] = []
-        EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-
-        def _cb(hwnd, _lparam):
-            if not _user32.IsWindowVisible(hwnd):
-                return True
-            length = _user32.GetWindowTextLengthW(hwnd)
-            if length == 0:
-                return True
-            buffer = ctypes.create_unicode_buffer(length + 1)
-            _user32.GetWindowTextW(hwnd, buffer, length + 1)
-            rect = wintypes.RECT()
-            if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
-                return True
-            results.append((
-                int(hwnd),
-                [rect.left - offset_x, rect.top - offset_y, rect.right - offset_x, rect.bottom - offset_y],
-                buffer.value,
-            ))
-            return True
-
-        try:
-            _user32.EnumWindows(EnumWindowsProc(_cb), 0)
-        except Exception:
-            pass
-        return results
+        # 保留成熟实现的工具窗口/透明窗口过滤、DWM 边界及 UWP 特判；
+        # 不在 backend 内维护一份缩减版窗口枚举。
+        from capture.window_finder import WindowFinder
+        finder = WindowFinder(screen_offset_x=offset_x, screen_offset_y=offset_y)
+        finder.find_windows()
+        return finder.windows
 
     def find_window_at_point(self, windows, x: int, y: int):
         for hwnd, rect, title in windows:
@@ -206,15 +186,6 @@ class WindowsWindowBackend(WindowBackend):
         return None
 
     def find_monitor_rect_at_point(self, x: int, y: int) -> List[int]:
-        try:
-            MONITOR_DEFAULTTONEAREST = 2
-            monitor = _user32.MonitorFromPoint(wintypes.POINT(x, y), MONITOR_DEFAULTTONEAREST)
-            if monitor:
-                info = wintypes.MONITORINFO()
-                info.cbSize = ctypes.sizeof(wintypes.MONITORINFO)
-                if _user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
-                    r = info.rcMonitor
-                    return [r.left, r.top, r.right, r.bottom]
-        except Exception:
-            pass
-        return [0, 0, 0, 0]
+        # wintypes 无 MONITORINFO；复用已声明指针宽度签名的成熟查询路径。
+        from capture.window_finder import WindowFinder
+        return WindowFinder().find_monitor_rect_at_point(x, y)

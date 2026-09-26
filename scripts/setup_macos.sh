@@ -66,11 +66,12 @@ echo "==> 安装 Python 依赖（Mac 条件依赖，跳过 pywin32/comtypes）"
 pip install -r requirements.txt -r requirements-dev.txt
 
 echo "==> 构建 Rust 扩展 (arm64 wheel)"
-mkdir -p /tmp/jietuba_wheels
+WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jietuba-wheels.XXXXXX")"
 for crate in longstitch pyclipboard ppocr_rust gifrecorder; do
-  (cd "rust_libs/$crate" && maturin build --release --out /tmp/jietuba_wheels)
+  (cd "rust_libs/$crate" && maturin build --locked --release --out "$WHEEL_DIR")
 done
-pip install --force-reinstall /tmp/jietuba_wheels/*arm64*.whl
+pip install --force-reinstall "$WHEEL_DIR"/*arm64*.whl
+echo "本轮原生 wheels 保留在: $WHEEL_DIR"
 
 echo "==> 验证四个 Rust 扩展均可导入"
 python - <<'PY'

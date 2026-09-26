@@ -245,7 +245,7 @@ def main():
     if (DIST / "Jietuba").exists():
         shutil.rmtree(DIST / "Jietuba")
     # PyInstaller 必须用带依赖的解释器运行
-    run([PYTHON, "-m", "PyInstaller", "--noconfirm", "--clean", str(SPEC)],
+    run([PYTHON, "-m", "PyInstaller", "--noconfirm", str(SPEC)],
         cwd=REPO)
     ensure_resources()
     sign_app()

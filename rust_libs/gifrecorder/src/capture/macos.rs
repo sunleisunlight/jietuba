@@ -89,7 +89,7 @@ impl ScreenCapture {
         // 丢弃排队旧帧，取最新
         loop {
             match self.rx.try_recv() {
-                Ok(_) => continue,
+                Ok(frame) => self.last = Some(frame),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     return Err("capture stream disconnected".into());
@@ -133,5 +133,28 @@ impl Drop for ScreenCapture {
         unsafe {
             JTKStopCapture(self.handle);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grab_keeps_newest_queued_frame_and_reuses_it_when_idle() {
+        let (tx, rx) = sync_channel(2);
+        let mut capture = ScreenCapture {
+            handle: std::ptr::null_mut(),
+            rx,
+            last: Some(vec![0; 4]),
+            width: 1,
+            height: 1,
+        };
+        tx.send(vec![1; 4]).unwrap();
+        tx.send(vec![2; 4]).unwrap();
+        assert_eq!(capture.grab().unwrap(), &[2; 4]);
+        assert_eq!(capture.grab().unwrap(), &[2; 4]);
+        tx.send(vec![3; 4]).unwrap();
+        assert_eq!(capture.grab().unwrap(), &[3; 4]);
     }
 }
