@@ -25,5 +25,6 @@ classifiers = [
 ]
 
 [tool.maturin]
+features = ["extension-module"]
 # 发行名是 j-stitch，import 名保持 longstitch 不变
 module-name = "longstitch"

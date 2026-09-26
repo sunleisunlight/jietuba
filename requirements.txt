@@ -22,6 +22,7 @@ pywin32==311 ; sys_platform == "win32"
 comtypes==1.4.16 ; sys_platform == "win32"
 
 # ===== macOS 专属依赖（PyObjC 系统框架绑定）=====
+pyobjc==10.3.2 ; sys_platform == "darwin"
 pyobjc-framework-Cocoa==10.3.2 ; sys_platform == "darwin"
 pyobjc-framework-Quartz==10.3.2 ; sys_platform == "darwin"
 pyobjc-framework-ApplicationServices==10.3.2 ; sys_platform == "darwin"
