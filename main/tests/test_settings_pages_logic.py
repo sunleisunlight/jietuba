@@ -179,7 +179,8 @@ class TestShortcutKeyTables:
                 cfg_key, label, default = entry
                 assert cfg_key.startswith("inapp_"), cfg_key
                 assert label and isinstance(label, str)
-                assert default and isinstance(default, str)
+                # 2.3 起允许无默认键（如聚光灯、保存），空字符串不是缺失配置。
+                assert isinstance(default, str)
 
     def test_combined_table_is_the_concatenation_of_both_groups(self):
         assert page_hotkey.INAPP_KEYS == (

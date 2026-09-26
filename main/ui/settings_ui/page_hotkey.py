@@ -15,7 +15,7 @@ from ui.fluent_lite.theme import ACCENT
 from .components import SettingCardGroup, WhiteCard, apply_theme_text_style
 from ..hotkey_edit import HotkeyEdit, validate_hotkey_group
 from ..inapp_key_edit import InAppKeyEdit
-from settings.tool_settings import ALL_TOOL_SHORTCUTS, SCREENSHOT_ACTION_SHORTCUTS
+from settings.tool_settings import ALL_TOOL_SHORTCUTS, SCREENSHOT_ACTION_SHORTCUTS, ToolSettingsManager
 from core.shortcut_manager import (
     inapp_shortcut_display_text, is_reserved_inapp_shortcut,
     display_hotkey_str,
@@ -26,7 +26,7 @@ from core.shortcut_manager import (
 # 截图作用域的定义来自 settings.tool_settings 的权威表：设置页与“自定义工具栏”
 # 因此读写同一批配置项、共用同一个冲突域。第三项只是默认值展示，实际值读配置。
 SCREENSHOT_KEYS = [
-    (cfg_key, label, "")
+    (cfg_key, label, ToolSettingsManager.APP_DEFAULT_SETTINGS[cfg_key])
     for cfg_key, label in SCREENSHOT_ACTION_SHORTCUTS
 ]
 

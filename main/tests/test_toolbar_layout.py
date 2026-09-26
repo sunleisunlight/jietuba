@@ -293,11 +293,13 @@ class TestResetSessionState:
         state.drag_handle = SimpleNamespace(set_manual_mode=manual_mode)
         state.hide = _Recorder()
         state.reload_layout = _Recorder()
+        state.refresh_shortcut_badges = _Recorder()
 
         Toolbar.reset_session_state(state)
 
         # 截图窗口复用工具栏，每次开新会话都要重读排布配置
         assert state.reload_layout.calls == [()]
+        assert state.refresh_shortcut_badges.calls == [()]
         assert state.current_tool is None
         assert all(btn.checked is False for btn in state.tool_buttons.values())
         assert hide_all.calls == [()]

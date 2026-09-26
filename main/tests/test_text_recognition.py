@@ -286,14 +286,15 @@ def test_toolbar_button_emits_its_signal(qapp):
     assert clicks == [True]
 
 
-def test_upgrade_puts_the_new_button_next_to_screenshot_translate(qapp):
+def test_upgrade_puts_recognition_after_mosaic_in_numeric_order(qapp):
     """老用户存过的排布里没有这个按钮，补回来时不能堆到「确定」右边"""
     stored = [("long_screenshot", SHOW), ("save", SHOW), ("screenshot_translate", SHOW),
               ("scan_code", MORE), ("confirm", SHOW)]
     keys = [key for key, _mode in normalize_layout(stored)]
 
-    assert keys.index("text_recognize") == keys.index("screenshot_translate") + 1
-    assert dict(normalize_layout(stored))["text_recognize"] == MORE
+    assert keys.index("text_recognize") == keys.index("mosaic") + 1
+    assert keys.index("text_recognize") < keys.index("confirm")
+    assert dict(normalize_layout(stored))["text_recognize"] == SHOW
 
 
 class TestTextRecognizeAction:

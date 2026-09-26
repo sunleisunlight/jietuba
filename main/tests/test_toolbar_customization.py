@@ -76,7 +76,7 @@ class TestNormalizeLayout:
         ]
         keys = [key for key, _mode in normalize_layout(stored)]
         assert keys[0] == "confirm"
-        assert keys[keys.index("number") + 1] == "mosaic"
+        assert keys[keys.index("pin") + 1] == "mosaic"  # 2.4: 钉图 6 → 马赛克 7
 
     def test_button_missing_from_an_old_config_gets_its_default_mode(self):
         """升级前存下的排布里没有扫码按钮：补回时按默认收进「…」，工具栏不会突然变宽"""
@@ -235,7 +235,7 @@ class TestLayoutDialog:
         rows = dialog._rows
 
         # 把「钉图」拖到第一行上沿：其余可调整行的中线都在鼠标下方，它就该排第一
-        top = rows["long_screenshot"].mapToGlobal(QPoint(0, 1)).y()
+        top = rows["note"].mapToGlobal(QPoint(0, 1)).y()  # 2.4 默认首行是备注 1
         dialog._drag_row(rows["pin"], top)
         rows["mosaic"].set_mode(MORE)
 
