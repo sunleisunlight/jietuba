@@ -43,7 +43,7 @@ Git 远端：origin
 
 ## 2. 工作原则
 
-- 默认直接在 `master2` 修改，除非用户明确要求创建分支。
+- `master2` 是最终唯一长期主线；日常开发使用第 3 节的短期分支。
 - 先看相关代码和调用链，只修改本次任务。
 - 保留已有功能和用户修改。
 - 不做无关重构、依赖升级或清理。
@@ -59,6 +59,8 @@ Git 远端：origin
   - Windows 问题：`fix/windows-<name>`
   - macOS 问题：`fix/macos-<name>`
 - 禁止 `reset --hard` 覆盖现有工作、`force push`、覆盖已有 Tag、删除他人 worktree。
+- 双平台整合在 `integration/unified-platform` 的独立 worktree 进行；保留历史分支。
+  Windows 测试与真实 exe 构建先通过，再验证 macOS；双端人工验收后仅由用户决定合回 `master2`。
 
 ## 4. 不自动测试
 
@@ -130,10 +132,10 @@ Commit：
 v<版本>-<YYMMDD> <中文摘要>
 ```
 
-Tag：
+Tag（统一使用上述 SemVer 格式，历史带日期 Tag 保留且不得覆盖）：
 
 ```text
-v<版本>-<YYMMDD>
+v<版本>
 ```
 
 Tag 默认使用 annotated tag。

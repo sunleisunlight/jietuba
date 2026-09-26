@@ -3,12 +3,13 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [master2, master]
+    branches: [master2, master, integration/unified-platform]
   pull_request:
     branches: [master2, master]
 
 jobs:
   macos:
+    needs: test
     name: test (macos)
     runs-on: macos-14
     env:
@@ -129,6 +130,7 @@ jobs:
     env:
       # PySide6 GUI 组件在无桌面会话的 CI Runner 上需要离屏渲染
       QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
 
     steps:
       - name: Checkout
@@ -197,6 +199,36 @@ jobs:
           --cov-report=term:skip-covered
           --cov-report=xml
           --cov-fail-under=37
+          --junitxml=test-results.xml
+
+      - name: Build current Windows software
+        run: python build_with_ocr_onefile.py
+
+      - name: Record Windows artifact provenance
+        run: |
+          $files = @(Get-Item dist/jietuba_pp.exe) + @(Get-ChildItem dist/models/*.onnx)
+          if ($files.Count -ne 3) { throw "Expected exe and both OCR models" }
+          $manifest = @{
+            commit = '${{ github.sha }}'
+            architecture = '${{ matrix.arch }}'
+            version = (python scripts/version_utils.py)
+            files = @($files | ForEach-Object { @{
+              name = $_.Name
+              bytes = $_.Length
+              sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            } })
+          }
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content dist/build-manifest.json
+
+      - name: Upload current Windows software
+        uses: actions/upload-artifact@v4
+        with:
+          name: jietuba-windows-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            dist/jietuba_pp.exe
+            dist/models/*.onnx
+            dist/build-manifest.json
+          if-no-files-found: error
 
       - name: Exercise the real ARM64 clipboard watcher
         if: matrix.arch == 'arm64'
@@ -236,6 +268,7 @@ jobs:
         with:
           name: coverage-xml-${{ matrix.arch }}
           path: |
+            test-results.xml
             coverage.xml
             diff-coverage.html
           if-no-files-found: warn
