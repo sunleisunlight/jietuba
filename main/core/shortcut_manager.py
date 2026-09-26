@@ -975,8 +975,9 @@ _STR_TO_QT_KEY: Optional[Dict[str, int]] = None
 
 # ── 平台化热键字符串显示 ───────────────────────────────
 _MOD_DISPLAY = (
-    ("ctrl", "Control"),
-    ("control", "Control"),
+    ("ctrl", "Cmd"),
+    ("control", "Cmd"),
+    ("lctrl", "Control"),
     ("win", "Cmd"),
     ("meta", "Cmd"),
     ("super", "Cmd"),
@@ -988,7 +989,7 @@ _MOD_DISPLAY = (
 
 
 def display_hotkey_str(hotkey: str) -> str:
-    """设置/欢迎页展示用：macOS 上把 win/ctrl/alt 显示为 Cmd/Control/Option。
+    """设置/欢迎页展示用：macOS 上把 win/ctrl/alt 显示为 Cmd/Cmd/Option。
 
     只影响显示，不改变存储格式（配置跨平台保持 ctrl+1 等原样）。
     """

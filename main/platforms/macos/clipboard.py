@@ -18,6 +18,7 @@ from PySide6.QtGui import QGuiApplication, QImage
 from ..base.clipboard import ClipboardBackend
 
 _CMD_V_DOWN = 9  # kVK_ANSI_V
+_CMD_C_DOWN = 8  # kVK_ANSI_C
 _CMD_KEY = 0x37  # kVK_Command
 
 # 激活重试参数（与 Windows 版语义一致，约 200ms 上限）
@@ -25,37 +26,42 @@ _ACTIVATE_RETRY_MS = 20
 _ACTIVATE_MAX_ATTEMPTS = 10
 
 
-def _post_key_event(keycode: int, down: bool) -> None:
+def _post_key_event(keycode: int, down: bool, *, command: bool = False) -> None:
     """注入一次键盘事件（CGEventCreateKeyboardEvent + CGEventPost）。"""
     import Quartz
 
     event = Quartz.CGEventCreateKeyboardEvent(None, keycode, down)
-    if event is not None:
-        Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
-        Quartz.CFRelease(event)
+    if event is None:
+        raise RuntimeError("无法创建 macOS 键盘事件")
+    Quartz.CGEventSetFlags(event, Quartz.kCGEventFlagMaskCommand if command else 0)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+    # PyObjC 管理 Create 返回对象的生命周期，不手动 CFRelease。
 
 
 def send_cmd_v() -> bool:
     """模拟按下 Command+V。"""
-    try:
-        _post_key_event(_CMD_KEY, True)
-        _post_key_event(_CMD_V_DOWN, True)
-        _post_key_event(_CMD_V_DOWN, False)
-        _post_key_event(_CMD_KEY, False)
-        return True
-    except Exception:
-        return False
+    return _send_command_shortcut(_CMD_V_DOWN)
 
 
 def send_copy_shortcut() -> bool:
     """模拟按下 Command+C（智能翻译"备用复制快捷键"的 macOS 等价物）。"""
+    return _send_command_shortcut(_CMD_C_DOWN)
+
+
+def _send_command_shortcut(keycode: int) -> bool:
     try:
-        _post_key_event(_CMD_KEY, True)
-        _post_key_event(_CMD_V_DOWN, True)
-        _post_key_event(_CMD_V_DOWN, False)
-        _post_key_event(_CMD_KEY, False)
+        try:
+            _post_key_event(_CMD_KEY, True, command=True)
+            _post_key_event(keycode, True, command=True)
+        finally:
+            try:
+                _post_key_event(keycode, False, command=True)
+            finally:
+                _post_key_event(_CMD_KEY, False)
         return True
-    except Exception:
+    except Exception as exc:
+        from core.logger import log_exception
+        log_exception(exc, "macOS 复制/粘贴快捷键")
         return False
 
 
@@ -67,6 +73,15 @@ def release_modifiers() -> None:
 
 class MacOSClipboardBackend(ClipboardBackend):
     """macOS 剪贴板后端。"""
+
+    @staticmethod
+    def activate_target(target: int) -> bool:
+        from platforms import get_platform_backend
+        return get_platform_backend().windows.set_foreground(target)
+
+    @staticmethod
+    def send_cmd_v() -> bool:
+        return send_cmd_v()
 
     def copy_image(self, image: QImage, file_reference: Optional[str] = None) -> None:
         clipboard = QGuiApplication.clipboard()
