@@ -5,6 +5,8 @@
 """
 
 import gc
+import hashlib
+import json
 from PySide6.QtWidgets import QApplication, QWidget, QGraphicsTextItem
 from PySide6.QtCore import Qt, QTimer, QRect, QRectF
 from PySide6.QtGui import QColor, QPixmap
@@ -317,6 +319,10 @@ class ScreenshotWindow(QWidget):
         self.is_history_session = False   # True = 本次会话是从历史恢复出来的
         self._history_dialog = None       # 已打开的历史窗口（防重复创建）
         self._history_offscreen = False   # 历史桌面不在当前屏幕范围内（只记日志）
+        # 上一次真正落盘的工程状态指纹：scene.changed 除了"内容变了"也会被
+        # 重绘脏区触发（鼠标悬停、光标预览等），没有这道闸的话每停手一次都会
+        # 白渲染一张缩略图并写一次盘。指纹不变就当没变过，直接跳过。
+        self._history_state_signature = None
         self._history_timer = QTimer(self)
         self._history_timer.setSingleShot(True)
         self._history_timer.setInterval(HISTORY_FLUSH_DELAY_MS)
@@ -754,6 +760,8 @@ class ScreenshotWindow(QWidget):
         """把当前会话与一条历史记录绑起来，并挂上"状态变化 → 防抖落盘"。"""
         self.history_id = history_id
         self.is_history_session = bool(is_restored) and history_id is not None
+        # 新会话的状态基线还没落过盘，指纹必须清空
+        self._history_state_signature = None
         if not history_id:
             return
         scene = getattr(self, 'scene', None)
@@ -775,22 +783,12 @@ class ScreenshotWindow(QWidget):
     def _finalize_history_session(self):
         """会话收尾：把最后的工程状态落盘，或丢弃一条从未确认选区的草稿。"""
         history_id = self.history_id
-        self.history_id = None
-        timer = getattr(self, '_history_timer', None)
-        if timer is not None:
-            timer.stop()
         if not history_id:
             return
 
         scene = getattr(self, 'scene', None)
         if scene is None:
-            return
-
-        try:
-            from history import get_history_manager
-            manager = get_history_manager()
-        except Exception as e:
-            log_exception(e, T("获取历史管理器"))
+            self._detach_history_session()
             return
 
         try:
@@ -800,18 +798,44 @@ class ScreenshotWindow(QWidget):
 
         # 没有确认过选区 = 用户只是误触了一下截图，不该在历史里留记录
         if not confirmed:
-            manager.discard(history_id)
+            self._detach_history_session()
+            try:
+                from history import get_history_manager
+                get_history_manager().discard(history_id)
+            except Exception as e:
+                log_exception(e, T("丢弃历史草稿"))
             return
 
-        state = self._build_history_state()
-        if state is None:
-            manager.mark_ready(history_id)
-            return
-        manager.persist(history_id, state, self._render_history_preview(),
-                        status=_status_ready())
+        # 结束时强制落一次：指纹相同也要写，保证 status / updated_at 收尾正确
+        self._flush_history_state(force=True)
+        self._detach_history_session()
 
-    def _flush_history_state(self, *_args):
-        """强制把当前工程状态写进历史（关键出口调用，不走防抖）。"""
+    def _detach_history_session(self):
+        """解除与历史记录的绑定，并停掉防抖计时器。"""
+        self.history_id = None
+        self._history_state_signature = None
+        timer = getattr(self, '_history_timer', None)
+        if timer is not None:
+            timer.stop()
+
+    def _history_state_signature_of(self, state) -> str:
+        """工程状态的指纹（内容相同就跳过落盘）。"""
+        try:
+            blob = json.dumps(state, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError) as e:
+            # 序列化不出来说明有字段不是 JSON 友好的，绝不能静默丢内容
+            log_warning(T("历史状态无法序列化，本次不落盘: {error}", error=str(e)),
+                        "ScreenshotWindow")
+            return ""
+        return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+    def _flush_history_state(self, *_args, force: bool = False):
+        """把当前工程状态写进历史（关键出口强制调用，其余走防抖）。
+
+        scene.changed 不只是"标注变了"，重绘脏区也会触发它；所以这里先比指纹，
+        内容真的变了才渲染缩略图并落盘——否则鼠标悬停、光标预览这类纯视觉变化
+        都会换来一次完整的缩略图渲染 + 写盘。
+        """
         history_id = self.history_id
         timer = getattr(self, '_history_timer', None)
         if timer is not None:
@@ -824,6 +848,14 @@ class ScreenshotWindow(QWidget):
         state = self._build_history_state()
         if state is None:
             return
+
+        signature = self._history_state_signature_of(state)
+        if not signature:
+            return
+        if not force and signature == self._history_state_signature:
+            return
+        self._history_state_signature = signature
+
         try:
             from history import get_history_manager
             confirmed = bool(scene.selection_model.is_confirmed)
