@@ -8,7 +8,7 @@
 ```text
 项目名：jietuba（截图吧）
 平台：Windows + macOS（同一套代码、同一个主开发分支）
-默认分支：master2
+默认分支：main
 Windows 构建：python build_with_ocr_onefile.py
 macOS 构建：scripts/setup_macos.sh → python build_macos.py → scripts/package_macos.sh
 macOS 目标：Apple Silicon(arm64) + macOS 12.3 及以上（GIF 录制依赖 ScreenCaptureKit，无低版本 fallback）
@@ -43,7 +43,7 @@ Git 远端：origin
 
 ## 2. 工作原则
 
-- `master2` 是最终唯一长期主线；日常开发使用第 3 节的短期分支。
+- `main` 是最终唯一长期主线；日常开发使用第 3 节的短期分支。
 - 先看相关代码和调用链，只修改本次任务。
 - 保留已有功能和用户修改。
 - 不做无关重构、依赖升级或清理。
@@ -51,16 +51,17 @@ Git 远端：origin
 
 ## 3. 分支模型
 
-- `master2` 是**唯一长期主线**，Windows 与 macOS 的正式改动最终都汇入 `master2`。
+- `main` 是**唯一长期主线**，Windows 与 macOS 的正式改动最终都汇入 `main`。
 - **禁止长期维护 Windows / macOS 两条功能分叉的主线**。
-- 大型改造（如跨平台重构）必须在独立分支（必要时用独立 worktree）进行，禁止直接污染 `master2`。
-- 日常改动使用短期分支，完成后回合 `master2`：
+- 大型改造（如跨平台重构）必须在独立分支（必要时用独立 worktree）进行，禁止直接污染 `main`。
+- 日常改动使用短期分支，完成后回合 `main`：
   - 新功能：`feature/<name>`
   - Windows 问题：`fix/windows-<name>`
   - macOS 问题：`fix/macos-<name>`
 - 禁止 `reset --hard` 覆盖现有工作、`force push`、覆盖已有 Tag、删除他人 worktree。
 - 双平台整合在 `integration/unified-platform` 的独立 worktree 进行；保留历史分支。
-  Windows 测试与真实 exe 构建先通过，再验证 macOS；双端人工验收后仅由用户决定合回 `master2`。
+  Windows 测试与真实 exe 构建先通过，再验证 macOS；双端人工验收后仅由用户决定合回 `main`。
+- `master2` 已退役：只作为历史分支保留，不再接收新提交、不再作为主线。
 
 ## 4. 不自动测试
 
@@ -123,7 +124,7 @@ Git 远端：origin
 3. 构建当前平台真实软件；
 4. Commit；
 5. Tag；
-6. Push（推送 `origin` 的 `master2` 分支与 Tag）；
+6. Push（推送 `origin` 的 `main` 分支与 Tag）；
 7. 交给用户人工测试。
 
 Commit：
@@ -177,7 +178,7 @@ git status --short --branch
 默认：
 
 ```text
-master2
+main
 ```
 
 发布推送所有项目要求的远端（当前为 `origin`）。
@@ -185,6 +186,15 @@ master2
 - force push；
 - 覆盖已有 Tag；
 - 把无关文件混入本次 Commit。
+
+## 默认推送
+
+- **每次改动完成即默认推送到 GitHub（`origin`），不再逐次询问用户。**
+  影响软件运行的改动先构建成功，再 Commit、再 Push；纯文档 / 纯测试改动可直接 Commit + Push。
+- 推送当前分支：`git push origin <当前分支>`；主线 `main` 与新建分支首次推送用 `git push -u origin <分支>`。
+- 推送失败必须查明原因并修复后重推（远端被拒、鉴权失效、网络失败都要明确报告），不得以"已提交"当作完成。
+- 严禁用 `force push` 掩盖推送失败；被拒时先 `git fetch` 看清分叉再决定合并方式。
+- 一次任务结束后不遗留"已提交但未推送"的本地提交。
 
 ## 最终回复
 

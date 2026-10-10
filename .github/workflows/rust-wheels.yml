@@ -7,7 +7,7 @@ name: Build Rust Wheels
 # 只在 Rust 源码真的改动时触发。
 on:
   push:
-    branches: [master2, master]
+    branches: [main, master]
     paths:
       - "rust_libs/**"
       - ".github/workflows/rust-wheels.yml"

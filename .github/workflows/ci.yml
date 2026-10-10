@@ -3,9 +3,9 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [master2, master, integration/unified-platform]
+    branches: [main, master, integration/unified-platform]
   pull_request:
-    branches: [master2, master]
+    branches: [main, master]
 
 jobs:
   macos:
