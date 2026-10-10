@@ -694,8 +694,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.end_date_edit.setDate(today)
         self.start_date_edit.setProperty("hasError", False)
         self.end_date_edit.setProperty("hasError", False)
-        if hasattr(self, "type_filter_btn"):
-            self._update_type_filter_button(0)
+        self._sync_type_filter_ui()
         self.controller.clear_time_and_type_filters()
 
     def _toggle_paste_with_html(self, checked: bool):
@@ -928,12 +927,24 @@ class ClipboardWindow(QWidget, FramelessMixin):
 
     def _set_type_filter(self, index: int):
         self._update_type_filter_button(index)
-        self.controller.set_content_type_filter(index)
+        # 文本/图片直接切到内置类型分组；全部/文件停留在全部历史视图。
+        view_group_id = {1: "text", 2: "image"}.get(index)
+        self.controller.apply_type_filter(index)
+        self.group_bar.sync_selected(view_group_id)
+
+    def _sync_type_filter_ui(self):
+        """让类型下拉的选中项与当前视图保持一致（切分组/关筛选栏后调用）。"""
+        if not hasattr(self, "type_filter_btn"):
+            return
+        group_id = self.controller.current_group_id
+        index = 1 if group_id == "text" else 2 if group_id == "image" else 0
+        self._update_type_filter_button(index)
 
     def _on_group_switched(self, group_id):
         self.group_bar.switch_to_group(group_id)
+        self._sync_type_filter_ui()
         is_quick_launch = False
-        if group_id is not None:
+        if isinstance(group_id, int):
             groups = self.controller.manager.get_groups()
             g = next((group for group in groups if group.id == group_id), None)
             is_quick_launch = g is not None and g.group_type == GroupType.FILE
@@ -1006,7 +1017,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
         return None
 
     def _on_paste_item(self, item_id: int):
-        if self.controller.current_group_id is not None:
+        if isinstance(self.controller.current_group_id, int):
             groups = self.controller.manager.get_groups()
             current_group = next((group for group in groups if group.id == self.controller.current_group_id), None)
             if current_group is not None and current_group.group_type == GroupType.FILE:
@@ -1098,9 +1109,13 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.controller.move_item_order(item_id, self.controller.current_group_id, direction)
 
     def _edit_item(self, item_id: int):
+        # 内置类型分组不是数据库分组，管理对话框只认真实分组 ID。
+        editor_group_id = self.controller.current_group_id
+        if not isinstance(editor_group_id, int):
+            editor_group_id = None
         self.controller.open_manage_dialog_for_item(
             item_id,
-            self.controller.current_group_id,
+            editor_group_id,
             group_added_callback=self.group_bar.refresh_buttons,
             data_changed_callback=self._on_manage_data_changed,
         )

@@ -3387,6 +3387,14 @@ SOFTWARE.</translation></message>
 <context>
     <name>GroupBar</name>
     <message>
+        <source>Text</source>
+        <translation>テキスト</translation>
+    </message>
+    <message>
+        <source>Image</source>
+        <translation>画像</translation>
+    </message>
+    <message>
         <source>Clipboard History</source>
         <translation>クリップボード履歴</translation>
     </message>

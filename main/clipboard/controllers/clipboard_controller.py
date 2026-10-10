@@ -35,12 +35,23 @@ _H_LEFT_USED = 2 + 34 + 4 + 1 + 4 + 34 + 4
 _H_RIGHT_RESERVED = 4 + 34 + 4 + 34 + 2
 _H_BTN_SLOT = 34 + 4
 
+# 分组栏最前面固定的两个内置类型分组占用的空间：
+# 两个 34px 按钮 + 各自 4px 间距 + 9px 分隔块（含间距）。
+# 它们永远显示、不参与溢出折叠，容量计算时必须先扣掉。
+_BUILTIN_GROUPS_BLOCK = (34 + 4) + (34 + 4) + (9 + 4)
+
+# 内置分组 ID（不是数据库里的真实分组，复用 content_type 取值）：
+# None=全部历史，"text"/"image"=内置类型视图，int=用户自建分组。
+BUILTIN_GROUP_TEXT = "text"
+BUILTIN_GROUP_IMAGE = "image"
+BUILTIN_GROUP_IDS = (BUILTIN_GROUP_TEXT, BUILTIN_GROUP_IMAGE)
+
 
 def calc_sidebar_capacity(right_bar_height: int) -> int:
     """计算右侧按钮栏在当前高度下最多能显示的分组按钮数量。-1 表示未初始化。"""
     if right_bar_height <= 0:
         return -1
-    available = right_bar_height - _TOP_USED - _BOTTOM_RESERVED
+    available = right_bar_height - _TOP_USED - _BOTTOM_RESERVED - _BUILTIN_GROUPS_BLOCK
     return 0 if available <= 0 else available // _BTN_SLOT
 
 
@@ -48,7 +59,7 @@ def calc_topbar_capacity(bar_width: int) -> int:
     """计算顶部横栏在当前宽度下最多能显示的分组按钮数量。"""
     if bar_width <= 0:
         return -1
-    available = bar_width - _H_LEFT_USED - _H_RIGHT_RESERVED
+    available = bar_width - _H_LEFT_USED - _H_RIGHT_RESERVED - _BUILTIN_GROUPS_BLOCK
     return 0 if available <= 0 else available // _H_BTN_SLOT
 
 
@@ -79,7 +90,9 @@ class ClipboardController(QObject):
         
         # 当前数据状态
         self.current_items: List[ClipboardItem] = []
-        self.current_group_id: Optional[int] = None  # None 表示显示剪切板历史
+        # 当前视图：None=全部历史；"text"/"image"=内置类型分组（BUILTIN_GROUP_IDS）；
+        # int=用户自建的数据库分组。
+        self.current_group_id: "int | str | None" = None
         
         # 分页加载相关
         self._current_offset = 0
@@ -249,14 +262,21 @@ class ClipboardController(QObject):
         self._load_more_items()
 
     def _fetch_items_page(self, limit: int, offset: int) -> Tuple[List[ClipboardItem], int]:
-        if self.current_group_id is None:
+        # 内置类型分组本质是"全部历史 + 固定 content_type 筛选"，
+        # 复用 get_history 的数据库筛选，不碰分组表。
+        builtin_type = (
+            self.current_group_id
+            if self.current_group_id in BUILTIN_GROUP_IDS
+            else None
+        )
+        if self.current_group_id is None or builtin_type is not None:
             start_ts = int(self._time_range[0].timestamp()) if self._time_range else None
             end_ts = int(self._time_range[1].timestamp()) if self._time_range else None
             items = self.manager.get_history(
                 limit=limit,
                 offset=offset,
                 search=self._search_text,
-                content_type=self._content_type,
+                content_type=builtin_type or self._content_type,
                 start_time=start_ts,
                 end_time=end_ts,
             )
@@ -322,15 +342,22 @@ class ClipboardController(QObject):
             self._search_text = search
             self.load_history()
     
-    def set_content_type_filter(self, filter_index: int):
-        """设置内容类型筛选
-        
+    def apply_type_filter(self, filter_index: int):
+        """类型下拉筛选，与分组栏的内置类型分组共用同一套视图状态。
+
         Args:
-            filter_index: 0=全部, 1=文本, 2=图片, 3=文件
+            filter_index: 0=全部, 1=文本（内置文字分组）,
+                          2=图片（内置图片分组）, 3=文件（全部历史 + 文件筛选）
         """
-        type_map = {0: None, 1: "text", 2: "image", 3: "file"}
-        content_type = type_map.get(filter_index)
-        if self._content_type != content_type:
+        if filter_index == 1:
+            group_id, content_type = BUILTIN_GROUP_TEXT, None
+        elif filter_index == 2:
+            group_id, content_type = BUILTIN_GROUP_IMAGE, None
+        else:
+            group_id, content_type = None, (None if filter_index == 0 else "file")
+
+        if self.current_group_id != group_id or self._content_type != content_type:
+            self.current_group_id = group_id
             self._content_type = content_type
             self.load_history()
 
@@ -388,14 +415,16 @@ class ClipboardController(QObject):
     
     # ==================== 分组管理 ====================
     
-    def switch_to_group(self, group_id: Optional[int]):
-        """切换到指定分组
-        
+    def switch_to_group(self, group_id: "int | str | None"):
+        """切换到指定分组（分组栏入口）
+
         Args:
-            group_id: 分组ID，None 表示切换到剪切板历史
+            group_id: None=全部历史；"text"/"image"=内置类型分组；int=用户分组。
+                      从分组栏切走时，类型下拉的"文件"筛选随之清空，避免残留。
         """
-        if self.current_group_id != group_id:
+        if self.current_group_id != group_id or self._content_type is not None:
             self.current_group_id = group_id
+            self._content_type = None
             self.load_history()
     
     def delete_group(self, group_id: int, parent_widget=None) -> bool:
@@ -504,9 +533,9 @@ class ClipboardController(QObject):
         config = get_tool_settings_manager()
         move_to_top = config.get_clipboard_move_to_top_on_paste()
         
-        # 关键：只在"剪贴板历史"视图时才移动到最前
-        # 如果在"收藏分组"视图，则不移动顺序
-        if self.current_group_id is not None:
+        # 关键：只在"剪贴板历史/内置类型"视图时才移动到最前
+        # 如果在用户自建分组视图，则不移动顺序（内置类型分组仍是历史视图）
+        if isinstance(self.current_group_id, int):
             move_to_top = False  # 在分组中粘贴，不移动顺序
         
         if self.manager.paste_item(item_id, self.paste_with_html, move_to_top):
@@ -700,9 +729,10 @@ class ClipboardController(QObject):
             return True
         return False
 
-    def get_item_move_state(self, item_id: int, group_id: Optional[int]) -> tuple[bool, bool]:
+    def get_item_move_state(self, item_id: int, group_id: "int | str | None") -> tuple[bool, bool]:
         """获取分组内容是否可上移/下移"""
-        if group_id is None:
+        # 内置类型分组是历史视图，没有组内排序。
+        if not isinstance(group_id, int):
             return False, False
 
         items = self.manager.get_by_group(group_id, offset=0, limit=1000)
@@ -711,9 +741,9 @@ class ClipboardController(QObject):
                 return index > 0, index < len(items) - 1
         return False, False
 
-    def move_item_order(self, item_id: int, group_id: Optional[int], direction: int) -> bool:
+    def move_item_order(self, item_id: int, group_id: "int | str | None", direction: int) -> bool:
         """移动分组内容顺序（direction: -1 上移, 1 下移）"""
-        if group_id is None:
+        if not isinstance(group_id, int):
             return False
 
         items = self.manager.get_by_group(group_id, offset=0, limit=1000)
@@ -826,7 +856,7 @@ class ClipboardController(QObject):
 
         返回 False 表示这条内容落在哪一行得由查询决定，调用方需要整表重查。
         """
-        if self._is_loading or not self._can_insert_incrementally():
+        if self._is_loading or not self._can_insert_incrementally(item):
             return False
 
         # 重复内容会被后端移到最前而不是新增，旧行还在列表里，位置也变了
@@ -840,14 +870,21 @@ class ClipboardController(QObject):
         self.item_inserted.emit(item, row)
         return True
 
-    def _can_insert_incrementally(self) -> bool:
-        """分组、搜索、筛选视图下新条目属不属于当前列表要由查询决定，这里判断不了。"""
-        return (
-            self.current_group_id is None
-            and not self._search_text
-            and not self._content_type
-            and self._time_range is None
-        )
+    def _can_insert_incrementally(self, item: Optional[ClipboardItem] = None) -> bool:
+        """真实分组、搜索、时间筛选视图下新条目位置要由查询决定，不能直接插。
+
+        内置类型分组（文字/图片）仍是历史流，只要新条目类型匹配就能直接插到顶部；
+        全部历史视图下的"文件"下拉筛选无法靠类型简单判定（涉及 file 子类型），
+        保持整表重载。
+        """
+        group_id = self.current_group_id
+        if isinstance(group_id, int):
+            return False
+        if self._search_text or self._time_range is not None:
+            return False
+        if group_id in BUILTIN_GROUP_IDS:
+            return item is not None and item.content_type == group_id
+        return not self._content_type
 
     def _first_unpinned_row(self) -> int:
         """排序是 is_pinned DESC, item_order DESC，新条目排在置顶块之后。"""
@@ -882,9 +919,9 @@ class ClipboardController(QObject):
         visible = list(groups[:cap])
         hidden = list(groups[cap:])
 
-        # 确保当前选中分组可见
+        # 确保当前选中的真实用户分组可见（内置类型分组固定显示，不参与折叠）
         current_gid = self.current_group_id
-        if current_gid is not None and visible:
+        if isinstance(current_gid, int) and visible:
             visible_ids = {g.id for g in visible}
             if current_gid not in visible_ids:
                 selected = next((g for g in hidden if g.id == current_gid), None)

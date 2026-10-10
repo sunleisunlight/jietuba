@@ -3346,6 +3346,14 @@ SOFTWARE.</translation></message>
 <context>
     <name>GroupBar</name>
     <message>
+        <source>Text</source>
+        <translation>텍스트</translation>
+    </message>
+    <message>
+        <source>Image</source>
+        <translation>이미지</translation>
+    </message>
+    <message>
         <source>Clipboard History</source>
         <translation>클립보드 기록</translation>
     </message>

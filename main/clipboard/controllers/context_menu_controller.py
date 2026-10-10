@@ -37,7 +37,7 @@ class _ItemContextMenuState:
     """内容右键菜单构建时使用的上下文状态。"""
 
     clipboard_item: ClipboardItem
-    current_group_id: Optional[int]
+    current_group_id: "int | str | None"
     visible_groups: List[Group]
     can_move_up: bool = False
     can_move_down: bool = False
@@ -52,7 +52,8 @@ class _ItemContextMenuState:
 
     @property
     def in_group(self) -> bool:
-        return self.current_group_id is not None
+        # 内置类型分组（"text"/"image"）本质是历史视图，不算"在用户分组内"。
+        return isinstance(self.current_group_id, int)
 
 
 @dataclass(frozen=True)
@@ -266,7 +267,7 @@ class ClipboardContextMenuController:
     def _build_item_context_menu_state(self, clipboard_item: ClipboardItem) -> _ItemContextMenuState:
         can_up, can_down = False, False
         current_group_id = self._controller.current_group_id
-        if current_group_id is not None:
+        if isinstance(current_group_id, int):
             can_up, can_down = self._controller.get_item_move_state(clipboard_item.id, current_group_id)
 
         return _ItemContextMenuState(

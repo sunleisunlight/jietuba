@@ -16,7 +16,11 @@ from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QCursor, QAction
 
 from typing import Optional, List
-from ...controllers import ClipboardController
+from ...controllers import (
+    ClipboardController,
+    BUILTIN_GROUP_TEXT,
+    BUILTIN_GROUP_IMAGE,
+)
 from ...core import ClipboardManager, Group
 from ..menus.group_context_menu import ClipboardGroupContextMenu
 from ..theme.themes import Theme
@@ -36,12 +40,18 @@ class GroupBar(QWidget):
         manage_items_requested()  — 请求打开内容管理对话框
     """
 
-    group_switched = Signal(object)          # Optional[int]
+    group_switched = Signal(object)          # None / "text" / "image" / int
     close_requested = Signal()
     sidebar_entered = Signal()
     sidebar_exited = Signal(object)          # Optional[int] — prev_item_id
     manage_groups_requested = Signal()
     manage_items_requested = Signal()
+
+    # 固定排在最前面的内置类型分组：(视图 ID, 图标, tooltip 翻译源串)
+    BUILTIN_GROUP_BUTTONS = (
+        (BUILTIN_GROUP_TEXT, "🔤", "Text"),
+        (BUILTIN_GROUP_IMAGE, "📷", "Image"),
+    )
 
     def __init__(
         self,
@@ -117,6 +127,14 @@ class GroupBar(QWidget):
         """刷新分组按钮；超出可用空间时折叠为溢出菜单"""
         self._clear_group_buttons_layout()
         self.clipboard_btn.setChecked(self.controller.current_group_id is None)
+
+        # 最前面固定放「文字」「图片」两个内置类型分组，再加分隔线，
+        # 用户自建分组始终排在它们后面。
+        for type_id, icon, text_key in self.BUILTIN_GROUP_BUTTONS:
+            btn = self._make_builtin_group_btn(type_id, icon, text_key)
+            self.group_buttons_layout.addWidget(btn)
+            self.group_buttons.append(btn)
+        self.group_buttons_layout.addWidget(self._make_builtin_separator())
 
         is_top = self.position == "top"
         bar_size = self.bar_widget.width() if is_top else self.bar_widget.height()
@@ -202,9 +220,16 @@ class GroupBar(QWidget):
         if not self._sidebar_mode:
             self._set_sidebar_focus_button(None)
 
-    def switch_to_group(self, group_id: Optional[int]):
+    def switch_to_group(self, group_id: "int | str | None"):
         """切换到指定分组（UI 同步 + 委托 controller）"""
         self.controller.switch_to_group(group_id)
+        self.sync_selected(group_id)
+
+    def sync_selected(self, group_id: "int | str | None"):
+        """只同步按钮选中态与侧栏焦点位置，不触发 controller 切换。
+
+        类型下拉改变视图时走这里，避免和 controller 的加载逻辑互相重复触发。
+        """
         self.clipboard_btn.setChecked(group_id is None)
         for btn in self.group_buttons:
             btn.setChecked(btn.property("group_id") == group_id)
@@ -275,6 +300,34 @@ class GroupBar(QWidget):
             lambda pos, b=btn, gid=group.id: self._show_group_context_menu(b, gid, pos)
         )
         return btn
+
+    def _make_builtin_group_btn(self, group_id: str, icon: str, text_key: str) -> QPushButton:
+        """内置类型分组按钮（文字/图片）：固定存在、不可编辑/删除/排序。"""
+        btn = QPushButton(icon)
+        btn.setFixedSize(34, 34)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip(self.tr(text_key))
+        btn.setCheckable(True)
+        btn.setChecked(self.controller.current_group_id == group_id)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        btn.setStyleSheet(self._get_sidebar_btn_style())
+        btn.setProperty("group_id", group_id)
+        btn.setProperty("builtin_group", True)
+        btn.clicked.connect(lambda checked, b=btn, gid=group_id: self._on_sidebar_button_clicked(b, gid))
+        return btn
+
+    def _make_builtin_separator(self) -> QFrame:
+        """内置类型分组与用户自建分组之间的分隔线。"""
+        sep = QFrame()
+        if self.position == "top":
+            sep.setFrameShape(QFrame.Shape.VLine)
+            sep.setFixedWidth(9)
+        else:
+            sep.setFrameShape(QFrame.Shape.HLine)
+            sep.setFixedHeight(9)
+        sep.setLineWidth(1)
+        sep.setStyleSheet("color: #E0E0E0; background: transparent; border: none;")
+        return sep
 
     # ================================================================
     #  布局构建

@@ -3420,6 +3420,14 @@ SOFTWARE.</translation></message>
 <context>
     <name>GroupBar</name>
     <message>
+        <source>Text</source>
+        <translation>文字</translation>
+    </message>
+    <message>
+        <source>Image</source>
+        <translation>图片</translation>
+    </message>
+    <message>
         <source>Clipboard History</source>
         <translation>剪贴板历史</translation>
     </message>
