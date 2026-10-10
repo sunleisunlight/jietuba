@@ -334,6 +334,21 @@ class MainApp(QObject):
                 log_warning(T("智能翻译热键注册失败: {translation_hotkey}", translation_hotkey=translation_hotkey), "Hotkey")
                 failed_hotkeys.append((label, translation_hotkey))
         
+        # 注册「继续标注」热键：任意程序里按下就起一个截图会话并打开标注历史。
+        # 默认占用 Ctrl+Shift+H；不想用就把设置里的这两个框清空。
+        continue_annotate_hotkeys = (
+            (self.config_manager.get_continue_annotate_hotkey(), self.tr("Continue Annotating")),
+            (self.config_manager.get_continue_annotate_hotkey_2(), self.tr("Continue Annotating (2)")),
+        )
+        for continue_hotkey, label in continue_annotate_hotkeys:
+            if not continue_hotkey:
+                continue
+            if self.hotkey_system.register_hotkey(continue_hotkey, self.continue_annotation):
+                log_info(T("继续标注热键已注册: {hotkey}", hotkey=continue_hotkey), "Hotkey")
+            else:
+                log_warning(T("继续标注热键注册失败: {hotkey}", hotkey=continue_hotkey), "Hotkey")
+                failed_hotkeys.append((label, continue_hotkey))
+
         # 注册剪切板热键（如果剪切板功能启用）
         if self.config_manager.get_clipboard_enabled():
             clipboard_hotkey = self.config_manager.get_clipboard_hotkey()
@@ -440,9 +455,25 @@ class MainApp(QObject):
         modal.activateWindow()
         return True
             
+    def continue_annotation(self):
+        """全局「继续标注」热键：起一个截图会话，并直接打开标注历史。
+
+        标注历史必须挂在截图窗口上（选历史 = 把过去的工程载入这个窗口继续编辑），
+        所以这里走的还是截图热键那条路，只是在窗口就绪后多推一步。
+        """
+        window = self.screenshot_window
+        if window is not None and getattr(window, "_session_active", False):
+            # 已经在一个截图会话里：直接用这个窗口开历史，不重启采集
+            window.open_annotation_history()
+            return
+
+        # 采集在后台线程里做，窗口要等采集完才存在，所以把"开历史"记在标志上，
+        # 由 _create_screenshot_window 在窗口就绪后补上。
+        self._pending_annotation_history = True
+        self.start_screenshot()
+
     def start_screenshot(self):
         """启动截图 - 管理截图窗口生命周期"""
-        
         # 已有截图窗口且会话活跃 → 忽略重复触发，并把焦点还给截图窗口
         if self.screenshot_window and getattr(self.screenshot_window, '_session_active', False):
             log_debug(T("截图窗口已存在，忽略重复触发"), "MainApp")
@@ -586,6 +617,11 @@ class MainApp(QObject):
                 prefetched_image=image,
                 prefetched_rect=rect,
             )
+
+        # 「继续标注」热键攒下的那一跳：窗口到这一刻才算真的能开历史
+        if getattr(self, "_pending_annotation_history", False):
+            self._pending_annotation_history = False
+            self.screenshot_window.open_annotation_history()
     
     def open_settings(self):
         """打开设置窗口"""

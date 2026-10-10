@@ -266,6 +266,10 @@ class ToolSettingsManager(QObject):
             "text_width": 0,
             # 目标框与文本框之间的间隙；0 = 自动（同上）
             "gap": 0,
+            # 备注正文的底色：与文字工具同一套语义（备注的正文就是一段普通文字）
+            "background_enabled": False,
+            "background_color": "#FFFFFF",
+            "background_opacity": 178,
         },
         "eraser": {
             "stroke_width": 25,  # 橡皮擦大小（宽度）
@@ -284,6 +288,10 @@ class ToolSettingsManager(QObject):
         "pin_clipboard_hotkey_2": "",              # 钉住剪贴板图片的备用快捷键
         "translation_hotkey": "",                  # 翻译主热键
         "translation_hotkey_2": "",                # 翻译备用热键
+        # 继续标注：任意程序里按下就起一个截图会话并直接打开标注历史。
+        # 与截图热键同属"截图类"全局热键，但各占一个键位、互不覆盖。
+        "continue_annotate_hotkey": "ctrl+shift+h",
+        "continue_annotate_hotkey_2": "",
         "global_hotkeys_disabled": False,           # 是否禁用全局热键
 
         # 应用内快捷键
@@ -843,6 +851,30 @@ class ToolSettingsManager(QObject):
     def set_translation_hotkey_2(self, value: str):
         """保存智能翻译备用全局快捷键。"""
         self.qsettings.setValue("app/translation_hotkey_2", value)
+
+    def get_continue_annotate_hotkey(self) -> str:
+        """获取「继续标注」全局快捷键。"""
+        return self.qsettings.value(
+            "app/continue_annotate_hotkey",
+            self.APP_DEFAULT_SETTINGS["continue_annotate_hotkey"],
+            type=str,
+        )
+
+    def set_continue_annotate_hotkey(self, value: str):
+        """保存「继续标注」全局快捷键。"""
+        self.qsettings.setValue("app/continue_annotate_hotkey", value)
+
+    def get_continue_annotate_hotkey_2(self) -> str:
+        """获取「继续标注」备用全局快捷键。"""
+        return self.qsettings.value(
+            "app/continue_annotate_hotkey_2",
+            self.APP_DEFAULT_SETTINGS["continue_annotate_hotkey_2"],
+            type=str,
+        )
+
+    def set_continue_annotate_hotkey_2(self, value: str):
+        """保存「继续标注」备用全局快捷键。"""
+        self.qsettings.setValue("app/continue_annotate_hotkey_2", value)
 
     # ---------- 应用内快捷键 ----------
     def get_inapp_shortcut(self, key: str) -> str:

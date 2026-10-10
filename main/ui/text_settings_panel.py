@@ -13,6 +13,10 @@ from .base_settings_panel import (
     paint_rounded_panel,
 )
 from .color_picker_button import ColorPickerButton
+from .text_background_control import (
+    BACKGROUND_PRESET_STYLES, EFFECT_PRESET_COLORS, TextBackgroundControl,
+    popup_controls_qss, preset_swatch_button, style_preset_swatch,
+)
 from canvas.items import TextItem
 from core.constants import (
     CSS_FONT_FAMILY,
@@ -25,22 +29,8 @@ from core.ui_scale import scaled
 from core.logger import log_exception, T
 
 
-# 背景、描边、阴影三个弹出层共用同一组预设色：弹层长一个样，白色在哪个里面都在同一个位置
-EFFECT_PRESET_COLORS = (
-    ("#FFFFFF", "White"),
-    ("#000000", "Black"),
-    ("#FFFF00", "Yellow"),
-)
-
-# 背景预设：底色和文字色成对给出。色块上直接写着字，看的就是"白底黑字"这个搭配本身；
-# 点一下两个颜色一起换，不透明度沿用滑块上的当前值，换成什么还能继续微调。
-BACKGROUND_PRESET_STYLES = (
-    ("#FFFFFF", "#000000", "White background, black text"),
-    ("#FFFFFF", "#FF0000", "White background, red text"),
-    ("#000000", "#FFFFFF", "Black background, white text"),
-    ("#000000", "#FF0000", "Black background, red text"),
-    ("#FFFF00", "#000000", "Yellow background, black text"),
-)
+# 底色控件（开关 + 弹层 + 风格预设）与备注面板共用同一份，见 ui/text_background_control.py；
+# 上面的 EFFECT_PRESET_COLORS / BACKGROUND_PRESET_STYLES 也从那里导入，只有一处定义。
 
 # 描边档位的提示，与 TextItem.OUTLINE_WIDTH_LEVELS 一一对应。不报数字：档位是字号的
 # 比例，"0.07"对用户没有意义，他挑的是观感。
@@ -96,60 +86,6 @@ def render_text_effect_icon(side: int, ratio: float = 1.0, *, outline_width: flo
 
 # Qt 的 QWIDGETSIZE_MAX，PySide6 没导出这个常量
 _WIDGET_SIZE_MAX = 16777215
-
-
-def _style_preset_color_button(button: QPushButton, color_hex: str, side: int):
-    """按当前比例给预设色块定尺寸和样式（建按钮和改比例共用）"""
-    button.setFixedSize(side, side)
-    border_color = "#888888" if color_hex == "#FFFFFF" else "#333333"
-    button.setStyleSheet(f"""
-        QPushButton {{
-            background-color: {color_hex};
-            border: 1px solid {border_color};
-            border-radius: {scaled(6)}px;
-        }}
-        QPushButton:hover {{
-            border: 2px solid #000;
-        }}
-    """)
-
-
-def _preset_color_button(color_hex: str, side: int, tooltip: str) -> QPushButton:
-    button = QPushButton()
-    button.setToolTip(tooltip)
-    _style_preset_color_button(button, color_hex, side)
-    return button
-
-
-def _style_background_preset_button(
-    button: QPushButton, background_hex: str, text_hex: str, side: int
-):
-    """底色预设色块：底是底色、字是文字色，"白底黑字"这类搭配一眼可辨。"""
-    button.setFixedSize(side, side)
-    border_color = "#888888" if background_hex == "#FFFFFF" else "#333333"
-    button.setStyleSheet(f"""
-        QPushButton {{
-            background-color: {background_hex};
-            color: {text_hex};
-            border: 1px solid {border_color};
-            border-radius: {scaled(4)}px;
-            padding: 0px;
-            font-size: {scaled(13)}px;
-            font-weight: bold;
-        }}
-        QPushButton:hover {{
-            border: 2px solid #000;
-        }}
-    """)
-
-
-def _background_preset_button(
-    background_hex: str, text_hex: str, side: int, tooltip: str
-) -> QPushButton:
-    button = QPushButton("A")
-    button.setToolTip(tooltip)
-    _style_background_preset_button(button, background_hex, text_hex, side)
-    return button
 
 
 class _FourStepSlider(QSlider):
@@ -222,27 +158,12 @@ class TextSettingsPanel(QWidget):
 
     @staticmethod
     def _popup_controls_qss() -> str:
-        """弹出层里的控件样式。
+        """弹出层里的控件样式 = 共用那一段（见 text_background_control）+ 描边滑条自己的形状。
 
         描边粗细虽只有四档，但用带刻度的离散滑条呈现：比四个零散的小方块更紧凑，
         也不会伪装成可取任意数值的连续滑条。尺寸按当前比例算，改比例后要重新挂。
         """
-        return f"""
-        QPushButton {{
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: {scaled(3)}px;
-            padding: 0px;
-        }}
-        QPushButton:hover {{
-            border-color: #bbb;
-        }}
-        QPushButton:checked {{
-            border: 2px solid #0078d7;
-        }}
-        QSlider {{
-            background-color: transparent;
-        }}
+        return popup_controls_qss() + f"""
         QSlider#outlineWidthSlider {{
             min-height: {scaled(24)}px;
         }}
@@ -273,17 +194,6 @@ class TextSettingsPanel(QWidget):
         QSlider#outlineWidthSlider::handle:horizontal:hover {{
             background: #0067b8;
         }}
-        QFrame#popupDivider {{
-            background: #e8e8e8;
-            border: none;
-            min-height: 1px;
-            max-height: 1px;
-        }}
-        QLabel {{
-            color: #333;
-            font-family: {CSS_FONT_FAMILY};
-            font-size: {scaled(11)}px;
-        }}
     """
 
     def __init__(self, parent=None):
@@ -294,9 +204,6 @@ class TextSettingsPanel(QWidget):
 
         self.current_font = QFont(default_font_family, 16)
         self.current_color = QColor(Qt.GlobalColor.red)
-        self.background_enabled = False
-        self.background_color = QColor(255, 255, 255)
-        self.background_opacity = 255
         self.outline_enabled = False
         self.outline_color = QColor(TextItem.DEFAULT_OUTLINE_COLOR)
         self.outline_width = TextItem.DEFAULT_OUTLINE_WIDTH
@@ -356,22 +263,26 @@ class TextSettingsPanel(QWidget):
         self.outline_btn.setIcon(QIcon(render_text_effect_icon(
             icon_sz, ratio, outline_width=TextItem.DEFAULT_OUTLINE_WIDTH)))
         self.shadow_btn.setIcon(QIcon(render_text_effect_icon(icon_sz, ratio, shadow=True)))
-        for button in (self.background_btn, self.outline_btn, self.shadow_btn):
+        for button in (self.outline_btn, self.shadow_btn):
             button.setFixedSize(btn_sz, btn_sz)
             button.setIconSize(QSize(icon_sz, icon_sz))
-        self._update_background_btn_style()
+        # 底色开关（含它自己的弹层）由共用控件按同一比例重算
+        self._background.apply_scale()
 
         self.color_btn.setFixedSize(btn_sz, btn_sz)
         preset_sz = scaled(self.BASE_PRESET_BTN)
         for button, color_str in self._preset_buttons:
-            _style_preset_color_button(button, color_str, preset_sz)
+            style_preset_swatch(button, color_str, preset_sz)
 
         self._apply_popup_scale()
         self.adjustSize()
         self.update()
 
     def _apply_popup_scale(self):
-        """三个效果弹出层的尺寸，和面板一起按比例重算"""
+        """描边 / 阴影两个弹出层的尺寸，和面板一起按比例重算
+
+        底色弹层不在这一份里：它归 TextBackgroundControl 自己管（见 apply_scale）。
+        """
         qss = self._popup_controls_qss()
         color_side = scaled(self.BASE_POPUP_COLOR_BTN)
         for popup_layout, colors_layout in self._popup_layouts:
@@ -382,12 +293,9 @@ class TextSettingsPanel(QWidget):
             if color_hex is None:
                 button.setFixedSize(color_side, color_side)
             else:
-                _style_preset_color_button(button, color_hex, color_side)
+                style_preset_swatch(button, color_hex, color_side)
         for label in self._opacity_labels:
             label.setFixedWidth(scaled(self.BASE_OPACITY_LABEL_WIDTH))
-        preset_side = scaled(self.BASE_PRESET_BTN)
-        for button, background_hex, text_hex, _tip in self._background_preset_buttons:
-            _style_background_preset_button(button, background_hex, text_hex, preset_side)
 
         icon_side = scaled(self.BASE_EFFECT_ICON)
         ratio = self.devicePixelRatioF()
@@ -459,12 +367,17 @@ class TextSettingsPanel(QWidget):
         layout.addWidget(self.italic_btn)
         layout.addWidget(self.underline_btn)
 
-        # 背景 / 描边 / 阴影：都是"开关 + 打开后悬停弹出设置层"
-        self.background_btn = QPushButton("BG")
+        # 底色：开关 + 悬停弹层。控件与备注面板共用同一份
+        # （见 ui/text_background_control.py），这里只把它摆进布局、接上信号。
+        self._background = TextBackgroundControl(self)
+        self._background.changed.connect(self._on_background_changed)
+        self._background.text_color_requested.connect(self._on_preset_color_clicked)
+        layout.addWidget(self._background.toggle_btn)
+
+        # 描边 / 阴影：都是"开关 + 打开后悬停弹出设置层"
         self.outline_btn = QPushButton()
         self.shadow_btn = QPushButton()
         for button, tip in (
-            (self.background_btn, self.tr("Text Background")),
             (self.outline_btn, self.tr("Text Outline")),
             (self.shadow_btn, self.tr("Text Shadow")),
         ):
@@ -500,34 +413,25 @@ class TextSettingsPanel(QWidget):
 
         self._preset_buttons = []
         for color_str in preset_colors:
-            btn = _preset_color_button(color_str, scaled(self.BASE_PRESET_BTN), color_str)
+            btn = preset_swatch_button(color_str, scaled(self.BASE_PRESET_BTN), color_str)
             btn.clicked.connect(lambda checked, c=color_str: self._on_preset_color_clicked(c))
             layout.addWidget(btn)
             self._preset_buttons.append((btn, color_str))
 
         layout.addStretch()
 
-        # 弹出层里按比例算尺寸的控件，改比例时按这些清单重算
+        # 弹出层里按比例算尺寸的控件，改比例时按这些清单重算（底色弹层归共用控件管）
         self._popup_layouts = []
         self._popup_color_buttons = []
-        self._background_preset_buttons = []
         self._opacity_labels = []
         self._init_effect_popups()
         self.apply_scale()
 
     def _init_effect_popups(self):
-        """三个效果各自的弹出层：第一行都是颜色，第二行是各自的"量"。"""
-        # 背景：颜色 + 不透明度
-        popup, self.background_color_btn = self._build_effect_popup(
-            self.background_btn, self.tr("Custom Background Color"), self._on_background_color_picked,
-        )
-        self.background_opacity_slider, self.background_opacity_label = self._add_opacity_row(
-            popup, self.tr("Background Opacity"), self._on_background_opacity_changed,
-        )
-        self._add_background_presets(popup)
-        self.set_background_settings(self.background_enabled, self.background_color, self.background_opacity)
-        self._fit_effect_popup_width(popup)
+        """描边、阴影各自的弹出层：第一行都是颜色，第二行是各自的"量"。
 
+        底色那一层已经由 TextBackgroundControl 建好了，不在这里重复。
+        """
         # 描边：颜色 + 四档离散粗细滑条
         popup, self.outline_color_btn = self._build_effect_popup(
             self.outline_btn, self.tr("Custom Outline Color"), self._on_outline_color_picked,
@@ -570,7 +474,7 @@ class TextSettingsPanel(QWidget):
         colors_layout.addWidget(custom)
         self._popup_color_buttons.append((custom, None))
         for color_hex, name in EFFECT_PRESET_COLORS:
-            preset = _preset_color_button(color_hex, color_side, self.tr(name))
+            preset = preset_swatch_button(color_hex, color_side, self.tr(name))
             preset.clicked.connect(lambda _checked=False, c=color_hex: on_color(QColor(c)))
             colors_layout.addWidget(preset)
             self._popup_color_buttons.append((preset, color_hex))
@@ -601,26 +505,6 @@ class TextSettingsPanel(QWidget):
         popup.layout().addLayout(row)
         slider.valueChanged.connect(on_change)
         return slider, label
-
-    def _add_background_presets(self, popup: HoverPopup):
-        """背景弹层里的风格预设：底色和文字色成对，点一下两个一起换。"""
-        row = QHBoxLayout()
-        row.addStretch()
-        side = scaled(self.BASE_PRESET_BTN)
-        for background_hex, text_hex, tip in BACKGROUND_PRESET_STYLES:
-            button = _background_preset_button(
-                background_hex, text_hex, side, self.tr(tip)
-            )
-            button.clicked.connect(
-                lambda _checked=False, bg=background_hex, fg=text_hex:
-                    self._apply_background_preset(bg, fg)
-            )
-            row.addWidget(button)
-            self._background_preset_buttons.append(
-                (button, background_hex, text_hex, tip)
-            )
-        row.addStretch()
-        popup.layout().addLayout(row)
 
     def _add_outline_width_slider(self, popup: HoverPopup) -> QSlider:
         """建立四档离散滑条；两端图标说明从细到粗的方向。"""
@@ -668,7 +552,6 @@ class TextSettingsPanel(QWidget):
         self.underline_btn.toggled.connect(self._on_font_changed)
 
         self.color_btn.color_changed.connect(self._on_color_picked)
-        self.background_btn.toggled.connect(self._on_background_toggled)
         self.outline_btn.toggled.connect(self._on_outline_toggled)
         self.shadow_btn.toggled.connect(self._on_shadow_toggled)
 
@@ -712,85 +595,68 @@ class TextSettingsPanel(QWidget):
         label.setText(f"{percent}%")
 
     # ------------------------------------------------------------------
-    # 背景
+    # 底色
+    #
+    # 开关、弹层、状态都在共用的 TextBackgroundControl 里（文字面板和备注面板都要
+    # 这一组控件）。下面这几个入口保留下来，是因为本面板的既有调用点与用例按名字
+    # 用它们；它们只是转发，不再自己持有状态。
     # ------------------------------------------------------------------
 
+    @property
+    def background_btn(self):
+        return self._background.toggle_btn
+
+    @property
+    def background_enabled(self) -> bool:
+        return self._background.enabled
+
+    @background_enabled.setter
+    def background_enabled(self, enabled: bool):
+        self._background.set_enabled_silently(enabled)
+
+    @property
+    def background_color(self) -> QColor:
+        return self._background.color
+
+    @background_color.setter
+    def background_color(self, color: QColor):
+        self._background.set_color_silently(color)
+
+    @property
+    def background_opacity(self) -> int:
+        return self._background.opacity
+
+    @background_opacity.setter
+    def background_opacity(self, opacity: int):
+        self._background.set_opacity_silently(opacity)
+
+    @property
+    def background_color_btn(self):
+        return self._background.color_btn
+
+    @property
+    def background_opacity_slider(self):
+        return self._background.opacity_slider
+
+    @property
+    def _background_preset_buttons(self):
+        return self._background.preset_swatches
+
     def _update_background_btn_style(self):
-        """更新背景按钮样式"""
-        if self.background_btn.isChecked():
-            color = QColor(self.background_color)
-            alpha = max(0, min(255, int(self.background_opacity)))
-            luminance = color.red() * 3 + color.green() * 6 + color.blue()
-            text_color = "#000000" if luminance >= 1280 else "#ffffff"
-            self.background_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: rgba({color.red()}, {color.green()}, {color.blue()}, {alpha});
-                    color: {text_color};
-                    border: 1px solid #999;
-                    font-size: {scaled(12)}px;
-                }}
-            """)
-        else:
-            self.background_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: white;
-                    border: 1px solid #ddd;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #f0f0f0;
-                    border: 1px solid #bbb;
-                }
-            """)
-
-    def _on_background_toggled(self, checked: bool):
-        self.background_enabled = checked
-        self._update_background_btn_style()
-        self._emit_background_changed()
-
-    def _on_background_color_picked(self, color: QColor):
-        self.background_color = QColor(color)
-        self.background_color_btn.set_color(self.background_color)
-        self._update_background_btn_style()
-        self._emit_background_changed()
-
-    def _on_background_opacity_changed(self, value: int):
-        self.background_opacity = value
-        self._refresh_opacity_label(self.background_opacity_label, value)
-        self._update_background_btn_style()
-        self._emit_background_changed()
+        """更新底色开关的样式（它就是一块"当前底色"的预览）。"""
+        self._background.update_toggle_style()
 
     def _apply_background_preset(self, background_hex: str, text_hex: str):
-        """套用一套"底色 + 文字色"预设。
+        """套用一套"底色 + 文字色"预设（转发给共用控件）。"""
+        self._background.apply_preset(background_hex, text_hex)
 
-        不透明度沿用滑块上的当前值（默认 70%），套完底色、文字色、不透明度都还能
-        继续单独调——预设只是把三个值摆到一个合适的起点，不是锁死。
-        """
-        self._on_background_color_picked(QColor(background_hex))
-        if not self.background_enabled:
-            # 点风格预设就是要用底色：顺手把开关打开，省得用户再点一下
-            self.background_btn.setChecked(True)
-        self._on_preset_color_clicked(text_hex)
-
-    def _emit_background_changed(self):
-        color = QColor(self.background_color)
-        color.setAlpha(self.background_opacity)
-        self.background_changed.emit(self.background_enabled, color, self.background_opacity)
+    def _on_background_changed(self, enabled: bool, color: QColor, opacity: int):
+        """共用控件报了新值 → 转发成面板对外的 background_changed。"""
+        self.background_changed.emit(bool(enabled), QColor(color), int(opacity))
 
     def set_background_settings(self, enabled: bool, color: QColor, opacity: int):
         """设置背景配置（不触发信号）"""
-        self.background_enabled = bool(enabled)
-        self.background_color = QColor(color)
-        self.background_opacity = int(opacity)
-        self.background_btn.blockSignals(True)
-        self.background_btn.setChecked(self.background_enabled)
-        self.background_btn.blockSignals(False)
-        self._update_background_btn_style()
-        self.background_color_btn.set_color(self.background_color)
-        self.background_opacity_slider.blockSignals(True)
-        self.background_opacity_slider.setValue(self.background_opacity)
-        self.background_opacity_slider.blockSignals(False)
-        self._refresh_opacity_label(self.background_opacity_label, self.background_opacity)
+        self._background.set_state(enabled, color, opacity)
 
     # ------------------------------------------------------------------
     # 描边
@@ -931,14 +797,10 @@ class TextSettingsPanel(QWidget):
         self.bold_btn.setToolTip(self.tr("Bold"))
         self.italic_btn.setToolTip(self.tr("Italic"))
         self.underline_btn.setToolTip(self.tr("Underline"))
-        self.background_btn.setToolTip(self.tr("Text Background"))
+        self._background.retranslate()
         self.outline_btn.setToolTip(self.tr("Text Outline"))
         self.shadow_btn.setToolTip(self.tr("Text Shadow"))
         self.color_btn.setToolTip(self.tr("Custom Color"))
-        self.background_color_btn.setToolTip(self.tr("Custom Background Color"))
-        self.background_opacity_slider.setToolTip(self.tr("Background Opacity"))
-        for button, _background_hex, _text_hex, tip in self._background_preset_buttons:
-            button.setToolTip(self.tr(tip))
         self.outline_color_btn.setToolTip(self.tr("Custom Outline Color"))
         self._update_outline_width_slider_tooltip()
         for tip, preview in zip(
@@ -980,7 +842,7 @@ class TextSettingsPanel(QWidget):
 
             bg_enabled = text_settings.get("background_enabled", False)
             bg_color = QColor(text_settings.get("background_color", "#FFFFFF"))
-            bg_opacity = text_settings.get("background_opacity", 255)
+            bg_opacity = text_settings.get("background_opacity", 178)
             self.set_background_settings(bg_enabled, bg_color, bg_opacity)
 
             self.set_outline_settings(

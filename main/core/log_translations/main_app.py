@@ -18,6 +18,8 @@ TRANSLATIONS: dict[str, str] = {
     "截图备用热键注册失败: {hotkey_2}": "Screenshot backup hotkey registration failed: {hotkey_2}",
     "智能翻译热键已注册: {translation_hotkey}": "Smart translation hotkey registered: {translation_hotkey}",
     "智能翻译热键注册失败: {translation_hotkey}": "Smart translation hotkey registration failed: {translation_hotkey}",
+    "继续标注热键已注册: {hotkey}": "Continue-annotating hotkey registered: {hotkey}",
+    "继续标注热键注册失败: {hotkey}": "Continue-annotating hotkey registration failed: {hotkey}",
     "剪贴板热键已注册: {clipboard_hotkey}": "Clipboard hotkey registered: {clipboard_hotkey}",
     "剪贴板热键注册失败: {clipboard_hotkey}": "Clipboard hotkey registration failed: {clipboard_hotkey}",
     "剪贴板备用热键已注册: {clipboard_hotkey_2}": "Clipboard backup hotkey registered: {clipboard_hotkey_2}",

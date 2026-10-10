@@ -30,6 +30,7 @@ from .base_settings_panel import (
     StepperWidget, build_settings_panel_stylesheet, paint_rounded_panel,
 )
 from .color_picker_button import ColorPickerButton
+from .text_background_control import TextBackgroundControl
 
 _tr = make_tr("ArrowSettingsPanel")
 
@@ -250,6 +251,14 @@ class NoteSettingsPanel(QWidget):
         self.font_spin.valueChanged.connect(self._on_font_size_changed)
         layout.addWidget(self.font_spin)
 
+        # === 5. 文字底色 ===
+        # 备注的正文就是一段普通文字，底色能力和文字工具完全一样，所以直接用同一个
+        # 控件（开关 + 悬停弹层：颜色 / 不透明度 / 风格预设），不在这里再写一份弹层。
+        self._background = TextBackgroundControl(self)
+        self._background.changed.connect(self._on_background_changed)
+        self._background.text_color_requested.connect(self._on_text_color_requested)
+        layout.addWidget(self._background.toggle_btn)
+
         layout.addStretch()
 
         self._sync_direction_buttons()
@@ -287,6 +296,7 @@ class NoteSettingsPanel(QWidget):
             """)
 
         self._apply_direction_icon_sizes()
+        self._background.apply_scale()
         self.adjustSize()
         self.update()
 
@@ -324,6 +334,15 @@ class NoteSettingsPanel(QWidget):
                     "label_position": NoteItem.normalize_position(
                         manager.get_setting("note", "label_position", NoteItem.DEFAULT_POSITION)
                     ),
+                    "background_enabled": bool(
+                        manager.get_setting("note", "background_enabled", False)
+                    ),
+                    "background_color": QColor(
+                        manager.get_setting("note", "background_color", "#FFFFFF")
+                    ),
+                    "background_opacity": int(
+                        manager.get_setting("note", "background_opacity", 178)
+                    ),
                 }
         except Exception as exc:
             log_exception(exc, T("读取备注默认设置"))
@@ -333,6 +352,9 @@ class NoteSettingsPanel(QWidget):
             "opacity": 1.0,
             "font_size": 14,
             "label_position": NoteItem.DEFAULT_POSITION,
+            "background_enabled": False,
+            "background_color": QColor("#FFFFFF"),
+            "background_opacity": 178,
         }
 
     def current_state(self) -> dict:
@@ -343,6 +365,9 @@ class NoteSettingsPanel(QWidget):
             "opacity": float(self.current_opacity),
             "font_size": int(self.current_font_size),
             "label_position": self.current_direction,
+            "background_enabled": bool(self._background.enabled),
+            "background_color": self._background.color,
+            "background_opacity": int(self._background.opacity),
         }
 
     def _apply_state(self, state: dict):
@@ -371,6 +396,13 @@ class NoteSettingsPanel(QWidget):
         )
         self._sync_direction_buttons()
 
+        # 底色：控件自己持有开关 / 颜色 / 不透明度，缺哪项就沿用控件当前值
+        self._background.set_state(
+            bool(state.get("background_enabled", self._background.enabled)),
+            QColor(state.get("background_color", self._background.color)),
+            int(state.get("background_opacity", self._background.opacity)),
+        )
+
     def load_from_config(self):
         """把备注工具的持久化设置回填到面板（切换工具、恢复工具态时调用）。"""
         self._apply_state(self.default_state())
@@ -391,6 +423,9 @@ class NoteSettingsPanel(QWidget):
                 opacity=float(state.get("opacity", 1.0)),
                 font_size=int(state.get("font_size", 14)),
                 label_position=NoteItem.normalize_position(state.get("label_position")),
+                background_enabled=bool(state.get("background_enabled", False)),
+                background_color=QColor(state.get("background_color", "#FFFFFF")).name(),
+                background_opacity=int(state.get("background_opacity", 178)),
             )
         except Exception as exc:
             log_exception(exc, T("保存备注设置"))
@@ -425,6 +460,13 @@ class NoteSettingsPanel(QWidget):
                 state["opacity"] = float(opacity)
 
             state["label_position"] = getattr(item, "direction", state["label_position"])
+
+            # 底色：图元上颜色和不透明度存在同一个 QColor 里，面板上分开显示
+            state["background_enabled"] = bool(getattr(item, "has_background", False))
+            background_color = QColor(getattr(item, "background_color", "#FFFFFF"))
+            state["background_opacity"] = background_color.alpha()
+            background_color.setAlpha(255)
+            state["background_color"] = background_color
             self._apply_state(state)
         finally:
             self.blockSignals(False)
@@ -479,6 +521,7 @@ class NoteSettingsPanel(QWidget):
         self.stroke_spin.setToolTip(self._tr("Line Width"))
         self.opacity_spin.setToolTip(self._tr("Opacity (%)"))
         self.font_spin.setToolTip(self._tr("Font Size"))
+        self._background.retranslate()
         for direction, button in self._direction_buttons.items():
             button.setToolTip(self._tr(NoteItem.POSITION_LABELS[direction]))
 
@@ -524,6 +567,16 @@ class NoteSettingsPanel(QWidget):
             return
         self.current_direction = direction
         self._sync_direction_buttons()
+        self._emit()
+
+    def _on_background_changed(self, _enabled: bool, _color: QColor, _opacity: int):
+        """底色控件改了：状态在控件里，这里只把它报出去（current_state 会去取）。"""
+        self._emit()
+
+    def _on_text_color_requested(self, color: QColor):
+        """点了底色预设：预设里带的那支文字色也该换到备注正文上。"""
+        self.current_color = QColor(color)
+        self.color_btn.set_color(self.current_color)
         self._emit()
 
     # ------------------------------------------------------------------

@@ -701,6 +701,12 @@ class SettingsDialog(FrostedFramelessDialog):
             self.translation_hotkey_edit.setText(display_hotkey_str(defaults["translation_hotkey"]))
         if hasattr(self, 'translation_hotkey_edit_2'):
             self.translation_hotkey_edit_2.setText(display_hotkey_str(defaults["translation_hotkey_2"]))
+        if hasattr(self, 'continue_annotate_hotkey_edit'):
+            self.continue_annotate_hotkey_edit.setText(
+                display_hotkey_str(defaults["continue_annotate_hotkey"]))
+        if hasattr(self, 'continue_annotate_hotkey_edit_2'):
+            self.continue_annotate_hotkey_edit_2.setText(
+                display_hotkey_str(defaults["continue_annotate_hotkey_2"]))
         # 应用内快捷键（macOS 按平台习惯显示修饰键，存储格式不变）
         if hasattr(self, '_inapp_edits'):
             for cfg_key, edit in self._inapp_edits.items():
@@ -918,6 +924,14 @@ class SettingsDialog(FrostedFramelessDialog):
         if hasattr(self, 'translation_hotkey_edit_2'):
             self.config_manager.set_translation_hotkey_2(
                 self.translation_hotkey_edit_2.text().strip()
+            )
+        if hasattr(self, 'continue_annotate_hotkey_edit'):
+            self.config_manager.set_continue_annotate_hotkey(
+                self.continue_annotate_hotkey_edit.text().strip()
+            )
+        if hasattr(self, 'continue_annotate_hotkey_edit_2'):
+            self.config_manager.set_continue_annotate_hotkey_2(
+                self.continue_annotate_hotkey_edit_2.text().strip()
             )
 
         # 1. 截图交互（双击确认 + 智能选区）
@@ -1207,6 +1221,7 @@ class SettingsDialog(FrostedFramelessDialog):
             "clipboard_hotkey_edit", "clipboard_hotkey_edit_2",
             "translation_hotkey_edit", "translation_hotkey_edit_2",
             "pin_clipboard_hotkey_edit", "pin_clipboard_hotkey_edit_2",
+            "continue_annotate_hotkey_edit", "continue_annotate_hotkey_edit_2",
         ):
             widget = getattr(self, attr, None)
             if widget is not None:
@@ -1266,7 +1281,9 @@ class SettingsDialog(FrostedFramelessDialog):
         for attr in ('hotkey_input', 'hotkey_input_2', 'clipboard_hotkey_edit',
                       'translation_hotkey_edit', 'translation_hotkey_edit_2',
                       'clipboard_hotkey_edit_2', 'pin_clipboard_hotkey_edit',
-                      'pin_clipboard_hotkey_edit_2', 'save_path_lbl', 'path_lbl',
+                      'pin_clipboard_hotkey_edit_2',
+                      'continue_annotate_hotkey_edit', 'continue_annotate_hotkey_edit_2',
+                      'save_path_lbl', 'path_lbl',
                       ):
             w = getattr(self, attr, None)
             if w is not None:

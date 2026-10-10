@@ -1345,6 +1345,14 @@ Replace it?</source>
         <translation>翻訳 (2)</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>注釈を続ける</translation>
+    </message>
+    <message>
+        <source>Continue Annotating (2)</source>
+        <translation>注釈を続ける (2)</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>クリップボード (2)</translation>
     </message>

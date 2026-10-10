@@ -1332,6 +1332,14 @@ Replace it?</source>
         <translation>번역 (2)</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>주석 이어서 달기</translation>
+    </message>
+    <message>
+        <source>Continue Annotating (2)</source>
+        <translation>주석 이어서 달기 (2)</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>클립보드 (2)</translation>
     </message>

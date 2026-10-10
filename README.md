@@ -591,6 +591,8 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — brush settings panel
 ├── shape_settings_panel.py  # ShapeSettingsPanel — shape settings panel
 ├── text_settings_panel.py   # TextSettingsPanel — text settings panel
+├── text_background_control.py # TextBackgroundControl — text/note background swatch control
+├── annotation_history_dialog.py # AnnotationHistoryDialog — "continue annotating" history browser
 ├── note_settings_panel.py   # NoteSettingsPanel — note settings panel (color, line width, direction, font size)
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — arrow settings panel
 ├── number_settings_panel.py # number tool settings panel

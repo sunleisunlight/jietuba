@@ -237,21 +237,24 @@ class HistoryManager(QObject):
 
     def list_records(self, *, source_type: Optional[str] = None,
                      favorite_only: bool = False,
-                     offset: int = 0, limit: int = 60) -> List[HistoryRecord]:
+                     offset: int = 0, limit: int = 60,
+                     annotated_only: bool = True) -> List[HistoryRecord]:
         try:
             return self.repository.list_records(
                 source_type=source_type, favorite_only=favorite_only,
-                offset=offset, limit=limit,
+                offset=offset, limit=limit, annotated_only=annotated_only,
             )
         except Exception as e:
             log_warning(T("读取历史列表失败: {error}", error=str(e)), "History")
             return []
 
     def count(self, *, source_type: Optional[str] = None,
-              favorite_only: bool = False) -> int:
+              favorite_only: bool = False,
+              annotated_only: bool = True) -> int:
         try:
             return self.repository.count(
-                source_type=source_type, favorite_only=favorite_only
+                source_type=source_type, favorite_only=favorite_only,
+                annotated_only=annotated_only,
             )
         except Exception as e:
             log_warning(T("统计历史数量失败: {error}", error=str(e)), "History")

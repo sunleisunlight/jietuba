@@ -1346,6 +1346,14 @@ Replace it?</source>
         <translation>翻译 (2)</translation>
     </message>
     <message>
+        <source>Continue Annotating</source>
+        <translation>继续标注</translation>
+    </message>
+    <message>
+        <source>Continue Annotating (2)</source>
+        <translation>继续标注 (2)</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>剪贴板 (2)</translation>
     </message>

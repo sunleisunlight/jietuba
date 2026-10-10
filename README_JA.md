@@ -590,6 +590,8 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — ブラシ設定パネル
 ├── shape_settings_panel.py  # ShapeSettingsPanel — 形状設定パネル
 ├── text_settings_panel.py   # TextSettingsPanel — テキスト設定パネル
+├── text_background_control.py # TextBackgroundControl — テキスト/メモの背景コントロール
+├── annotation_history_dialog.py # AnnotationHistoryDialog — 「注釈を続ける」履歴ウィンドウ
 ├── note_settings_panel.py   # NoteSettingsPanel — メモ設定パネル（色/線幅/方向/フォントサイズ）
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — 矢印設定パネル
 ├── number_settings_panel.py # 番号ツール設定パネル

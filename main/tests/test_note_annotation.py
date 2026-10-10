@@ -121,6 +121,105 @@ def _drag_tool(tool, ctx, start, end, steps=4):
 
 
 # ----------------------------------------------------------------------------
+# 正文底色：备注的正文就是一段普通文字，底色能力和文字工具是同一套
+# ----------------------------------------------------------------------------
+
+def _settings_manager(**note_values):
+    """只回答备注设置的管理器替身；没给的键一律回默认值。"""
+    class Manager:
+        @staticmethod
+        def get_setting(_tool_id, key, default=None):
+            return note_values.get(key, default)
+
+        @staticmethod
+        def get_text_always_on_top_enabled():
+            return True
+
+    return Manager()
+
+
+def test_note_tool_creates_the_note_with_the_configured_background(
+    tool, ctx, scene, monkeypatch
+):
+    """新建备注要照设置回填底色：颜色与不透明度都写进图元。"""
+    monkeypatch.setattr(
+        "settings.get_tool_settings_manager",
+        lambda: _settings_manager(
+            background_enabled=True,
+            background_color="#0000FF",
+            background_opacity=120,
+        ),
+    )
+
+    _drag_tool(tool, ctx, (100, 100), (180, 150))
+
+    notes = [it for it in _top_level(scene) if isinstance(it, NoteItem)]
+    assert len(notes) == 1
+    note = notes[0]
+    assert note.has_background
+    assert note.background_color.name() == "#0000ff"
+    assert note.background_color.alpha() == 120
+
+
+def test_note_panel_background_preset_sets_both_background_and_text_color(qapp):
+    """备注面板的底色预设（白底黑字这类）一次把底色和正文色都摆好。"""
+    from ui.note_settings_panel import NoteSettingsPanel
+
+    panel = NoteSettingsPanel()
+    states = []
+    panel.note_style_changed.connect(states.append)
+    try:
+        panel._background.apply_preset("#000000", "#FFFFFF")
+
+        state = states[-1]
+        assert state["background_enabled"] is True
+        assert state["background_color"].name() == "#000000"
+        assert state["background_opacity"] == 178, "不透明度默认约 70%，且不被预设改写"
+        assert state["color"].name() == "#ffffff"
+    finally:
+        panel.deleteLater()
+
+
+def test_note_panel_background_round_trips_through_the_item(qapp):
+    """面板 → 备注、备注 → 面板两个方向都要对得上，否则面板显示的会和画出来的不一样。"""
+    from ui.note_settings_panel import NoteSettingsPanel
+    from ui.screenshot_window import ScreenshotWindow
+
+    panel = NoteSettingsPanel()
+    note = NoteItem(
+        target_rect=QRectF(0, 0, 40, 40), font=QFont("Arial", 12), color=QColor("red")
+    )
+    try:
+        panel._background.set_state(True, QColor("#0000FF"), 120)
+        ScreenshotWindow._apply_note_style(note, panel.current_state())
+
+        assert note.has_background
+        assert note.background_color.name() == "#0000ff"
+        assert note.background_color.alpha() == 120
+
+        # 反向：从图元回填面板
+        panel._background.set_state(False, QColor("#FFFFFF"), 255)
+        panel.set_state_from_item(note)
+        state = panel.current_state()
+        assert state["background_enabled"] is True
+        assert state["background_color"].name() == "#0000ff"
+        assert state["background_opacity"] == 120
+    finally:
+        panel.deleteLater()
+
+
+def test_note_background_follows_the_same_default_as_text(qapp):
+    """备注与文字的底色默认值同源：约 70% 不透明，且默认不开。"""
+    from settings.tool_settings import ToolSettingsManager
+
+    note_defaults = ToolSettingsManager.DEFAULT_SETTINGS["note"]
+    text_defaults = ToolSettingsManager.DEFAULT_SETTINGS["text"]
+    assert note_defaults["background_opacity"] == text_defaults["background_opacity"]
+    assert note_defaults["background_color"] == text_defaults["background_color"]
+    assert note_defaults["background_enabled"] is False
+
+
+# ----------------------------------------------------------------------------
 # 1~7：创建
 # ----------------------------------------------------------------------------
 

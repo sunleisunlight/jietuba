@@ -45,6 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_history_updated  ON history(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_history_favorite ON history(favorite, updated_at DESC);
 """
 
+# 历史列表只列"真的标注过"的记录：零标注的截图连继续编辑的对象都没有，混在「继续
+# 标注」里只会让人以为点错了。已收藏的是例外——用户显式收藏过就说明他想留着，
+# 哪怕当时还没画东西。
+_ANNOTATED_ONLY_CLAUSE = "(annotation_count > 0 OR favorite = 1)"
+
 
 class HistoryRepository:
     """history.sqlite 的 CRUD。所有方法都可能在任意线程调用。"""
@@ -167,8 +172,12 @@ class HistoryRepository:
         favorite_only: bool = False,
         offset: int = 0,
         limit: int = 60,
+        annotated_only: bool = True,
     ) -> List[HistoryRecord]:
-        """按 updated_at DESC 分页取元数据（列表只读这一份，不碰大图）。"""
+        """按 updated_at DESC 分页取元数据（列表只读这一份，不碰大图）。
+
+        annotated_only 默认 True：零标注的截图不进列表（见 _ANNOTATED_ONLY_CLAUSE）。
+        """
         where = []
         params: list = []
         if source_type:
@@ -176,6 +185,8 @@ class HistoryRepository:
             params.append(source_type)
         if favorite_only:
             where.append("favorite = 1")
+        if annotated_only:
+            where.append(_ANNOTATED_ONLY_CLAUSE)
         clause = f"WHERE {' AND '.join(where)}" if where else ""
 
         conn = self._connect()
@@ -191,7 +202,9 @@ class HistoryRepository:
         return [HistoryRecord.from_row(row) for row in rows]
 
     def count(self, *, source_type: Optional[str] = None,
-              favorite_only: bool = False) -> int:
+              favorite_only: bool = False,
+              annotated_only: bool = True) -> int:
+        """统计条数。筛选口径必须和 list_records 完全一致，否则列表与数字对不上。"""
         where = []
         params: list = []
         if source_type:
@@ -199,6 +212,8 @@ class HistoryRepository:
             params.append(source_type)
         if favorite_only:
             where.append("favorite = 1")
+        if annotated_only:
+            where.append(_ANNOTATED_ONLY_CLAUSE)
         clause = f"WHERE {' AND '.join(where)}" if where else ""
         conn = self._connect()
         row = conn.execute(

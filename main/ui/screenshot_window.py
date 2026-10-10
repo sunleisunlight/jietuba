@@ -1625,6 +1625,18 @@ class ScreenshotWindow(QWidget):
         if position is not None:
             item.set_direction(position)
 
+        # 正文底色：备注的正文就是一段普通文字，和文字工具走同一条 set_background
+        background_enabled = state.get("background_enabled")
+        if background_enabled is not None:
+            background_color = state.get("background_color")
+            background_opacity = state.get("background_opacity")
+            color = QColor(background_color) if background_color is not None else None
+            item.set_background(
+                bool(background_enabled),
+                color,
+                int(background_opacity) if background_opacity is not None else None,
+            )
+
     def on_mosaic_style_changed(self, style: str):
         """马赛克种类变化（马赛克/模糊），交给 MosaicTool 统一处理。"""
         from tools.mosaic import MosaicTool

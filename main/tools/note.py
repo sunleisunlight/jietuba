@@ -1,4 +1,4 @@
-﻿"""
+"""
 备注工具 —— 拖框圈住目标，松手自动生成"目标框 + 箭头 + 文本框"。
 
 和矩形工具一样是"拖一个框出来"，区别在松手之后：矩形到此为止，备注还要把文本框、
@@ -136,6 +136,16 @@ class NoteTool(Tool):
             provisional=True,
         )
         item.set_visual_opacity(float(ctx.opacity))
+        # 正文底色：和文字工具一样始终写一遍（即使当前关着），这样下次打开底色时
+        # 用的就是上次保存的那支颜色与不透明度
+        background_opacity = int(manager.get_setting("note", "background_opacity", 178))
+        background_color = QColor(manager.get_setting("note", "background_color", "#FFFFFF"))
+        background_color.setAlpha(background_opacity)
+        item.set_background(
+            bool(manager.get_setting("note", "background_enabled", False)),
+            background_color,
+            background_opacity,
+        )
         ctx.scene.addItem(item)
         log_debug(T("创建备注: {rect}", rect=target_rect), "NoteTool")
         return item

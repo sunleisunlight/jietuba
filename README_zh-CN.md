@@ -666,6 +666,8 @@ ui/
 ├── paint_settings_panel.py  # PaintSettingsPanel — 画笔设置面板
 ├── shape_settings_panel.py  # ShapeSettingsPanel — 形状设置面板
 ├── text_settings_panel.py   # TextSettingsPanel — 文字设置面板
+├── text_background_control.py # TextBackgroundControl — 文字/备注底色控件
+├── annotation_history_dialog.py # AnnotationHistoryDialog — 「继续标注」历史窗口
 ├── note_settings_panel.py   # NoteSettingsPanel — 备注设置面板（颜色/线宽/方向/字号）
 ├── arrow_settings_panel.py  # ArrowSettingsPanel — 箭头设置面板
 ├── number_settings_panel.py # 数字工具设置面板
