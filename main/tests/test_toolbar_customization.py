@@ -83,7 +83,7 @@ class TestNormalizeLayout:
         stored = [(key, SHOW) for key in DEFAULT_ORDER if key != "scan_code"]
         layout = normalize_layout(stored)
         keys = [key for key, _mode in layout]
-        assert keys[keys.index("save") + 1] == "scan_code"
+        assert keys[keys.index("annotation_history") + 1] == "scan_code"
         assert dict(layout)["scan_code"] == MORE
 
     def test_a_layout_saved_before_note_existed_gains_the_note_button(self):
@@ -113,11 +113,15 @@ class TestPersistence:
 class TestScreenshotToolbar:
 
     def test_default_layout_folds_low_frequency_buttons_and_ends_with_more(self, qapp):
+        from ui.toolbar_layout import DEFAULT_MORE
+
         toolbar = Toolbar()
         assert _toolbar_row(toolbar) == [
-            key for key in DEFAULT_ORDER if key not in ("scan_code", "spotlight")
+            key for key in DEFAULT_ORDER if key not in DEFAULT_MORE
         ] + ["more"]
-        assert toolbar._folded_keys == ["scan_code", "spotlight"]
+        assert toolbar._folded_keys == [
+            key for key in DEFAULT_ORDER if key in DEFAULT_MORE
+        ]
         assert toolbar.copy_btn.isHidden()
         geometries = [toolbar._buttons[key].geometry() for key in _toolbar_row(toolbar)]
         for left, right in zip(geometries, geometries[1:]):

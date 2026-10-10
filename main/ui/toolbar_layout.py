@@ -27,14 +27,14 @@ DEFAULT_ORDER = (
     # 组合键 / 固定键
     "undo", "redo", "cancel",
     # 无快捷键
-    "long_screenshot", "save", "scan_code", "gif", "spotlight",
+    "long_screenshot", "save", "annotation_history", "scan_code", "gif", "spotlight",
     # 固定收尾
     "confirm",
 )
 
 # 默认收进「…」的按钮，其余默认始终显示。后加的低频、无快捷键功能放这里，
 # 免得把工具栏默认宽度越撑越宽；数字 8/9 的识别/翻译给足存在感，拿出来始终显示。
-DEFAULT_MORE = frozenset({"scan_code", "spotlight"})
+DEFAULT_MORE = frozenset({"scan_code", "spotlight", "annotation_history"})
 
 # 确定按钮固定显示、不可调整，也不出现在工具栏调整界面中：截图必须始终有办法收尾。
 # 其余按钮都是普通编辑操作，用户可以自由排序、收进「…」或隐藏。

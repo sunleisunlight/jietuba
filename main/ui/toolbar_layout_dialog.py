@@ -41,6 +41,7 @@ _tr = make_tr("ToolbarLayoutDialog")
 BUTTON_NAMES = {
     "long_screenshot": "Long screenshot",
     "save": "Save",
+    "annotation_history": "Annotation history",
     "screenshot_translate": "Screenshot translate",
     "text_recognize": "Recognize text",
     "scan_code": "Scan code",

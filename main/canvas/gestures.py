@@ -25,7 +25,7 @@ TextEdgeDrag 漏过这一步——位置变了、撤销栈里却什么都没有�
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtWidgets import QGraphicsTextItem
+from PySide6.QtWidgets import QApplication, QGraphicsTextItem
 
 from core.logger import T, log_exception
 
@@ -293,6 +293,107 @@ class PendingTextEdit:
         self.item = None
         self._press_pos = None
         self._moved = False
+
+
+class PendingAnnotationSelect:
+    """在任意工具下把已有标注"点选"出来——按下先挂起，松手还停在原地才算选中。
+
+    和 PendingTextEdit 同一个套路：这一下同样可能是"在当前工具下、从标注上面起笔"
+    的开头。所以按下先不选中、也不起笔，只记住"点的是哪个图元、从哪儿按下的"；
+    中途移动超过拖拽容差就把这一笔交回当前工具（按按下时的位置重新起笔），松手仍
+    没动才真正选中它、并切到它的归属工具。
+
+    这样"任何工具下都能调任意标注"和"按住拖拽照常绘制"两件事不会互相抢这一下。
+    """
+
+    def __init__(self, view):
+        self._view = view
+        self.item = None
+        self._press_scene_pos = None
+        self._press_view_pos = None
+        self._button = None
+
+    @property
+    def active(self) -> bool:
+        return self.item is not None
+
+    def arm(self, event, scene_pos: QPointF) -> bool:
+        """按下时判断这一下要不要挂起成"可能的单击选中"。
+
+        返回 True 表示这次按下被接管，调用方不要再起笔。
+        """
+        view = self._view
+        controller = getattr(view, "smart_edit_controller", None)
+        if controller is None or event.button() != Qt.MouseButton.LeftButton:
+            return False
+        # Ctrl / Shift 的语义在按下那一刻就有结论（跨工具选择、等比约束），不挂起
+        if event.modifiers() & (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+        ):
+            return False
+        if view._is_text_editing():
+            return False
+
+        scene = getattr(view, "canvas_scene", None)
+        if scene is None or not scene.selection_model.is_confirmed:
+            return False
+
+        item = controller.preview_item_at(scene_pos)
+        if item is None:
+            return False
+
+        self.item = item
+        self._press_scene_pos = QPointF(scene_pos)
+        self._press_view_pos = event.pos()
+        self._button = event.button()
+        return True
+
+    def hand_off_if_dragging(self, event) -> bool:
+        """鼠标真的拖起来了：这一笔归当前工具，按按下时的位置重新起笔。
+
+        返回 True 表示已经交给工具了，调用方按正常绘图流程继续（下一条分支会
+        把当前点喂给这一笔）。
+        """
+        if self.item is None:
+            return False
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return False
+
+        moved = (
+            event.pos() - self._press_view_pos
+        ).manhattanLength() > QApplication.startDragDistance()
+        if not moved:
+            return False
+
+        press_scene_pos = self._press_scene_pos
+        button = self._button
+        self.clear()
+        self._view.drawing.begin(press_scene_pos, button)
+        return True
+
+    def settle(self, event, scene_pos: QPointF) -> bool:
+        """松手：还算单击、且仍落在同一个图元上，才把它选出来。"""
+        item = self.item
+        self.clear()
+        if item is None:
+            return False
+        if event.button() != Qt.MouseButton.LeftButton:
+            return False
+
+        view = self._view
+        controller = getattr(view, "smart_edit_controller", None)
+        if controller is None or item.scene() is None:
+            return False
+        if not item.contains(item.mapFromScene(scene_pos)):
+            return False
+
+        return controller.select_preview_item(item)
+
+    def clear(self):
+        self.item = None
+        self._press_scene_pos = None
+        self._press_view_pos = None
+        self._button = None
 
 
 class ManualItemDrag:

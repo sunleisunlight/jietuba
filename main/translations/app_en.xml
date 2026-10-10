@@ -903,6 +903,10 @@ Replace it?</translation>
         <translation>Save to file</translation>
     </message>
     <message>
+        <source>Continue annotating (annotation history)</source>
+        <translation>Continue annotating (annotation history)</translation>
+    </message>
+    <message>
         <source>Copy image</source>
         <translation>Copy image</translation>
     </message>
@@ -2538,6 +2542,26 @@ Replace it?</translation>
         <translation>Custom Background Color</translation>
     </message>
     <message>
+        <source>White background, black text</source>
+        <translation>White background, black text</translation>
+    </message>
+    <message>
+        <source>White background, red text</source>
+        <translation>White background, red text</translation>
+    </message>
+    <message>
+        <source>Black background, white text</source>
+        <translation>Black background, white text</translation>
+    </message>
+    <message>
+        <source>Black background, red text</source>
+        <translation>Black background, red text</translation>
+    </message>
+    <message>
+        <source>Yellow background, black text</source>
+        <translation>Yellow background, black text</translation>
+    </message>
+    <message>
         <source>White</source>
         <translation>White</translation>
     </message>
@@ -3484,6 +3508,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Long screenshot</source>
         <translation>Long screenshot</translation>
+    </message>
+    <message>
+        <source>Annotation history</source>
+        <translation>Annotation history</translation>
     </message>
     <message>
         <source>Save</source>

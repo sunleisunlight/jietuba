@@ -1173,6 +1173,7 @@ class ScreenshotWindow(QWidget):
         self.toolbar.save_clicked.connect(self._handle_save)
         self.toolbar.pin_clicked.connect(self._handle_pin)
         self.toolbar.long_screenshot_clicked.connect(self.start_long_screenshot_mode)
+        self.toolbar.annotation_history_clicked.connect(self.open_annotation_history)
         self.toolbar.screenshot_translate_clicked.connect(self._handle_screenshot_translate)
         self.toolbar.text_recognize_clicked.connect(self._handle_text_recognize)
         self.toolbar.scan_code_clicked.connect(self._handle_scan_code)

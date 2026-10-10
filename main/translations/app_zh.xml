@@ -943,6 +943,10 @@ Replace it?</source>
         <translation>保存到文件</translation>
     </message>
     <message>
+        <source>Continue annotating (annotation history)</source>
+        <translation>继续标注（标注历史）</translation>
+    </message>
+    <message>
         <source>GIF recording</source>
         <translation>GIF 录制</translation>
     </message>
@@ -2685,6 +2689,26 @@ Replace it?</source>
         <translation>自定义背景颜色</translation>
     </message>
     <message>
+        <source>White background, black text</source>
+        <translation>白底黑字</translation>
+    </message>
+    <message>
+        <source>White background, red text</source>
+        <translation>白底红字</translation>
+    </message>
+    <message>
+        <source>Black background, white text</source>
+        <translation>黑底白字</translation>
+    </message>
+    <message>
+        <source>Black background, red text</source>
+        <translation>黑底红字</translation>
+    </message>
+    <message>
+        <source>Yellow background, black text</source>
+        <translation>黄底黑字</translation>
+    </message>
+    <message>
         <source>White</source>
         <translation>白色</translation>
     </message>
@@ -3649,6 +3673,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Long screenshot</source>
         <translation>长截图</translation>
+    </message>
+    <message>
+        <source>Annotation history</source>
+        <translation>标注历史</translation>
     </message>
     <message>
         <source>Save</source>

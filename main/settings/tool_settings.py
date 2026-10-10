@@ -86,6 +86,7 @@ SCREENSHOT_SHORTCUT_KEYS = tuple(
 TOOLBAR_SHORTCUT_BINDINGS = {
     "long_screenshot": "inapp_long_screenshot",
     "save": "inapp_save",
+    "annotation_history": "inapp_continue_annotate",
     "screenshot_translate": "inapp_translate",
     "text_recognize": "inapp_text_recognize",
     "scan_code": "inapp_scan_code",
@@ -234,7 +235,7 @@ class ToolSettingsManager(QObject):
             "font_family": "",
             "background_enabled": False,
             "background_color": "#FFFFFF",  # 文字背景默认白色
-            "background_opacity": 255,
+            "background_opacity": 178,      # 默认约 70% 不透明：纯色底太抢眼，压住字反而看不清
             # 描边/阴影：与 TextItem 的 DEFAULT_* 一致（这里不能 import canvas）
             "outline_enabled": False,
             "outline_color": "#FFFFFF",

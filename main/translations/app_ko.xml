@@ -934,6 +934,10 @@ Replace it?</source>
         <translation>파일로 저장</translation>
     </message>
     <message>
+        <source>Continue annotating (annotation history)</source>
+        <translation>주석 이어서 달기(주석 기록)</translation>
+    </message>
+    <message>
         <source>Copy image</source>
         <translation>이미지 복사</translation>
     </message>
@@ -2601,6 +2605,26 @@ Replace it?</source>
         <translation>사용자 지정 배경색</translation>
     </message>
     <message>
+        <source>White background, black text</source>
+        <translation>흰 배경 검은 글자</translation>
+    </message>
+    <message>
+        <source>White background, red text</source>
+        <translation>흰 배경 빨간 글자</translation>
+    </message>
+    <message>
+        <source>Black background, white text</source>
+        <translation>검은 배경 흰 글자</translation>
+    </message>
+    <message>
+        <source>Black background, red text</source>
+        <translation>검은 배경 빨간 글자</translation>
+    </message>
+    <message>
+        <source>Yellow background, black text</source>
+        <translation>노란 배경 검은 글자</translation>
+    </message>
+    <message>
         <source>White</source>
         <translation>흰색</translation>
     </message>
@@ -3575,6 +3599,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Long screenshot</source>
         <translation>긴 스크린샷</translation>
+    </message>
+    <message>
+        <source>Annotation history</source>
+        <translation>주석 기록</translation>
     </message>
     <message>
         <source>Save</source>

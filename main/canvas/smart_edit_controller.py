@@ -91,6 +91,10 @@ class SmartEditController(QObject):
         TextItem, NoteItem, NumberItem, MosaicItem,
     )
 
+    # 整支工具都保留"按下即作用于目标"原语义、不参与"任意工具点选"的工具：
+    # 光标工具靠拖动换选区/挪窗口，橡皮擦就是用来擦鼠标底下的东西。
+    PREVIEW_EXEMPT_TOOLS = ("cursor", "eraser")
+
     @staticmethod
     def _pick_drawable_items(items):
         """从 scene.items(pos) 里挑出可编辑的图元。
@@ -322,45 +326,50 @@ class SmartEditController(QObject):
     
     def can_show_hover_cursor(self, item: QGraphicsItem) -> bool:
         """
-        判断是否显示悬停十字光标
-        
+        判断是否显示悬停十字光标与候选框
+
         Args:
             item: QGraphicsItem 对象
-            
-        Returns:
-            return
-        """
-        item_type = self.get_item_type(item)
 
+        Returns:
+            bool - 鼠标经过时给不给候选反馈
+        """
+        return self.can_preview_item(item)
+
+    def can_preview_item(self, item: QGraphicsItem) -> bool:
+        """任意绘制工具下，鼠标经过就能预览、单击就能选中的图元。
+
+        这是"鼠标焦点移到哪，就能调整哪个标注"的那一半：不再要求当前工具和图元
+        类型匹配。按下即选中仍然只走 can_select_item，所以"拖拽就按当前工具绘制"
+        "Ctrl 跨工具选择"这些既有语义都不受影响。
+
+        两类图元照着原来的道理排在外面：
+        - 自由笔画（画笔、荧光笔、涂抹马赛克）成片叠在一起，逐条闪框反而看不清
+          （见 DrawingItemMixin.shows_selection_frame）；
+        - 聚光灯的孔是 RectItem，但它只归聚光灯工具管。
+
+        光标工具和橡皮擦整支工具都排在外面：前者靠拖动换选区/挪窗口，后者存在的
+        意义就是擦掉鼠标底下的东西，都要保留"按下即作用于目标"的原语义。
+        """
+        if item is None or is_composite_child(item):
+            return False
+        if not self.current_tool_id or self.current_tool_id in self.PREVIEW_EXEMPT_TOOLS:
+            return False
+        if not isinstance(item, self.DRAWABLE_TYPES):
+            return False
         if isinstance(item, SpotlightItem):
             return self.current_tool_id == "spotlight"
+        shows_frame = getattr(item, "shows_selection_frame", None)
+        return bool(shows_frame()) if callable(shows_frame) else False
 
-        # 画笔/荧光笔路径：不显示十字光标（需要 Ctrl 才能交互）
-        if item_type == ItemType.PATH:
-            return False
-        
-        # 无工具模式（光标工具）：不显示十字光标（优先移动选区）
-        if not self.current_tool_id or self.current_tool_id == "cursor":
-            return False
-        
-        # 工具激活时，只对匹配类型显示光标
-        tool_to_type = {
-            "rect": ItemType.SHAPE,
-            "ellipse": ItemType.SHAPE,
-            "arrow": ItemType.ARROW,
-            "text": ItemType.TEXT,
-            "note": ItemType.NOTE,
-            "number": ItemType.NUMBER,
-        }
-
-        if self.current_tool_id == "highlighter" and item_type == ItemType.SHAPE:
-            return bool(getattr(item, "is_highlighter_rect", False))
-
-        if self.current_tool_id == "mosaic" and item_type == ItemType.SHAPE:
-            return bool(getattr(item, "fill_mode", None) and item.fill_mode())
-
-        expected_type = tool_to_type.get(self.current_tool_id)
-        return item_type == expected_type
+    def preview_item_at(self, scene_pos: QPointF) -> Optional[QGraphicsItem]:
+        """取鼠标位置下可用于"任意工具点选"的最上层图元；没有返回 None。"""
+        if self.scene is None:
+            return None
+        for item in self._pick_drawable_items(self.scene.items(scene_pos)):
+            if self.can_preview_item(item):
+                return item
+        return None
 
     # ========================================================================
     # 鼠标事件处理
@@ -379,22 +388,17 @@ class SmartEditController(QObject):
         """
         if self.scene is None:
             return False
-        items = self.scene.items(scene_pos)
-        drawable_items = self._pick_drawable_items(items)
 
-        if drawable_items:
-            item = drawable_items[0]
-            if self.can_show_hover_cursor(item):
-                if self.hovered_item != item:
-                    self.hovered_item = item
-                    self.hover_changed.emit(item)
-                    # 不再发射 cursor_change_request 信号，由 view.py 直接设置光标
-                return True
-            else:
-                if self.hovered_item:
-                    self.hovered_item = None
-                    self.hover_changed.emit(None)
-                return False
+        # 和单击选中用同一个判定：指到哪个图元，就是"再点一下会选中的那个"。
+        # 以前只看命中列表里的第一个，压着一条自由笔画的矩形就永远指不到——
+        # 明明点得中，悬停却没有反馈。
+        item = self.preview_item_at(scene_pos)
+        if item is not None:
+            if self.hovered_item != item:
+                self.hovered_item = item
+                self.hover_changed.emit(item)
+                # 不再发射 cursor_change_request 信号，由 view.py 直接设置光标
+            return True
 
         if self.hovered_item:
             self.hovered_item = None
@@ -577,6 +581,21 @@ class SmartEditController(QObject):
         if isinstance(item, ArrowItem):
             self._sync_arrow_panel_state(item)
     
+    def select_preview_item(self, item: QGraphicsItem) -> bool:
+        """选中"任意工具下点出来的"图元，并切到它的归属工具。
+
+        顺序不能反：切工具会清空当前选择（set_tool -> clear_selection），所以先切、
+        再选。切到归属工具后工具栏会亮起对应的按钮、弹出对应的设置面板，用户接着
+        就能拖它、改它的样式，不必自己先去找那个工具。
+        """
+        if item is None or item.scene() is None:
+            return False
+        owner_tool_id = self.get_item_tool_id(item)
+        if owner_tool_id and owner_tool_id != self.current_tool_id:
+            self.tool_switch_requested.emit(owner_tool_id)
+        self.select_item(item)
+        return True
+
     def clear_selection(self, suppress_block: bool = False):
         """清除选择"""
         self._active_click_handle = None

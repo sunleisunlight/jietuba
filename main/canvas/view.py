@@ -158,14 +158,16 @@ class CanvasView(QGraphicsView):
 
         # 两种由 View 全程接管的手势，各自管着自己那一摊状态（见 canvas/gestures.py）
         from canvas.gestures import (
-            DrawingStroke, ManualItemDrag, NotePartDrag, PendingTextEdit,
-            SelectionDrag, TextEdgeDrag,
+            DrawingStroke, ManualItemDrag, NotePartDrag, PendingAnnotationSelect,
+            PendingTextEdit, SelectionDrag, TextEdgeDrag,
         )
         self.drawing = DrawingStroke(self)
         self.selection_drag = SelectionDrag(self)
         self.text_drag = TextEdgeDrag(self)
         self.item_drag = ManualItemDrag(self)
         self.pending_text_edit = PendingTextEdit(self)
+        # 任意工具下点选已有标注（按下挂起、松手结算，见 canvas/gestures.py）
+        self.pending_annotation_select = PendingAnnotationSelect(self)
         # 备注内部拖动：拖目标框只动框、拖文字只动文字（见 NoteItem.move_*_by_scene）
         self.note_drag = NotePartDrag(self)
 
@@ -223,6 +225,7 @@ class CanvasView(QGraphicsView):
             return
         self.item_drag.finish(commit=True)
         self.note_drag.finish(commit=True)
+        self.pending_annotation_select.clear()
         self._is_closed = True
 
         from core.qt_utils import safe_disconnect
@@ -979,6 +982,7 @@ class CanvasView(QGraphicsView):
         self._double_click_candidate = None
         # 新的一次点击开始前重置单击编辑状态
         self.pending_text_edit.clear()
+        self.pending_annotation_select.clear()
         
         if not self.canvas_scene.selection_model.is_confirmed:
             # 选区未确认：拖拽创建选区
@@ -1091,6 +1095,14 @@ class CanvasView(QGraphicsView):
                 log_debug(T("刚清除选择，跳过本次绘图"), "CanvasView")
                 return
             
+            # 步骤2.5：任意工具下点选已有标注。
+            # 上面的 handle_press 只认"当前工具选得中"的图元，选不中的才会走到这里。
+            # 这一下同样可能是"在当前工具下、从这个标注上面起笔"，所以按下先挂起：
+            # 拖动就把这一笔交回当前工具（见 mouseMoveEvent），没动才是单击选中。
+            if self.pending_annotation_select.arm(event, scene_pos):
+                log_debug(T("挂起单击选中已有标注"), "CanvasView")
+                return
+
             # 步骤3：如果是绘图工具且未选中图元，执行绘图
             is_drawing_tool = current_tool_id != "cursor"
             
@@ -1279,6 +1291,11 @@ class CanvasView(QGraphicsView):
         if self.canvas_scene is None or self.scene() is None:
             return
         scene_pos = self.mapToScene(event.pos())
+
+        # 挂起的"单击选中"：鼠标真的拖起来了，就把这一笔交回当前工具按原位置起笔。
+        # 交给工具之后不在这里 return，让下面的状态2正常把当前点喂给这一笔。
+        if self.pending_annotation_select.hand_off_if_dragging(event):
+            log_debug(T("单击选中转为当前工具绘制"), "CanvasView")
 
         # ====================================================================
         # 状态1：创建选区（拖拽选框）
@@ -1524,7 +1541,11 @@ class CanvasView(QGraphicsView):
         4. 其他情况 → 智能编辑 + 传递给 Scene
         """
         scene_pos = self.mapToScene(event.pos())
-        
+
+        if self.pending_annotation_select.settle(event, scene_pos):
+            event.accept()
+            return
+
         if self.text_drag.active:
             self.text_drag.end()
             return

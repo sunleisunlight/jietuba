@@ -204,6 +204,21 @@ def test_leaving_takes_the_frame_away(canvas, kind):
     assert not _frame_painted(item)
 
 
+def test_hovering_with_a_mismatched_tool_still_shows_the_candidate_frame(canvas):
+    """当前工具和图元类型对不上时，鼠标停上去也要给候选反馈——「焦点到哪就能调哪」。"""
+    scene, view = canvas("text")
+    item = RectItem(QRectF(40, 40, 80, 60), QPen(RED, 4))
+    scene.addItem(item)
+
+    assert view.smart_edit_controller.current_tool_id == "text"
+    assert not item._hovered
+
+    _hover(view, QPointF(40, 70))
+
+    assert item._hovered, "文字工具下悬停矩形没有候选反馈"
+    assert _frame_painted(item)
+
+
 @pytest.mark.parametrize("kind", ["stroke", "mosaic"])
 def test_freehand_marks_are_not_candidates(canvas, kind):
     """自由笔画（画笔、涂抹马赛克）要 Ctrl 才选得中，鼠标经过不该有任何反馈。

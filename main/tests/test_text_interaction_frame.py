@@ -201,20 +201,20 @@ def test_the_text_being_edited_gets_a_solid_frame(canvas):
 
 
 def test_the_text_being_edited_keeps_its_frame_under_another_tool(canvas):
-    """拿着矩形工具编辑一段文字，那一圈实线框不能没：手柄就挂在它身上。
+    """拿着选不中文字的工具编辑一段文字，那一圈实线框不能没：手柄就挂在它身上。
 
     别的图元"选中就画实线"要过一道"当前工具选得中它吗"的门（画笔笔画要 Ctrl 才
-    选得中，不该平白多出一圈框）。文字这一路不能过那道门——矩形工具下它对文字
+    选得中，不该平白多出一圈框）。文字这一路不能过那道门——光标工具下它对文字
     返回 False，而正在编辑的那一段必须有框。
     """
-    scene, view = canvas(tool="rect")
+    scene, view = canvas(tool="cursor")
     item = _text("edit me")
     scene.addItem(item)
 
     view._enter_text_edit_mode(item)
 
     assert item.is_editing()
-    assert not item._can_show_hover()  # 前置条件：矩形工具确实选不中文字
+    assert not item._can_show_hover()  # 前置条件：光标工具确实选不中文字
     painted, total = _top_edge_coverage(item)
     tolerance = 4 + 2 * TextItem.CLICK_MARGIN
     assert painted >= total - tolerance, "跨工具编辑时实线框丢了"
@@ -240,16 +240,22 @@ def test_an_idle_text_has_no_frame(canvas):
     assert _top_edge_coverage(item)[0] == 0
 
 
-def test_no_candidate_frame_when_the_tool_cannot_select_text(canvas):
-    """矩形工具下点不中文字，就不该给它画"点一下能切过去"的框。"""
+def test_another_tool_still_shows_the_text_as_a_candidate(canvas):
+    """矩形工具下悬停文字也要给候选框：任何工具下"焦点到哪就能调哪"。
+
+    以前这里是反过来的——当前工具选不中就什么都不画。现在候选框的含义是"再点
+    一下就会选中它"，与当前工具选不选得中无关；线型仍是虚线，和"正在编辑的那
+    一段"的实线框分得开。
+    """
     scene, view = canvas(tool="rect")
     item = _text("candidate")
     scene.addItem(item)
 
     item._set_hovered(True)
 
-    assert not item._hovered
-    assert _top_edge_coverage(item)[0] == 0
+    assert item._hovered
+    painted, total = _top_edge_coverage(item)
+    assert 0 < painted < total - 6, "候选文字要虚线框：画了，但有缺口"
 
 
 def test_qt_builtin_highlight_does_not_show_through(qapp):

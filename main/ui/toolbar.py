@@ -316,6 +316,7 @@ class Toolbar(QWidget):
     undo_clicked = Signal()  # 撤销
     redo_clicked = Signal()  # 重做
     long_screenshot_clicked = Signal()  # 长截图按钮
+    annotation_history_clicked = Signal()  # 标注历史（继续标注）按钮
     screenshot_translate_clicked = Signal()  # 截图翻译按钮
     text_recognize_clicked = Signal()  # 文字识别按钮
     scan_code_clicked = Signal()  # 扫码按钮
@@ -404,6 +405,9 @@ class Toolbar(QWidget):
             self.long_screenshot_clicked.emit)
         self.save_btn = self._add_button(
             "save", "svg/下载.svg", "Save to file", wide, self.save_clicked.emit)
+        self.annotation_history_btn = self._add_button(
+            "annotation_history", "svg/标注历史.svg", "Continue annotating (annotation history)",
+            wide, self.annotation_history_clicked.emit)
         self.screenshot_translate_btn = self._add_button(
             "screenshot_translate", "svg/翻译.svg", "Screenshot translate (OCR + Translate)", wide,
             self.screenshot_translate_clicked.emit)

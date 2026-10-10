@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QGraphicsScene, QStyleOptionGraphicsItem, QWidget
 
 from canvas.scene import CanvasScene
 from canvas.view import CanvasView
-from canvas.items import EllipseItem, RectItem, StrokeItem, TextItem
+from canvas.items import ArrowItem, EllipseItem, RectItem, StrokeItem, TextItem
 from canvas.handle_editor import HandleType, LayerEditor
 from canvas.smart_edit_controller import SmartEditController
 from ui.paint_settings_panel import PaintSettingsPanel
@@ -42,6 +42,35 @@ def _canvas(*, cross_tool_select=False, parent=None):
     scene = CanvasScene(image, QRectF(0, 0, 100, 80), enable_mosaic=True)
     view = CanvasView(scene, parent, cross_tool_select=cross_tool_select)
     return scene, view
+
+
+def _mouse_event(view, event_type, pos, *, buttons, button, modifiers=Qt.KeyboardModifier.NoModifier):
+    global_pos = view.mapToGlobal(pos.toPoint())
+    return QMouseEvent(event_type, pos, global_pos, button, buttons, modifiers)
+
+
+def _press(view, pos, modifiers=Qt.KeyboardModifier.NoModifier):
+    view.mousePressEvent(_mouse_event(
+        view, QEvent.Type.MouseButtonPress, pos,
+        buttons=Qt.MouseButton.LeftButton, button=Qt.MouseButton.LeftButton,
+        modifiers=modifiers,
+    ))
+
+
+def _move(view, pos, modifiers=Qt.KeyboardModifier.NoModifier):
+    view.mouseMoveEvent(_mouse_event(
+        view, QEvent.Type.MouseMove, pos,
+        buttons=Qt.MouseButton.LeftButton, button=Qt.MouseButton.NoButton,
+        modifiers=modifiers,
+    ))
+
+
+def _release(view, pos, modifiers=Qt.KeyboardModifier.NoModifier):
+    view.mouseReleaseEvent(_mouse_event(
+        view, QEvent.Type.MouseButtonRelease, pos,
+        buttons=Qt.MouseButton.NoButton, button=Qt.MouseButton.LeftButton,
+        modifiers=modifiers,
+    ))
 
 
 def test_text_is_above_draw_annotations_but_below_selection_overlay(qapp):
@@ -396,6 +425,54 @@ def test_background_toggle_previews_selected_color(qapp):
         panel.deleteLater()
 
 
+def test_background_preset_sets_both_background_and_text_color(qapp):
+    """风格预设（白底黑字这类）一次把底色和文字色都摆好，之后还能继续微调。"""
+    panel = TextSettingsPanel()
+    backgrounds = []
+    colors = []
+    panel.background_changed.connect(
+        lambda enabled, color, opacity: backgrounds.append((enabled, color.name()))
+    )
+    panel.color_changed.connect(lambda color: colors.append(color.name()))
+    try:
+        panel.background_opacity = 120
+        panel._apply_background_preset("#000000", "#FFFFFF")
+
+        assert panel.background_enabled
+        assert panel.background_btn.isChecked()
+        assert panel.background_color.name() == "#000000"
+        assert panel.current_color.name() == "#ffffff"
+        assert panel.background_opacity == 120, "预设不该改写用户调好的不透明度"
+        assert backgrounds[-1] == (True, "#000000")
+        assert colors[-1] == "#ffffff"
+    finally:
+        panel.deleteLater()
+
+
+def test_background_popup_offers_the_declared_style_swatches(qapp):
+    from ui.text_settings_panel import BACKGROUND_PRESET_STYLES
+
+    panel = TextSettingsPanel()
+    try:
+        pairs = [(bg, fg) for _button, bg, fg, _tip in panel._background_preset_buttons]
+        assert pairs == [(bg, fg) for bg, fg, _tip in BACKGROUND_PRESET_STYLES]
+        # 用户点名的四套搭配都要在
+        assert ("#FFFFFF", "#000000") in pairs
+        assert ("#FFFFFF", "#FF0000") in pairs
+        assert ("#000000", "#FFFFFF") in pairs
+        assert ("#000000", "#FF0000") in pairs
+    finally:
+        panel.deleteLater()
+
+
+def test_text_background_defaults_to_partly_transparent(qapp):
+    """底色默认约 70% 不透明：全不透明的纯色底太抢眼。"""
+    from settings.tool_settings import ToolSettingsManager
+
+    default = ToolSettingsManager.DEFAULT_SETTINGS["text"]["background_opacity"]
+    assert 0.65 <= default / 255 <= 0.75
+
+
 @pytest.mark.parametrize("current_tool", ["text", "cursor", "eraser", "mosaic"])
 def test_ctrl_selects_any_editable_item_when_host_capability_is_enabled(qapp, current_tool):
     scene = QGraphicsScene()
@@ -620,6 +697,109 @@ def test_ctrl_click_permanently_switches_to_the_items_owner_tool(qapp):
         view.smart_edit_controller.clear_selection()
         assert host.toolbar.current_tool == "ellipse"
         assert host.toolbar.tool_buttons["ellipse"].isChecked()
+    finally:
+        view.close()
+        host.close()
+        scene.deleteLater()
+
+
+def test_plain_click_selects_a_foreign_item_and_switches_to_its_owner_tool(qapp):
+    """不按 Ctrl：任何工具下单击别的类型的标注，就能选中它并切到它的归属工具。"""
+    host = QWidget()
+    host.toolbar = Toolbar(host)
+    scene, view = _canvas(parent=host)
+    try:
+        scene.selection_model.initialize_confirmed_rect(QRectF(0, 0, 100, 80))
+        scene.activate_tool("text")
+        host.toolbar.select_tool("text")
+        ellipse = EllipseItem(QRectF(0, 0, 30, 20), QPen(QColor("green"), 4))
+        scene.addItem(ellipse)
+
+        _press(view, QPointF(2, 2))
+        # 按下只是挂起：这一下也可能是在文字工具下起笔
+        assert view.smart_edit_controller.selected_item is None
+        assert view.pending_annotation_select.active
+
+        _release(view, QPointF(2, 2))
+
+        assert view.smart_edit_controller.selected_item is ellipse
+        assert view.smart_edit_controller.current_tool_id == "ellipse"
+        assert scene.tool_controller.current_tool.id == "ellipse"
+        assert host.toolbar.tool_buttons["ellipse"].isChecked()
+        assert not view.pending_annotation_select.active
+    finally:
+        view.close()
+        host.close()
+        scene.deleteLater()
+
+
+def test_dragging_from_a_foreign_item_still_draws_with_the_current_tool(qapp):
+    """按下后真的拖起来，这一笔还是当前工具的——「拖拽照常绘制」不能被点选吃掉。"""
+    host = QWidget()
+    host.toolbar = Toolbar(host)
+    scene, view = _canvas(parent=host)
+    try:
+        scene.selection_model.initialize_confirmed_rect(QRectF(0, 0, 100, 80))
+        # 箭头工具选不中椭圆（一个是 SHAPE、一个是 ARROW），正是"任意工具点选"的场景
+        scene.activate_tool("arrow")
+        host.toolbar.select_tool("arrow")
+        ellipse = EllipseItem(QRectF(0, 0, 30, 20), QPen(QColor("green"), 4))
+        scene.addItem(ellipse)
+
+        _press(view, QPointF(2, 2))
+        assert view.pending_annotation_select.active, "前置条件：按下时挂起了点选"
+
+        _move(view, QPointF(60, 60))
+        _release(view, QPointF(60, 60))
+
+        arrows = [i for i in scene.items() if isinstance(i, ArrowItem)]
+        assert arrows, "在标注上面起笔拖拽没有画出箭头"
+        assert view.smart_edit_controller.selected_item is not ellipse
+        assert not view.pending_annotation_select.active
+    finally:
+        view.close()
+        host.close()
+        scene.deleteLater()
+
+
+def test_freehand_marks_and_exempt_tools_are_not_clickable(qapp):
+    """自由笔画、光标工具、橡皮擦都不参与"任意工具点选"。"""
+    scene = QGraphicsScene()
+    controller = SmartEditController(scene)
+    stroke = _stroke()
+
+    controller.current_tool_id = "text"
+    assert not controller.can_preview_item(stroke)
+
+    for tool in ("cursor", "eraser"):
+        controller.current_tool_id = tool
+        assert not controller.can_preview_item(
+            EllipseItem(QRectF(0, 0, 20, 20), QPen(QColor("red"), 4))
+        ), tool
+
+    controller.current_tool_id = "text"
+    assert controller.can_preview_item(
+        EllipseItem(QRectF(0, 0, 20, 20), QPen(QColor("red"), 4))
+    )
+
+
+def test_eraser_still_acts_on_the_item_under_the_cursor(qapp):
+    """橡皮擦按下要接着擦：不能被"单击选中"抢先接走。"""
+    host = QWidget()
+    host.toolbar = Toolbar(host)
+    scene, view = _canvas(parent=host)
+    try:
+        scene.selection_model.initialize_confirmed_rect(QRectF(0, 0, 100, 80))
+        scene.activate_tool("eraser")
+        host.toolbar.select_tool("eraser")
+        ellipse = EllipseItem(QRectF(0, 0, 30, 20), QPen(QColor("green"), 4))
+        scene.addItem(ellipse)
+
+        _press(view, QPointF(2, 2))
+
+        assert not view.pending_annotation_select.active
+        assert view.drawing.active
+        assert view.smart_edit_controller.selected_item is None
     finally:
         view.close()
         host.close()

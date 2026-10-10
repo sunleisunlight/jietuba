@@ -940,6 +940,10 @@ Replace it?</source>
         <source>Save to file</source>
         <translation>ファイルに保存</translation>
     </message>
+    <message>
+        <source>Continue annotating (annotation history)</source>
+        <translation>注釈を続ける（注釈履歴）</translation>
+    </message>
     
     <message>
         <source>GIF recording</source>
@@ -2646,6 +2650,26 @@ Replace it?</source>
         <translation>カスタム背景色</translation>
     </message>
     <message>
+        <source>White background, black text</source>
+        <translation>白背景に黒文字</translation>
+    </message>
+    <message>
+        <source>White background, red text</source>
+        <translation>白背景に赤文字</translation>
+    </message>
+    <message>
+        <source>Black background, white text</source>
+        <translation>黒背景に白文字</translation>
+    </message>
+    <message>
+        <source>Black background, red text</source>
+        <translation>黒背景に赤文字</translation>
+    </message>
+    <message>
+        <source>Yellow background, black text</source>
+        <translation>黄背景に黒文字</translation>
+    </message>
+    <message>
         <source>White</source>
         <translation>白</translation>
     </message>
@@ -3616,6 +3640,10 @@ SOFTWARE.</translation></message>
     <message>
         <source>Long screenshot</source>
         <translation>長スクリーンショット</translation>
+    </message>
+    <message>
+        <source>Annotation history</source>
+        <translation>注釈履歴</translation>
     </message>
     <message>
         <source>Save</source>
