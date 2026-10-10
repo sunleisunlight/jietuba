@@ -42,6 +42,17 @@ class SelectionItem(QGraphicsItem):
     # 手柄互相压住，也把选区里的内容盖没了。
     HANDLE_CROWDING_RATIO = 0.8
 
+    # 控制点之间那段边框本身的热区宽度（物理像素，场景坐标与屏幕 1:1）。
+    # 八个手柄只落在角点和边中点，选区一大，想抓边得先瞄准小圆点；边框外侧
+    # 是遮罩区、没有标注，多让几像素好抓；内侧是绘图区，只盖到描边内沿，
+    # 再多就会吞掉贴着边框的正常起笔。
+    EDGE_BAND_OUTER = 8
+
+    @property
+    def edge_band_inner(self) -> int:
+        """边框内侧热区：描边内沿再让 1px，至少 2px。"""
+        return max(2, self.border_width // 2 + 1)
+
     def __init__(self, model: SelectionModel):
         super().__init__()
         self.setZValue(15)
@@ -264,21 +275,28 @@ class SelectionItem(QGraphicsItem):
             
         # 选区已确认，根据悬停位置显示不同的调整光标
         handle = self._hit_test(event.pos())
-        cursor = Qt.CursorShape.ArrowCursor
-        
-        if handle == self.HANDLE_TOP_LEFT or handle == self.HANDLE_BOTTOM_RIGHT:
-            cursor = Qt.CursorShape.SizeFDiagCursor
-        elif handle == self.HANDLE_TOP_RIGHT or handle == self.HANDLE_BOTTOM_LEFT:
-            cursor = Qt.CursorShape.SizeBDiagCursor
-        elif handle == self.HANDLE_TOP or handle == self.HANDLE_BOTTOM:
-            cursor = Qt.CursorShape.SizeVerCursor
-        elif handle == self.HANDLE_LEFT or handle == self.HANDLE_RIGHT:
-            cursor = Qt.CursorShape.SizeHorCursor
-        elif handle == self.HANDLE_BODY:
-            cursor = Qt.CursorShape.SizeAllCursor
-            
-        self.setCursor(QCursor(cursor))
+        self.setCursor(self.cursor_for_handle(handle))
         super().hoverMoveEvent(event)
+
+    @classmethod
+    def cursor_for_handle(cls, handle: int) -> QCursor:
+        """每个手柄（含 HANDLE_BODY / HANDLE_NONE）对应的光标。
+
+        悬停反馈和 View 层边缘热区共用这一份，两处看到的方向必须一致。
+        """
+        if handle in (cls.HANDLE_TOP_LEFT, cls.HANDLE_BOTTOM_RIGHT):
+            shape = Qt.CursorShape.SizeFDiagCursor
+        elif handle in (cls.HANDLE_TOP_RIGHT, cls.HANDLE_BOTTOM_LEFT):
+            shape = Qt.CursorShape.SizeBDiagCursor
+        elif handle in (cls.HANDLE_TOP, cls.HANDLE_BOTTOM):
+            shape = Qt.CursorShape.SizeVerCursor
+        elif handle in (cls.HANDLE_LEFT, cls.HANDLE_RIGHT):
+            shape = Qt.CursorShape.SizeHorCursor
+        elif handle == cls.HANDLE_BODY:
+            shape = Qt.CursorShape.SizeAllCursor
+        else:
+            shape = Qt.CursorShape.ArrowCursor
+        return QCursor(shape)
 
     @safe_event
     def mousePressEvent(self, event):
@@ -304,27 +322,43 @@ class SelectionItem(QGraphicsItem):
         """鼠标移动：调整选区"""
         if self.active_handle == self.HANDLE_NONE:
             return
-            
-        current_pos = event.scenePos()
-        dx = current_pos.x() - self.start_pos.x()
-        dy = current_pos.y() - self.start_pos.y()
-        
-        new_rect = QRectF(self.start_rect)
-        
-        if self.active_handle == self.HANDLE_BODY:
-            new_rect.translate(dx, dy)
-        else:
-            if self.active_handle in [self.HANDLE_LEFT, self.HANDLE_TOP_LEFT, self.HANDLE_BOTTOM_LEFT]:
-                new_rect.setLeft(self.start_rect.left() + dx)
-            if self.active_handle in [self.HANDLE_RIGHT, self.HANDLE_TOP_RIGHT, self.HANDLE_BOTTOM_RIGHT]:
-                new_rect.setRight(self.start_rect.right() + dx)
-            if self.active_handle in [self.HANDLE_TOP, self.HANDLE_TOP_LEFT, self.HANDLE_TOP_RIGHT]:
-                new_rect.setTop(self.start_rect.top() + dy)
-            if self.active_handle in [self.HANDLE_BOTTOM, self.HANDLE_BOTTOM_LEFT, self.HANDLE_BOTTOM_RIGHT]:
-                new_rect.setBottom(self.start_rect.bottom() + dy)
-                
+
+        new_rect = self.resize_rect(
+            self.active_handle, self.start_rect, self.start_pos, event.scenePos()
+        )
         self._model.set_rect(new_rect.normalized())
         event.accept()
+
+    @staticmethod
+    def resize_rect(
+        handle: int, start_rect: QRectF, start_pos: QPointF, current_pos: QPointF
+    ) -> QRectF:
+        """按手柄方向，把 start_rect 从 start_pos 拖到 current_pos 后的矩形。
+
+        返回值未规范化（往左/往上拖时宽高为负），调用方负责 normalized()。
+        View 层接管边缘手势时复用同一份几何算法，两条路径不允许拉出不同的框。
+        """
+        dx = current_pos.x() - start_pos.x()
+        dy = current_pos.y() - start_pos.y()
+
+        new_rect = QRectF(start_rect)
+        if handle == SelectionItem.HANDLE_BODY:
+            new_rect.translate(dx, dy)
+            return new_rect
+
+        if handle in [SelectionItem.HANDLE_LEFT, SelectionItem.HANDLE_TOP_LEFT,
+                      SelectionItem.HANDLE_BOTTOM_LEFT]:
+            new_rect.setLeft(start_rect.left() + dx)
+        if handle in [SelectionItem.HANDLE_RIGHT, SelectionItem.HANDLE_TOP_RIGHT,
+                      SelectionItem.HANDLE_BOTTOM_RIGHT]:
+            new_rect.setRight(start_rect.right() + dx)
+        if handle in [SelectionItem.HANDLE_TOP, SelectionItem.HANDLE_TOP_LEFT,
+                      SelectionItem.HANDLE_TOP_RIGHT]:
+            new_rect.setTop(start_rect.top() + dy)
+        if handle in [SelectionItem.HANDLE_BOTTOM, SelectionItem.HANDLE_BOTTOM_LEFT,
+                      SelectionItem.HANDLE_BOTTOM_RIGHT]:
+            new_rect.setBottom(start_rect.bottom() + dy)
+        return new_rect
 
     @safe_event
     def mouseReleaseEvent(self, event):
@@ -350,6 +384,55 @@ class SelectionItem(QGraphicsItem):
         if rect.contains(pos):
             return self.HANDLE_BODY
             
+        return self.HANDLE_NONE
+
+    def edge_handle_at(self, scene_pos: QPointF) -> int:
+        """场景坐标下，这个点是否落在选区的边缘热区（8 个边/角）上。
+
+        与 ``_hit_test`` 的区别：手柄之间那段边框也算命中——选区一大，边框
+        比小圆点好找得多，整条边都该能直接拖。命中返回对应手柄 id；点在
+        选区内部（HANDLE_BODY）、热区之外、选区未确认、或位置上压着文字
+        图元时返回 HANDLE_NONE，把这一下让给后续流程（绘图 / 文字编辑）。
+        """
+        if self._model.is_empty() or not self._model.is_confirmed:
+            return self.HANDLE_NONE
+        # 文字压在边框上时让位于文字编辑，与本项原生鼠标路径同一条例外
+        if self._should_delegate_to_text(scene_pos):
+            return self.HANDLE_NONE
+
+        handle = self._hit_test(self.mapFromScene(scene_pos))
+        if handle not in (self.HANDLE_NONE, self.HANDLE_BODY):
+            return handle
+
+        rect = self._model.rect()
+        outer = self.EDGE_BAND_OUTER
+        inner = self.edge_band_inner
+        if not rect.adjusted(-outer, -outer, outer, outer).contains(scene_pos):
+            return self.HANDLE_NONE
+
+        # 内外不对称：外侧让出 outer，内侧只让 inner
+        near_left = rect.left() - outer <= scene_pos.x() <= rect.left() + inner
+        near_right = rect.right() - inner <= scene_pos.x() <= rect.right() + outer
+        near_top = rect.top() - outer <= scene_pos.y() <= rect.top() + inner
+        near_bottom = rect.bottom() - inner <= scene_pos.y() <= rect.bottom() + outer
+
+        # 角优先于边：角落一带斜向拖才顺手
+        if near_left and near_top:
+            return self.HANDLE_TOP_LEFT
+        if near_right and near_top:
+            return self.HANDLE_TOP_RIGHT
+        if near_left and near_bottom:
+            return self.HANDLE_BOTTOM_LEFT
+        if near_right and near_bottom:
+            return self.HANDLE_BOTTOM_RIGHT
+        if near_left:
+            return self.HANDLE_LEFT
+        if near_right:
+            return self.HANDLE_RIGHT
+        if near_top:
+            return self.HANDLE_TOP
+        if near_bottom:
+            return self.HANDLE_BOTTOM
         return self.HANDLE_NONE
 
     def _should_delegate_to_text(self, scene_pos: QPointF) -> bool:

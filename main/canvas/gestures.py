@@ -81,6 +81,49 @@ class SelectionDrag:
         view.canvas_scene.confirm_selection()
 
 
+class SelectionEdgeResize:
+    """选区确认后，抓住边缘/控制点调整选区大小——任何工具下都成立。
+
+    cursor 工具下这件事原本由 Qt 把事件直接派给 SelectionItem；绘图工具的按下
+    会直接起笔，边缘拖不动。于是 View 在命中边缘热区时自己接管这次手势
+    （判定见 SelectionItem.edge_handle_at），几何仍走 SelectionItem.resize_rect，
+    与原生路径是同一份算法。
+    """
+
+    def __init__(self, view):
+        self._view = view
+        self.active = False
+        self.handle = None
+        self.start_pos = QPointF()
+        self.start_rect = QRectF()
+
+    def begin(self, handle: int, scene_pos: QPointF):
+        view = self._view
+        self.active = True
+        self.handle = int(handle)
+        self.start_pos = QPointF(scene_pos)
+        self.start_rect = view.canvas_scene.selection_model.rect()
+        # 与 SelectionItem 原生按下同一条信号：隐藏控制点、收工具栏
+        view.canvas_scene.selection_model.start_dragging()
+
+    def perform(self, scene_pos: QPointF):
+        from canvas.items import SelectionItem
+
+        view = self._view
+        view._update_magnifier_overlay(scene_pos)
+        new_rect = SelectionItem.resize_rect(
+            self.handle, self.start_rect, self.start_pos, scene_pos
+        )
+        view.canvas_scene.selection_model.set_rect(new_rect.normalized())
+
+    def finish(self):
+        if not self.active:
+            return
+        self.active = False
+        self.handle = None
+        self._view.canvas_scene.selection_model.stop_dragging()
+
+
 class DrawingStroke:
     """用当前工具画一笔：按下起头、移动喂点、松手收尾。
 

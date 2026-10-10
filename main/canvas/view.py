@@ -16,6 +16,7 @@ from canvas.items import (
     TextItem,
     NoteItem,
     NumberItem,
+    SelectionItem,
 )
 from core import log_debug, log_info, log_warning, log_error, safe_event
 from core.logger import T
@@ -159,10 +160,12 @@ class CanvasView(QGraphicsView):
         # 两种由 View 全程接管的手势，各自管着自己那一摊状态（见 canvas/gestures.py）
         from canvas.gestures import (
             DrawingStroke, ManualItemDrag, NotePartDrag, PendingAnnotationSelect,
-            PendingTextEdit, SelectionDrag, TextEdgeDrag,
+            PendingTextEdit, SelectionDrag, SelectionEdgeResize, TextEdgeDrag,
         )
         self.drawing = DrawingStroke(self)
         self.selection_drag = SelectionDrag(self)
+        # 选区确认后抓边缘改大小，任何工具下都成立（见 canvas/gestures.py）
+        self.selection_edge_resize = SelectionEdgeResize(self)
         self.text_drag = TextEdgeDrag(self)
         self.item_drag = ManualItemDrag(self)
         self.pending_text_edit = PendingTextEdit(self)
@@ -1037,6 +1040,15 @@ class CanvasView(QGraphicsView):
                 double_click_candidate = None
 
             # 步骤1：优先检查控制点拖拽（如果已选中图元）
+            # 但选区边缘热区比任何标注都优先：精准压在边框上时，用户要的是
+            # 调整截图区域，不是起笔画图、也不是选中压在边上的标注。
+            edge_handle = self._selection_edge_handle(scene_pos)
+            if edge_handle != SelectionItem.HANDLE_NONE:
+                log_debug(T("抓住选区边缘，调整选区大小"), "CanvasView")
+                self.selection_edge_resize.begin(edge_handle, scene_pos)
+                event.accept()
+                return
+
             edit_handled = self.smart_edit_controller.handle_edit_press(
                 scene_pos, event.pos(), event.button(), event.modifiers()
             )
@@ -1267,6 +1279,31 @@ class CanvasView(QGraphicsView):
 
     def invalidate_double_click_candidate(self):
         self._double_click_candidate = None
+
+    def _selection_edge_handle(self, scene_pos: QPointF) -> int:
+        """这个点是否压在选区边缘热区上；命中返回手柄 id，否则 HANDLE_NONE。
+
+        选区跨会话重建时 item 也会换，每次都从场景现取，不缓存引用。
+        热区上若还压着可操作的标注，让位于标注——与 cursor 工具下
+        handle_press 先于 Qt 事件分发的既有顺序一致：贴着截图边框画的
+        标注照常能点选，橡皮擦在边缘上照常擦，绘图工具也能从边上起笔。
+        这里不用 preview_item_at：cursor / 橡皮擦整支工具豁免悬停预览，
+        但它们在标注上的按下同样不该被改成拖选区。
+        """
+        scene = self.canvas_scene
+        if scene is None or not scene.selection_model.is_confirmed:
+            return SelectionItem.HANDLE_NONE
+        item = getattr(scene, "selection_item", None)
+        if item is None:
+            return SelectionItem.HANDLE_NONE
+        handle = item.edge_handle_at(scene_pos)
+        if handle == SelectionItem.HANDLE_NONE:
+            return SelectionItem.HANDLE_NONE
+        drawables = self.smart_edit_controller._pick_drawable_items(
+            scene.items(scene_pos))
+        if drawables:
+            return SelectionItem.HANDLE_NONE
+        return handle
     
     @safe_event
     def mouseMoveEvent(self, event):
@@ -1317,6 +1354,15 @@ class CanvasView(QGraphicsView):
         if self.text_drag.active:
             self._handle_text_drag_move(scene_pos)
             return
+
+        # ====================================================================
+        # 状态3.5：拖拽选区边缘（任何工具下抓住边框都能改选区大小）
+        # ====================================================================
+        if self.selection_edge_resize.active:
+            self.selection_edge_resize.perform(scene_pos)
+            self.setCursor(SelectionItem.cursor_for_handle(
+                self.selection_edge_resize.handle))
+            return
         
         # ====================================================================
         # 状态4：选区已确认 - 编辑模式（智能编辑、悬停、拖拽图元）
@@ -1354,6 +1400,15 @@ class CanvasView(QGraphicsView):
         is_left_pressed = bool(event.buttons() & Qt.MouseButton.LeftButton)
         if self._is_text_editing() and not is_left_pressed:
             self.text_drag.update_hover(scene_pos)
+
+        # 选区边缘热区的悬停反馈：任何工具下压在边框上都显示对应调整光标，
+        # 按下那一刻由边缘手势接管（见 mousePressEvent 步骤1）。
+        if not is_left_pressed:
+            edge_handle = self._selection_edge_handle(scene_pos)
+            if edge_handle != SelectionItem.HANDLE_NONE:
+                self.setCursor(SelectionItem.cursor_for_handle(edge_handle))
+                super().mouseMoveEvent(event)
+                return
 
         # 向下命中的兼容图元由 View 全程拥有这次手势，优先于顶层图元
         # 的控制点/hover 分发。
@@ -1548,6 +1603,11 @@ class CanvasView(QGraphicsView):
 
         if self.text_drag.active:
             self.text_drag.end()
+            return
+
+        if self.selection_edge_resize.active:
+            self.selection_edge_resize.finish()
+            event.accept()
             return
 
         if self.selection_drag.active:

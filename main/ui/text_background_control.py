@@ -224,8 +224,8 @@ class TextBackgroundControl(QObject):
         opacity_row.addWidget(self._opacity_label)
         layout.addLayout(opacity_row)
 
-        presets = QHBoxLayout()
-        presets.addStretch()
+        # 风格预设按钮先建好不挂布局：attach_preset_swatches() 会把它们摆上
+        # 面板一级颜色行，不用悬停 BG 弹层就能一键套"底色 + 文字色"。
         self.preset_swatches = []
         for background_hex, text_hex, tip in BACKGROUND_PRESET_STYLES:
             swatch = background_swatch_button(
@@ -235,12 +235,18 @@ class TextBackgroundControl(QObject):
                 lambda _checked=False, bg=background_hex, fg=text_hex:
                     self.apply_preset(bg, fg)
             )
-            presets.addWidget(swatch)
             self.preset_swatches.append((swatch, background_hex, text_hex, tip))
-        presets.addStretch()
-        layout.addLayout(presets)
 
         self._fit_popup_width()
+
+    def attach_preset_swatches(self, row_layout):
+        """把 5 个风格预设色块挂到面板一级布局的颜色行上。
+
+        只挂一次：按钮进入外部布局时 Qt 自动 reparent 到面板，BG 悬停弹层里
+        从此只有底色和不透明度两件事。
+        """
+        for swatch, _background_hex, _text_hex, _tip in self.preset_swatches:
+            row_layout.addWidget(swatch)
 
     def _fit_popup_width(self):
         """让顶层弹层按内容收口，而不是被 QWidget 的 200px 默认宽度撑开。"""

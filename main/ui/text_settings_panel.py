@@ -418,6 +418,15 @@ class TextSettingsPanel(QWidget):
             layout.addWidget(btn)
             self._preset_buttons.append((btn, color_str))
 
+        # 文字底色的 5 个风格预设直接放颜色行（"白底黑字"这类搭配一键套用）；
+        # 底色和不透明度的细调仍收在 BG 的悬停弹层里。
+        line_bg = QFrame()
+        line_bg.setObjectName("separator")
+        line_bg.setFrameShape(QFrame.Shape.VLine)
+        line_bg.setFixedWidth(1)
+        layout.addWidget(line_bg)
+        self._background.attach_preset_swatches(layout)
+
         layout.addStretch()
 
         # 弹出层里按比例算尺寸的控件，改比例时按这些清单重算（底色弹层归共用控件管）

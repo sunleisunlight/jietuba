@@ -207,6 +207,14 @@ class NoteSettingsPanel(QWidget):
             layout.addWidget(btn)
             self._preset_buttons.append((btn, color_str))
 
+        # 文字底色的 5 个风格预设直接放颜色行（"白底黑字"这类搭配一键套用）；
+        # 底色和不透明度的细调仍收在 BG 的悬停弹层里。
+        self._background = TextBackgroundControl(self)
+        self._background.changed.connect(self._on_background_changed)
+        self._background.text_color_requested.connect(self._on_text_color_requested)
+        layout.addWidget(self._separator())
+        self._background.attach_preset_swatches(layout)
+
         layout.addWidget(self._separator())
 
         # === 2. 线宽 + 透明度 ===
@@ -251,12 +259,8 @@ class NoteSettingsPanel(QWidget):
         self.font_spin.valueChanged.connect(self._on_font_size_changed)
         layout.addWidget(self.font_spin)
 
-        # === 5. 文字底色 ===
-        # 备注的正文就是一段普通文字，底色能力和文字工具完全一样，所以直接用同一个
-        # 控件（开关 + 悬停弹层：颜色 / 不透明度 / 风格预设），不在这里再写一份弹层。
-        self._background = TextBackgroundControl(self)
-        self._background.changed.connect(self._on_background_changed)
-        self._background.text_color_requested.connect(self._on_text_color_requested)
+        # === 5. 文字底色开关 ===
+        # 风格预设已挪到颜色行；这个开关 + 悬停弹层（底色 / 不透明度）仍留在这里。
         layout.addWidget(self._background.toggle_btn)
 
         layout.addStretch()
