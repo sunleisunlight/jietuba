@@ -1353,6 +1353,30 @@ Replace it?</source>
         <translation>注釈を続ける (2)</translation>
     </message>
     <message>
+        <source>Continue Last Annotating</source>
+        <translation>直前の画像の注釈を続ける</translation>
+    </message>
+    <message>
+        <source>Continue Last Annotating (2)</source>
+        <translation>直前の画像の注釈を続ける (2)</translation>
+    </message>
+    <message>
+        <source>No screenshot history to continue yet.</source>
+        <translation>続けて注釈できるスクリーンショット履歴がまだありません。</translation>
+    </message>
+    <message>
+        <source>The source image of this history is missing and cannot be continued.</source>
+        <translation>この履歴の元画像が見つからないため、注釈を続けられません。</translation>
+    </message>
+    <message>
+        <source>The source image or project state of this history is corrupted.</source>
+        <translation>この履歴の元画像またはプロジェクト状態が壊れているため、注釈を続けられません。</translation>
+    </message>
+    <message>
+        <source>This history record no longer exists.</source>
+        <translation>この履歴は存在しないか破損しています。</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>クリップボード (2)</translation>
     </message>

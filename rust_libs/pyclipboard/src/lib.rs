@@ -1237,9 +1237,13 @@ impl PyClipboardManager {
     /// 
     /// Args:
     ///     id: 要移动的项 ID
-    ///     before_id: 它前面的项 ID（None = 移到最前）
-    ///     after_id: 它后面的项 ID（None = 移到最后）
-    /// 
+    ///     before_id: 视觉上方的邻居 ID（None = 移到最前）
+    ///     after_id: 视觉下方的邻居 ID（None = 移到最后）
+    ///
+    /// 排序方向由该项的 group_id 决定：自建分组内容按 item_order ASC 展示；
+    /// 默认历史视图（group_id IS NULL）按 is_pinned DESC, item_order DESC 展示，
+    /// 且不允许跨越置顶/非置顶分区（跨区返回错误）。
+    ///
     /// Example:
     ///     # 将 item_3 移到 item_1 和 item_2 之间
     ///     manager.move_item_between(3, before_id=1, after_id=2)

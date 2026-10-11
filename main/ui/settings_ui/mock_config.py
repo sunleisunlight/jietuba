@@ -18,8 +18,10 @@ APP_DEFAULT_SETTINGS = {
     "pin_clipboard_hotkey_2": "",
     "translation_hotkey": "",
     "translation_hotkey_2": "",
-    "continue_annotate_hotkey": "ctrl+shift+h",
+    "continue_annotate_hotkey": "ctrl+shift+g",
     "continue_annotate_hotkey_2": "",
+    "continue_last_annotate_hotkey": "ctrl+shift+h",
+    "continue_last_annotate_hotkey_2": "",
     "double_click_copy_close": True,
     "cross_tool_selection": True,
     "text_always_on_top": True,
@@ -266,6 +268,10 @@ class MockConfig:
     def set_continue_annotate_hotkey(self, v): pass
     def get_continue_annotate_hotkey_2(self): return ""
     def set_continue_annotate_hotkey_2(self, v): pass
+    def get_continue_last_annotate_hotkey(self): return APP_DEFAULT_SETTINGS["continue_last_annotate_hotkey"]
+    def set_continue_last_annotate_hotkey(self, v): pass
+    def get_continue_last_annotate_hotkey_2(self): return ""
+    def set_continue_last_annotate_hotkey_2(self, v): pass
     def get_clipboard_enabled(self): return True
     def set_clipboard_enabled(self, v): pass
     def get_clipboard_auto_paste(self): return False

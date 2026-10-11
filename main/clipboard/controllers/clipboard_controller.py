@@ -767,6 +767,36 @@ class ClipboardController(QObject):
             return True
         return False
 
+    def can_reorder_current_view(self) -> bool:
+        """当前视图是否允许鼠标拖拽排序。
+
+        只有"全部历史"原视图可以：自建分组有自己的 ASC 排序（在管理窗口里拖），
+        内置类型分组 / 搜索 / 类型筛选 / 时间筛选都是数据库过滤出来的局部视图，
+        在里面算出的前后邻居不代表全局顺序，落库会把别的条目搞乱。
+        """
+        return (
+            self.current_group_id is None
+            and not self._search_text
+            and not self._content_type
+            and not self._time_range
+        )
+
+    def reorder_history_item(self, item_id: int,
+                             before_id: Optional[int],
+                             after_id: Optional[int]) -> bool:
+        """默认历史视图内的拖拽排序（DESC：before 是视觉上方邻居）。
+
+        成功后重载列表；失败（包括跨越置顶分区）返回 False，由界面回弹出的行。
+        """
+        if not self.can_reorder_current_view():
+            return False
+        if not self.manager.move_item_between(
+            item_id, before_id=before_id, after_id=after_id
+        ):
+            return False
+        self.load_history()
+        return True
+
     def open_manage_dialog_for_group(self, group_id: int,
                                      group_added_callback=None,
                                      data_changed_callback=None):

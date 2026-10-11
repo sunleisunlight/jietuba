@@ -41,6 +41,7 @@ from ..theme.themes import Theme, get_theme_manager
 from ..mixins.frameless_mixin import FramelessMixin
 from ..dialogs.manage_dialog import ManageDialog, get_manage_dialog
 from ..menus.item_context_menu import ClipboardItemContextMenu
+from ..widgets.draggable_list_widget import DraggableListWidget
 from ..widgets.group_bar import GroupBar
 from ..widgets.item_delegate import ClipboardItemDelegate, ROLE_ITEM_DATA, ROLE_ITEM_ID
 from ..widgets.preview_popup import PreviewPopup
@@ -409,7 +410,10 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.left_layout.setContentsMargins(0, 0, 0, 0)
         self.left_layout.setSpacing(0)
 
-        self.list_widget = QListWidget()
+        # 主历史列表：默认历史视图下允许鼠标拖拽上下排序（见 _on_items_reordered）
+        self.list_widget = DraggableListWidget(lock_first_row=False)
+        self.list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.list_widget.setStyleSheet(
             """
             QListWidget {
@@ -465,6 +469,8 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.selection_manager.request_group_switch.connect(self._on_top_group_switch)
 
         self.list_widget.itemSelectionChanged.connect(self._on_selection_changed)
+        self.list_widget.model().rowsMoved.connect(self._on_items_reordered)
+        self._update_drag_drop_mode()
 
         scrollbar = self.list_widget.verticalScrollBar()
         scrollbar.valueChanged.connect(self._on_scroll)
@@ -790,6 +796,39 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.list_widget.setUpdatesEnabled(True)
         self.list_widget.scrollToTop()
         self.list_widget.viewport().update()
+        self._update_drag_drop_mode()
+
+    def _update_drag_drop_mode(self):
+        """只有「全部历史」原视图允许拖拽排序，其余视图直接关掉拖拽。"""
+        enabled = self.controller.can_reorder_current_view()
+        self.list_widget.setAcceptDrops(enabled)
+        self.list_widget.setDragEnabled(enabled)
+        if enabled:
+            self.list_widget.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        else:
+            self.list_widget.setDragDropMode(QListWidget.DragDropMode.NoDragDrop)
+
+    def _row_item_id(self, row: int):
+        if 0 <= row < self.list_widget.count():
+            return self.list_widget.item(row).data(ROLE_ITEM_ID)
+        return None
+
+    def _on_items_reordered(self, *args):
+        """鼠标拖拽落下后：按拖动行的新邻居落库（DESC：上邻是 before）。"""
+        if not self.controller.can_reorder_current_view():
+            self._refresh_list()
+            return
+        row = self.list_widget.currentRow()
+        if row < 0:
+            return
+        item_id = self.list_widget.item(row).data(ROLE_ITEM_ID)
+        if item_id is None:
+            return
+        if not self.controller.reorder_history_item(
+            item_id, self._row_item_id(row - 1), self._row_item_id(row + 1)
+        ):
+            # 落库被拒（如跨越置顶分区）：Qt 已把行搬走，按数据库真实顺序回弹
+            self._refresh_list()
 
     def _on_load_completed(self):
         QTimer.singleShot(0, self._check_and_load_more_if_needed)
@@ -943,6 +982,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
     def _on_group_switched(self, group_id):
         self.group_bar.switch_to_group(group_id)
         self._sync_type_filter_ui()
+        self._update_drag_drop_mode()
         is_quick_launch = False
         if isinstance(group_id, int):
             groups = self.controller.manager.get_groups()

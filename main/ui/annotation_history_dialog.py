@@ -15,7 +15,7 @@ import os
 from collections import OrderedDict
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
@@ -433,6 +433,15 @@ class AnnotationHistoryDialog(QDialog):
         root.addWidget(self._empty_label, 1)
 
         self._scroll.verticalScrollBar().valueChanged.connect(self._on_scrolled)
+        # viewport 宽度变化（窗口首次显示、拖动缩放、滚动条出现/消失）都要重排。
+        # 不能只靠 dialog 的 resizeEvent：窗口以最终尺寸 exec() 显示时不会触发
+        # resizeEvent，而 __init__ 里 reload() 时 viewport 还没布局完，列数算出来
+        # 恒为 1，卡片就永远单列、右边全空。
+        self._scroll.viewport().installEventFilter(self)
+        self._relayout_timer = QTimer(self)
+        self._relayout_timer.setSingleShot(True)
+        self._relayout_timer.setInterval(30)
+        self._relayout_timer.timeout.connect(lambda: self._relayout_grid(force=True))
 
         # 信号在所有控件都就位之后再接：currentItemChanged 一旦触发就会走
         # reload()，而那需要卡片网格与空状态标签都已经存在。
@@ -609,6 +618,18 @@ class AnnotationHistoryDialog(QDialog):
         log_debug(T("已删除历史记录: {history_id}", history_id=history_id), "AnnotationHistory")
 
     # ==================================================================
+
+    def eventFilter(self, obj, event):
+        # viewport 尺寸变化（滚动条出现/消失、窗口缩放）→ 防抖重排
+        if obj is self._scroll.viewport() and event.type() == event.Type.Resize:
+            self._relayout_timer.start()
+        return super().eventFilter(obj, event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 首次显示时 viewport 才有真实宽度；此时强制按真实宽度重排一次，
+        # 覆盖 __init__ 里 reload() 算出单列、而 exec() 又不触发 resize 的情况。
+        QTimer.singleShot(0, lambda: self._relayout_grid(force=True))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

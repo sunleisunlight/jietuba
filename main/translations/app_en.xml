@@ -1278,6 +1278,12 @@ Replace it?</translation>
     <message><source>Translation (2)</source><translation>Translation (2)</translation></message>
     <message><source>Continue Annotating</source><translation>Continue Annotating</translation></message>
     <message><source>Continue Annotating (2)</source><translation>Continue Annotating (2)</translation></message>
+    <message><source>Continue Last Annotating</source><translation>Continue Last Annotating</translation></message>
+    <message><source>Continue Last Annotating (2)</source><translation>Continue Last Annotating (2)</translation></message>
+    <message><source>No screenshot history to continue yet.</source><translation>No screenshot history to continue yet.</translation></message>
+    <message><source>The source image of this history is missing and cannot be continued.</source><translation>The source image of this history is missing and cannot be continued.</translation></message>
+    <message><source>The source image or project state of this history is corrupted.</source><translation>The source image or project state of this history is corrupted.</translation></message>
+    <message><source>This history record no longer exists.</source><translation>This history record no longer exists.</translation></message>
     <message><source>Clipboard (2)</source><translation>Clipboard (2)</translation></message>
     <message><source>Pin Clipboard Image</source><translation>Create Pin Image</translation></message>
     <message><source>Pin Clipboard Image (2)</source><translation>Create Pin Image (2)</translation></message>

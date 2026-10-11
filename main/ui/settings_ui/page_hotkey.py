@@ -61,6 +61,8 @@ GLOBAL_HOTKEY_EDIT_ATTRS = (
     "pin_clipboard_hotkey_edit_2",
     "continue_annotate_hotkey_edit",
     "continue_annotate_hotkey_edit_2",
+    "continue_last_annotate_hotkey_edit",
+    "continue_last_annotate_hotkey_edit_2",
 )
 
 
@@ -294,6 +296,44 @@ def create_hotkey_page(dialog) -> QWidget:
     ca_h.addLayout(ca_v)
     ca_card.setFixedHeight(dialog_scaled(80))
     grp_global.addSettingCard(ca_card)
+
+    # 继续标注上一张热键（主 + 备用）：直接载入最新一条历史进入编辑器
+    cl_card = WhiteCard(grp_global)
+    cl_h = QHBoxLayout(cl_card)
+    cl_h.setContentsMargins(dialog_scaled(20), dialog_scaled(8), dialog_scaled(20), dialog_scaled(8))
+    cl_h.setSpacing(dialog_scaled(12))
+
+    cl_lbl = QLabel(dialog.tr("Continue Last Annotating"), cl_card)
+    apply_theme_text_style(cl_lbl, 15)
+    cl_h.addWidget(cl_lbl)
+    cl_h.addStretch()
+
+    cl_v = QVBoxLayout()
+    cl_v.setSpacing(dialog_scaled(5))
+    dialog.continue_last_annotate_hotkey_edit = HotkeyEdit()
+    dialog.continue_last_annotate_hotkey_edit.setText(
+        display_hotkey_str(dialog.config_manager.get_continue_last_annotate_hotkey())
+    )
+    dialog.continue_last_annotate_hotkey_edit.setPlaceholderText(
+        dialog.tr("e.g.: ctrl+shift+a")
+    )
+    dialog.continue_last_annotate_hotkey_edit.setFixedWidth(dialog_scaled(200))
+    dialog.continue_last_annotate_hotkey_edit.setStyleSheet(input_style)
+    cl_v.addWidget(dialog.continue_last_annotate_hotkey_edit)
+
+    dialog.continue_last_annotate_hotkey_edit_2 = HotkeyEdit()
+    dialog.continue_last_annotate_hotkey_edit_2.setText(
+        display_hotkey_str(dialog.config_manager.get_continue_last_annotate_hotkey_2())
+    )
+    dialog.continue_last_annotate_hotkey_edit_2.setPlaceholderText(
+        dialog.tr("e.g.: ctrl+shift+a")
+    )
+    dialog.continue_last_annotate_hotkey_edit_2.setFixedWidth(dialog_scaled(200))
+    dialog.continue_last_annotate_hotkey_edit_2.setStyleSheet(input_style)
+    cl_v.addWidget(dialog.continue_last_annotate_hotkey_edit_2)
+    cl_h.addLayout(cl_v)
+    cl_card.setFixedHeight(dialog_scaled(80))
+    grp_global.addSettingCard(cl_card)
 
     # 全局热键统一判重。连接放在所有输入框创建之后，避免初始化过程中
     # 只看到半组控件；最后主动跑一次，以识别配置文件里遗留的旧冲突。

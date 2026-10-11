@@ -334,8 +334,8 @@ class MainApp(QObject):
                 log_warning(T("智能翻译热键注册失败: {translation_hotkey}", translation_hotkey=translation_hotkey), "Hotkey")
                 failed_hotkeys.append((label, translation_hotkey))
         
-        # 注册「继续标注」热键：任意程序里按下就起一个截图会话并打开标注历史。
-        # 默认占用 Ctrl+Shift+H；不想用就把设置里的这两个框清空。
+        # 注册「继续标注」热键：任意程序里按下只打开标注历史窗口，不抓当前屏幕。
+        # 默认占用 Ctrl+Shift+G；不想用就把设置里的这两个框清空。
         continue_annotate_hotkeys = (
             (self.config_manager.get_continue_annotate_hotkey(), self.tr("Continue Annotating")),
             (self.config_manager.get_continue_annotate_hotkey_2(), self.tr("Continue Annotating (2)")),
@@ -348,6 +348,21 @@ class MainApp(QObject):
             else:
                 log_warning(T("继续标注热键注册失败: {hotkey}", hotkey=continue_hotkey), "Hotkey")
                 failed_hotkeys.append((label, continue_hotkey))
+
+        # 注册「继续标注上一张」热键：不弹窗，直接把最新一条历史载入编辑器。
+        # 默认占用 Ctrl+Shift+H。
+        continue_last_hotkeys = (
+            (self.config_manager.get_continue_last_annotate_hotkey(), self.tr("Continue Last Annotating")),
+            (self.config_manager.get_continue_last_annotate_hotkey_2(), self.tr("Continue Last Annotating (2)")),
+        )
+        for continue_last_hotkey, label in continue_last_hotkeys:
+            if not continue_last_hotkey:
+                continue
+            if self.hotkey_system.register_hotkey(continue_last_hotkey, self.continue_last_annotation):
+                log_info(T("继续标注上一张热键已注册: {hotkey}", hotkey=continue_last_hotkey), "Hotkey")
+            else:
+                log_warning(T("继续标注上一张热键注册失败: {hotkey}", hotkey=continue_last_hotkey), "Hotkey")
+                failed_hotkeys.append((label, continue_last_hotkey))
 
         # 注册剪切板热键（如果剪切板功能启用）
         if self.config_manager.get_clipboard_enabled():
@@ -456,21 +471,133 @@ class MainApp(QObject):
         return True
             
     def continue_annotation(self):
-        """全局「继续标注」热键：起一个截图会话，并直接打开标注历史。
+        """全局「继续标注」热键（默认 Ctrl+Shift+G）：只打开标注历史窗口。
 
-        标注历史必须挂在截图窗口上（选历史 = 把过去的工程载入这个窗口继续编辑），
-        所以这里走的还是截图热键那条路，只是在窗口就绪后多推一步。
+        不再先抓当前屏幕、不弹全屏选区遮罩——用户点了某张卡片后，才把那张
+        历史的母片直接载入截图编辑器（见 _load_history_into_editor）。
         """
         window = self.screenshot_window
         if window is not None and getattr(window, "_session_active", False):
-            # 已经在一个截图会话里：直接用这个窗口开历史，不重启采集
+            # 已经在一个截图会话里：沿用会话内开窗逻辑（切换本会话正在编辑的工程）
             window.open_annotation_history()
             return
 
-        # 采集在后台线程里做，窗口要等采集完才存在，所以把"开历史"记在标志上，
-        # 由 _create_screenshot_window 在窗口就绪后补上。
-        self._pending_annotation_history = True
-        self.start_screenshot()
+        if self._activate_blocking_modal():
+            return
+
+        # 已经开着独立历史窗口就只提到最前，不叠第二个
+        existing = getattr(self, "_standalone_history_dialog", None)
+        if existing is not None:
+            try:
+                if existing.isVisible():
+                    existing.raise_()
+                    existing.activateWindow()
+                    return
+            except RuntimeError:
+                existing = None
+
+        from ui.annotation_history_dialog import AnnotationHistoryDialog
+        dialog = AnnotationHistoryDialog(None, current_history_id=None)
+        self._standalone_history_dialog = dialog
+        try:
+            dialog.exec()
+        except Exception as e:
+            log_exception(e, T("打开标注历史窗口"))
+        finally:
+            self._standalone_history_dialog = None
+
+        chosen = getattr(dialog, "chosen_history_id", None)
+        if chosen:
+            self._load_history_into_editor(chosen)
+
+    def continue_last_annotation(self):
+        """全局「继续标注上一张」热键（默认 Ctrl+Shift+H）：
+
+        不弹窗、不抓当前屏幕，直接把最新一条历史载入截图编辑器。
+        """
+        window = self.screenshot_window
+        if window is not None and getattr(window, "_session_active", False):
+            # 会话内：直接切到最新的另一条历史
+            window.continue_latest_history()
+            return
+
+        if self._activate_blocking_modal():
+            return
+
+        try:
+            from history import get_history_manager
+            records = get_history_manager().list_records(limit=1)
+        except Exception as e:
+            log_exception(e, T("读取最新历史"))
+            records = []
+        if not records:
+            show_warning_dialog(
+                None,
+                self.tr("Continue Annotating"),
+                self.tr("No screenshot history to continue yet."),
+            )
+            return
+        self._load_history_into_editor(records[0].id, record=records[0])
+
+    def _load_history_into_editor(self, history_id: str, record=None):
+        """把一条历史的母片 + 工程状态直接载入截图编辑器，全程不重新抓屏。
+
+        窗口 UI 壳存在就复用（prepare_history_session），否则带 history_payload
+        首次创建 ScreenshotWindow，省掉 CaptureService 那一整次屏幕采集。
+        """
+        from history import get_history_manager
+        manager = get_history_manager()
+        try:
+            if record is None:
+                record = manager.get_record(history_id)
+            if record is None:
+                show_warning_dialog(
+                    None, self.tr("Continue Annotating"),
+                    self.tr("This history record no longer exists."),
+                )
+                return
+            if not os.path.isfile(record.source_path):
+                show_warning_dialog(
+                    None, self.tr("Continue Annotating"),
+                    self.tr("The source image of this history is missing and cannot be continued."),
+                )
+                return
+            state = manager.load_state(history_id)
+            image = manager.load_source_image(history_id)
+            if state is None or image is None or image.isNull():
+                show_warning_dialog(
+                    None, self.tr("Continue Annotating"),
+                    self.tr("The source image or project state of this history is corrupted."),
+                )
+                return
+        except Exception as e:
+            log_exception(e, T("读取历史工程"))
+            return
+
+        from PySide6.QtCore import QRectF
+        rect = QRectF(float(record.virtual_x), float(record.virtual_y),
+                      float(record.virtual_width), float(record.virtual_height))
+        if rect.width() < 1.0 or rect.height() < 1.0:
+            rect = QRectF(0.0, 0.0, float(image.width()), float(image.height()))
+
+        # 已有活跃会话（理论上调用方已分流）：走窗口内部的切换路径
+        window = self.screenshot_window
+        if window is not None and getattr(window, "_session_active", False):
+            window._switch_to_history(history_id)
+            return
+
+        try:
+            if window is None:
+                from ui.screenshot_window import ScreenshotWindow
+                self.screenshot_window = ScreenshotWindow(
+                    self.config_manager,
+                    history_payload=(image, rect, state, history_id),
+                )
+            else:
+                window.prepare_history_session(image, rect, state, history_id)
+            log_info(T("从全局热键直接载入历史: {history_id}", history_id=history_id), "MainApp")
+        except Exception as e:
+            log_exception(e, T("载入历史工程"))
 
     def start_screenshot(self):
         """启动截图 - 管理截图窗口生命周期"""
@@ -618,11 +745,6 @@ class MainApp(QObject):
                 prefetched_rect=rect,
             )
 
-        # 「继续标注」热键攒下的那一跳：窗口到这一刻才算真的能开历史
-        if getattr(self, "_pending_annotation_history", False):
-            self._pending_annotation_history = False
-            self.screenshot_window.open_annotation_history()
-    
     def open_settings(self):
         """打开设置窗口"""
         if not self.settings_window:

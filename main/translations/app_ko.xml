@@ -1340,6 +1340,30 @@ Replace it?</source>
         <translation>주석 이어서 달기 (2)</translation>
     </message>
     <message>
+        <source>Continue Last Annotating</source>
+        <translation>직전 이미지 주석 이어서 달기</translation>
+    </message>
+    <message>
+        <source>Continue Last Annotating (2)</source>
+        <translation>직전 이미지 주석 이어서 달기 (2)</translation>
+    </message>
+    <message>
+        <source>No screenshot history to continue yet.</source>
+        <translation>이어서 주석을 달 스크린샷 기록이 아직 없습니다.</translation>
+    </message>
+    <message>
+        <source>The source image of this history is missing and cannot be continued.</source>
+        <translation>이 기록의 원본 이미지가 없어 주석을 이어달 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The source image or project state of this history is corrupted.</source>
+        <translation>이 기록의 원본 이미지 또는 프로젝트 상태가 손상되어 주석을 이어달 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>This history record no longer exists.</source>
+        <translation>이 기록이 존재하지 않거나 손상되었습니다.</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>클립보드 (2)</translation>
     </message>

@@ -130,6 +130,9 @@ _QUICK_SHORTCUT_MIGRATION = (
 # 数字快速操作预设的迁移版本号。跑过一次就不再跑，保证幂等。
 QUICK_SHORTCUT_SCHEMA_VERSION = 1
 
+# 「继续标注」键位拆分（H→继续上一张、G→打开历史窗口）的一次性迁移版本
+CONTINUE_ANNOTATE_HOTKEY_SCHEMA_VERSION = 1
+
 
 class ToolSettings:
     """单个工具的设置数据类"""
@@ -288,10 +291,13 @@ class ToolSettingsManager(QObject):
         "pin_clipboard_hotkey_2": "",              # 钉住剪贴板图片的备用快捷键
         "translation_hotkey": "",                  # 翻译主热键
         "translation_hotkey_2": "",                # 翻译备用热键
-        # 继续标注：任意程序里按下就起一个截图会话并直接打开标注历史。
+        # 继续标注：任意程序里按下只打开标注历史窗口（不再先抓屏），由用户选一张继续。
         # 与截图热键同属"截图类"全局热键，但各占一个键位、互不覆盖。
-        "continue_annotate_hotkey": "ctrl+shift+h",
+        "continue_annotate_hotkey": "ctrl+shift+g",
         "continue_annotate_hotkey_2": "",
+        # 继续标注上一张：直接载入最新一条历史进入截图编辑器，不弹历史窗口。
+        "continue_last_annotate_hotkey": "ctrl+shift+h",
+        "continue_last_annotate_hotkey_2": "",
         "global_hotkeys_disabled": False,           # 是否禁用全局热键
 
         # 应用内快捷键
@@ -479,6 +485,8 @@ class ToolSettingsManager(QObject):
         self._initialize_tools()
         # 老用户升上来的配置里还留着旧的字母默认值，这里一次性换成新的 1~9 预设
         self.migrate_quick_inapp_shortcuts()
+        # 「继续标注」键位语义拆分：H 改为「继续标注上一张」，开历史窗口改用 G
+        self.migrate_continue_annotate_hotkeys()
 
     @property
     def settings(self):
@@ -876,6 +884,30 @@ class ToolSettingsManager(QObject):
         """保存「继续标注」备用全局快捷键。"""
         self.qsettings.setValue("app/continue_annotate_hotkey_2", value)
 
+    def get_continue_last_annotate_hotkey(self) -> str:
+        """获取「继续标注上一张」全局快捷键。"""
+        return self.qsettings.value(
+            "app/continue_last_annotate_hotkey",
+            self.APP_DEFAULT_SETTINGS["continue_last_annotate_hotkey"],
+            type=str,
+        )
+
+    def set_continue_last_annotate_hotkey(self, value: str):
+        """保存「继续标注上一张」全局快捷键。"""
+        self.qsettings.setValue("app/continue_last_annotate_hotkey", value)
+
+    def get_continue_last_annotate_hotkey_2(self) -> str:
+        """获取「继续标注上一张」备用全局快捷键。"""
+        return self.qsettings.value(
+            "app/continue_last_annotate_hotkey_2",
+            self.APP_DEFAULT_SETTINGS["continue_last_annotate_hotkey_2"],
+            type=str,
+        )
+
+    def set_continue_last_annotate_hotkey_2(self, value: str):
+        """保存「继续标注上一张」备用全局快捷键。"""
+        self.qsettings.setValue("app/continue_last_annotate_hotkey_2", value)
+
     # ---------- 应用内快捷键 ----------
     def get_inapp_shortcut(self, key: str) -> str:
         """获取应用内快捷键 (key 示例: 'inapp_confirm')"""
@@ -930,6 +962,68 @@ class ToolSettingsManager(QObject):
         if changed:
             from core.logger import log_info, T
             log_info(T("应用内快捷键已迁移到新的数字预设"), "Settings")
+        return changed
+
+    def migrate_continue_annotate_hotkeys(self) -> bool:
+        """把旧的单个「继续标注」键位迁到新拆分的两条语义。
+
+        旧版 Ctrl+Shift+H = 打开标注历史窗口；新版：
+        - Ctrl+Shift+G = 打开历史窗口（只开窗，不抓屏）
+        - Ctrl+Shift+H = 继续标注上一张（直接载入最新历史）
+
+        只动「从来没自定义过」的配置：开窗口存的仍是旧默认 H 才改成 G（G 已被
+        别的全局热键占用则保留）；「继续上一张」从没配置过时才写入 H（H 已被占用
+        或开窗口仍占着 H 时显式置空，避免同键注册两次）。schema 版本号保证幂等。
+        """
+        version_key = "app/continue_annotate_hotkey_schema_version"
+        try:
+            if int(self.qsettings.value(version_key, 0)) >= CONTINUE_ANNOTATE_HOTKEY_SCHEMA_VERSION:
+                return False
+        except (TypeError, ValueError):
+            pass
+
+        def norm(value) -> str:
+            return str(value or "").strip().lower()
+
+        open_key = "app/continue_annotate_hotkey"
+        last_key = "app/continue_last_annotate_hotkey"
+        old_open = norm(self.qsettings.value(open_key, None))
+        last_raw = self.qsettings.value(last_key, None)
+
+        # 其他全局热键的生效值（主+备用），迁移不能制造重复绑定
+        occupied = set()
+        for getter in (
+            self.get_hotkey, self.get_hotkey_2,
+            self.get_clipboard_hotkey, self.get_clipboard_hotkey_2,
+            self.get_translation_hotkey, self.get_translation_hotkey_2,
+            self.get_pin_clipboard_hotkey, self.get_pin_clipboard_hotkey_2,
+            self.get_continue_annotate_hotkey_2,
+        ):
+            value = norm(getter())
+            if value:
+                occupied.add(value)
+
+        changed = False
+        new_open = old_open
+        if old_open == "ctrl+shift+h" and "ctrl+shift+g" not in occupied:
+            self.qsettings.setValue(open_key, "ctrl+shift+g")
+            new_open = "ctrl+shift+g"
+            changed = True
+
+        if last_raw is None:
+            if "ctrl+shift+h" not in occupied and new_open != "ctrl+shift+h":
+                self.qsettings.setValue(last_key, "ctrl+shift+h")
+                changed = True
+            elif new_open == "ctrl+shift+h":
+                # 开窗口仍占着 H（G 被占用没让出去）：新键显式置空，
+                # 否则默认值 H 会与开窗口同键注册两次
+                self.qsettings.setValue(last_key, "")
+                changed = True
+
+        self.qsettings.setValue(version_key, CONTINUE_ANNOTATE_HOTKEY_SCHEMA_VERSION)
+        if changed:
+            from core.logger import log_info, T
+            log_info(T("继续标注热键已迁移：G=打开历史窗口，H=继续上一张"), "Settings")
         return changed
 
     def get_inapp_cursor_move_mode(self) -> str:

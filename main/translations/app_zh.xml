@@ -1354,6 +1354,30 @@ Replace it?</source>
         <translation>继续标注 (2)</translation>
     </message>
     <message>
+        <source>Continue Last Annotating</source>
+        <translation>继续标注上一张</translation>
+    </message>
+    <message>
+        <source>Continue Last Annotating (2)</source>
+        <translation>继续标注上一张 (2)</translation>
+    </message>
+    <message>
+        <source>No screenshot history to continue yet.</source>
+        <translation>还没有可继续标注的截图历史。</translation>
+    </message>
+    <message>
+        <source>The source image of this history is missing and cannot be continued.</source>
+        <translation>这条历史的母片已丢失，无法继续标注。</translation>
+    </message>
+    <message>
+        <source>The source image or project state of this history is corrupted.</source>
+        <translation>这条历史的母片或工程状态已损坏，无法继续标注。</translation>
+    </message>
+    <message>
+        <source>This history record no longer exists.</source>
+        <translation>这条历史记录不存在或已损坏。</translation>
+    </message>
+    <message>
         <source>Clipboard (2)</source>
         <translation>剪贴板 (2)</translation>
     </message>

@@ -369,3 +369,61 @@ class TestToolSettingsManager:
         assert manager.get_translation_provider_config("google") == {
             "api_key": "google-key",
         }
+
+
+class TestContinueAnnotateHotkeyMigration:
+    """「继续标注」键位拆分迁移：G=打开历史窗口、H=继续上一张。"""
+
+    def _manager(self, tmp_path, name, values):
+        ini_path = str(tmp_path / name)
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        for key, value in values.items():
+            qs.setValue(key, value)
+        qs.sync()
+        return ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+
+    def test_legacy_default_h_moves_to_g_and_last_takes_h(self, qapp, tmp_path):
+        manager = self._manager(tmp_path, "legacy.ini", {
+            "app/continue_annotate_hotkey": "ctrl+shift+h",
+        })
+
+        assert manager.get_continue_annotate_hotkey() == "ctrl+shift+g"
+        assert manager.get_continue_last_annotate_hotkey() == "ctrl+shift+h"
+
+    def test_fresh_config_gets_new_defaults(self, qapp, tmp_path):
+        manager = self._manager(tmp_path, "fresh.ini", {})
+
+        assert manager.get_continue_annotate_hotkey() == "ctrl+shift+g"
+        assert manager.get_continue_last_annotate_hotkey() == "ctrl+shift+h"
+
+    def test_custom_open_hotkey_is_kept(self, qapp, tmp_path):
+        manager = self._manager(tmp_path, "custom.ini", {
+            "app/continue_annotate_hotkey": "ctrl+shift+x",
+        })
+
+        assert manager.get_continue_annotate_hotkey() == "ctrl+shift+x"
+        assert manager.get_continue_last_annotate_hotkey() == "ctrl+shift+h"
+
+    def test_g_occupied_keeps_h_on_open_and_empties_last(self, qapp, tmp_path):
+        # G 已被截图主热键占用：开窗口只能留在 H，新键显式置空避免同键注册两次
+        manager = self._manager(tmp_path, "occupied.ini", {
+            "app/continue_annotate_hotkey": "ctrl+shift+h",
+            "app/hotkey": "ctrl+shift+g",
+        })
+
+        assert manager.get_continue_annotate_hotkey() == "ctrl+shift+h"
+        assert manager.get_continue_last_annotate_hotkey() == ""
+
+    def test_migration_runs_only_once(self, qapp, tmp_path):
+        ini_path = str(tmp_path / "once.ini")
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        qs.setValue("app/continue_annotate_hotkey", "ctrl+shift+h")
+        qs.sync()
+
+        first = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert first.get_continue_annotate_hotkey() == "ctrl+shift+g"
+
+        # 迁移后用户手动改回 H，再次启动不能被覆盖
+        first.set_continue_annotate_hotkey("ctrl+shift+h")
+        second = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert second.get_continue_annotate_hotkey() == "ctrl+shift+h"

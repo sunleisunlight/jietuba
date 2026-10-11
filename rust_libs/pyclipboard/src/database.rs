@@ -629,11 +629,27 @@ impl Database {
         before_id: Option<i64>,
         after_id: Option<i64>,
     ) -> Result<(), String> {
-        self.move_item_between_impl(id, before_id, after_id, 0)
+        // 分组内容（ASC 排序）与默认历史视图 group_id IS NULL（DESC 排序、
+        // 还有置顶分区）的排序方向完全不同，按 group_id 分两条实现。
+        let group_id: Option<i64> = self.conn.query_row(
+            "SELECT group_id FROM clipboard WHERE id = ?",
+            params![id],
+            |row| row.get(0),
+        ).map_err(|e| format!("查询分组失败: {}", e))?;
+
+        match group_id {
+            Some(gid) => self.move_group_item_between_impl(gid, id, before_id, after_id, 0),
+            None => self.move_history_item_between_impl(id, before_id, after_id, 0),
+        }
     }
-    
-    /// 内部实现，带递归深度检查
-    fn move_item_between_impl(
+
+    /// 默认历史视图（group_id IS NULL）内的拖拽排序。
+    ///
+    /// 历史按 `is_pinned DESC, item_order DESC` 展示：置顶分区在最上方，
+    /// 同一分区内 item_order 越大越靠上——before_id 是视觉上方邻居（order 更大），
+    /// after_id 是视觉下方邻居（order 更小），与分组视图的 ASC 语义正好相反。
+    /// 不允许跨越置顶 / 非置顶分区拖动，跨区时返回错误让调用方回弹原位。
+    fn move_history_item_between_impl(
         &self,
         id: i64,
         before_id: Option<i64>,
@@ -644,18 +660,117 @@ impl Database {
         if depth > 5 {
             return Err("重新索引次数过多，可能存在问题".to_string());
         }
-        
+
+        let pinned: i64 = self.conn.query_row(
+            "SELECT is_pinned FROM clipboard WHERE id = ?",
+            params![id],
+            |row| row.get(0),
+        ).map_err(|e| format!("查询置顶状态失败: {}", e))?;
+
+        // 两个邻居必须和被拖动项在同一分区，否则就是跨越置顶边界
+        for neighbor in before_id.iter().chain(after_id.iter()) {
+            let neighbor_pinned: i64 = self.conn.query_row(
+                "SELECT is_pinned FROM clipboard WHERE id = ?",
+                params![neighbor],
+                |row| row.get(0),
+            ).map_err(|e| format!("查询邻居项失败: {}", e))?;
+            if neighbor_pinned != pinned {
+                return Err("不能跨越置顶区域排序".to_string());
+            }
+        }
+
+        // 视觉上方邻居的 item_order 应当更大
+        let upper_order = if let Some(bid) = before_id {
+            self.conn.query_row(
+                "SELECT item_order FROM clipboard WHERE id = ?",
+                params![bid],
+                |row| row.get::<_, i64>(0),
+            ).map_err(|e| format!("查询上方项失败: {}", e))?
+        } else {
+            // 移到本分区最上方：比当前最大值再大 1000
+            self.conn.query_row(
+                "SELECT COALESCE(MAX(item_order), 0) + 1000 \
+                 FROM clipboard WHERE group_id IS NULL AND is_pinned = ?",
+                params![pinned],
+                |row| row.get::<_, i64>(0),
+            ).map_err(|e| format!("查询分区最大顺序失败: {}", e))?
+        };
+
+        // 视觉下方邻居的 item_order 应当更小
+        let lower_order = if let Some(aid) = after_id {
+            self.conn.query_row(
+                "SELECT item_order FROM clipboard WHERE id = ?",
+                params![aid],
+                |row| row.get::<_, i64>(0),
+            ).map_err(|e| format!("查询下方项失败: {}", e))?
+        } else {
+            // 移到本分区最下方：比当前最小值再小 1000
+            self.conn.query_row(
+                "SELECT COALESCE(MIN(item_order), 0) - 1000 \
+                 FROM clipboard WHERE group_id IS NULL AND is_pinned = ?",
+                params![pinned],
+                |row| row.get::<_, i64>(0),
+            ).map_err(|e| format!("查询分区最小顺序失败: {}", e))?
+        };
+
+        // 上下之间留不下新值 → 按当前显示顺序把该分区重排为稀疏值后重试
+        if upper_order <= lower_order || upper_order - lower_order < 10 {
+            self.reindex_history_partition(pinned)?;
+            return self.move_history_item_between_impl(id, before_id, after_id, depth + 1);
+        }
+
+        let new_order = (upper_order + lower_order) / 2;
+        self.conn.execute(
+            "UPDATE clipboard SET item_order = ?, updated_at = ? WHERE id = ?",
+            params![new_order, chrono::Local::now().timestamp(), id],
+        ).map_err(|e| format!("移动失败: {}", e))?;
+
+        Ok(())
+    }
+
+    /// 重新索引默认历史视图中某个置顶分区的 item_order
+    /// （按当前 DESC 显示顺序重新分配稀疏值，保持相对顺序不变）
+    fn reindex_history_partition(&self, pinned: i64) -> Result<(), String> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id FROM clipboard WHERE group_id IS NULL AND is_pinned = ? \
+             ORDER BY item_order DESC"
+        ).map_err(|e| format!("准备查询失败: {}", e))?;
+
+        let ids: Vec<i64> = stmt.query_map(params![pinned], |row| row.get(0))
+            .map_err(|e| format!("查询失败: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // DESC：显示在最上面的拿到最大值
+        for (index, id) in ids.iter().enumerate() {
+            let new_order = (ids.len() - index) as i64 * 1000;
+            self.conn.execute(
+                "UPDATE clipboard SET item_order = ? WHERE id = ?",
+                params![new_order, id],
+            ).map_err(|e| format!("重新索引分区失败: {}", e))?;
+        }
+
+        Ok(())
+    }
+
+    /// 自定义分组内容重排（ASC 排序）的内部实现，带递归深度检查
+    fn move_group_item_between_impl(
+        &self,
+        group_id: i64,
+        id: i64,
+        before_id: Option<i64>,
+        after_id: Option<i64>,
+        depth: i32,
+    ) -> Result<(), String> {
+        // 防止无限递归
+        if depth > 5 {
+            return Err("重新索引次数过多，可能存在问题".to_string());
+        }
+
         // 注意：分组内容使用 ASC 排序（小的在上面）
         // before_id 是界面上方的项，order 更小
         // after_id 是界面下方的项，order 更大
-        
-        // 获取该项的 group_id（用于查询范围）
-        let group_id: Option<i64> = self.conn.query_row(
-            "SELECT group_id FROM clipboard WHERE id = ?",
-            params![id],
-            |row| row.get(0)
-        ).unwrap_or(None);
-        
+
         // 获取上方项的 item_order（应该更小）
         let upper_order = if let Some(bid) = before_id {
             self.conn.query_row(
@@ -671,7 +786,7 @@ impl Database {
                 |row| row.get::<_, i64>(0)
             ).unwrap_or(0)
         };
-        
+
         // 获取下方项的 item_order（应该更大）
         let lower_order = if let Some(aid) = after_id {
             self.conn.query_row(
@@ -687,12 +802,12 @@ impl Database {
                 |row| row.get::<_, i64>(0)
             ).unwrap_or(1000)
         };
-        
+
         // 检查空间是否足够（lower 应该 > upper）
         if lower_order <= upper_order || lower_order - upper_order < 10 {
             // 重新索引该分组的内容
-            self.reindex_group_items(group_id.unwrap())?;
-            return self.move_item_between_impl(id, before_id, after_id, depth + 1);
+            self.reindex_group_items(group_id)?;
+            return self.move_group_item_between_impl(group_id, id, before_id, after_id, depth + 1);
         }
         
         // 计算新的 item_order（中间值）

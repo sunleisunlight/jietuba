@@ -302,7 +302,13 @@ class ScreenshotShortcutHandler(ShortcutHandler):
 
 
 class ScreenshotWindow(QWidget):
-    def __init__(self, config_manager=None, prefetched_image=None, prefetched_rect=None):
+    def __init__(self, config_manager=None, prefetched_image=None, prefetched_rect=None,
+                 history_payload=None):
+        """history_payload: (QImage, QRectF, state_dict, history_id)。
+
+        传入时表示这次不是实时截图，而是直接载入一条历史继续标注：不调用
+        CaptureService 抓屏，背景直接用历史母片，并还原选区与全部矢量标注。
+        """
         super().__init__()
         
         # 不设置 WA_DeleteOnClose —— 窗口复用，由 main_app 管理生命周期
@@ -332,8 +338,13 @@ class ScreenshotWindow(QWidget):
         _t0 = time.perf_counter()
         _timings = {}   # 收集各阶段耗时，最后统一输出
         
-        # 1. 获取屏幕截图：优先使用调用方预取的图像（已在后台线程截好），否则同步截图
-        if prefetched_image is not None and prefetched_rect is not None:
+        # 1. 获取屏幕截图：历史直入 > 调用方预取（后台线程截好）> 同步截图
+        if history_payload is not None:
+            payload_image, payload_rect, _payload_state, _payload_id = history_payload
+            self.original_image = payload_image
+            rect = payload_rect
+            _timings['截屏'] = 0.0  # 用历史母片，不抓屏
+        elif prefetched_image is not None and prefetched_rect is not None:
             self.original_image = prefetched_image
             rect = prefetched_rect
             _timings['截屏'] = 0.0  # 预取，主线程耗时为 0
@@ -454,7 +465,14 @@ class ScreenshotWindow(QWidget):
         QTimer.singleShot(50, self._safe_activate_and_focus)
 
         # 历史会话：立刻把完整虚拟桌面母片交给后台保存（不阻塞截图 UI）
-        self._attach_history_session(self._start_history_session(self.original_image, rect))
+        if history_payload is not None:
+            _payload_image, _payload_rect, payload_state, payload_id = history_payload
+            # 全局热键直接载入历史：还原选区与标注，以"已恢复"身份绑定该历史
+            self._restore_history_state(payload_state)
+            self._attach_history_session(payload_id, is_restored=True)
+            self._flush_history_state()
+        else:
+            self._attach_history_session(self._start_history_session(self.original_image, rect))
         
         # 初始状态：进入选区模式
         # CanvasView 默认处理鼠标按下进入选区
@@ -1057,6 +1075,27 @@ class ScreenshotWindow(QWidget):
         chosen = getattr(dialog, 'chosen_history_id', None)
         if chosen and chosen != self.history_id:
             self._switch_to_history(chosen)
+
+    def continue_latest_history(self):
+        """全局「继续标注上一张」：会话内直接切到最新的另一条历史。
+
+        最新一条就是当前会话自己时什么都不做（不弹窗）。
+        """
+        if self._is_closing:
+            return
+        try:
+            from history import get_history_manager
+            # 多取一条用于跳过"当前正在编辑的这一条"
+            records = get_history_manager().list_records(limit=2)
+        except Exception as e:
+            log_exception(e, T("读取最新历史"))
+            return
+        target = next((r for r in records if r.id != self.history_id), None)
+        if target is None:
+            log_debug(T("没有可切换的更新历史"), "ScreenshotWindow")
+            return
+        self._flush_history_state()
+        self._switch_to_history(target.id)
 
     def _switch_to_history(self, history_id):
         """从当前会话切换到另一条历史：先把 A 落盘销毁，再载入 B。"""

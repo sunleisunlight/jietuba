@@ -17,9 +17,15 @@ from ui.fluent_lite.theme import ACCENT
 class DraggableListWidget(QListWidget):
     """自定义列表控件，实现更好的拖拽视觉效果"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, lock_first_row: bool = True):
+        """
+        Args:
+            lock_first_row: 是否禁止把其他行拖到第一行。管理窗口的分组/内容列表
+                需要保留首行占位语义；剪贴板主历史视图没有这个限制，传 False。
+        """
         super().__init__(parent)
         self._drag_start_row = -1
+        self._lock_first_row = lock_first_row
 
     def startDrag(self, supportedActions):
         """重写拖拽开始事件，自定义拖拽样式"""
@@ -78,7 +84,7 @@ class DraggableListWidget(QListWidget):
         else:
             target_row = self.count()
 
-        if target_row == 0 and self._drag_start_row > 0:
+        if self._lock_first_row and target_row == 0 and self._drag_start_row > 0:
             event.ignore()
             return
 
@@ -113,7 +119,7 @@ class DraggableListWidget(QListWidget):
                 rect = self.visualItemRect(item)
 
                 if pos.y() < rect.center().y():
-                    if item_index > 0:
+                    if not self._lock_first_row or item_index > 0:
                         y = rect.top()
                         line_rect = rect
                 else:
