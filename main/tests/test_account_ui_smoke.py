@@ -115,6 +115,62 @@ class TestLoginDialog:
 
 
 # ============================================================================
+# 后端错误码 → 用户可执行的下一步
+# ============================================================================
+
+class TestAuthErrorMessages:
+    """每个账号错误码都要给出「我该点登录还是注册」的明确下一步。
+
+    回归：以前只映射了少数错误码，account_not_found /
+    product_registration_required / account_already_exists /
+    device_registration_already_used 全部落回兜底句「登录失败，请稍后重试」，
+    用户看不出原因也做不了补救。
+    """
+
+    def test_registration_failures_are_distinguishable(self):
+        from account.session import _human_error
+
+        expectations = {
+            "account_not_found": "注册账号",
+            "product_registration_required": "注册账号",
+            "account_already_exists": "登录",
+            "device_registration_already_used": "本机",
+            "security_pin_incorrect": "安全码",
+            "security_pin_setup_required": "安全码",
+            "device_limit_reached": "设备",
+            "network_unreachable": "网络",
+        }
+        messages = set()
+        for code, keyword in expectations.items():
+            message = _human_error(ApiError(code, status=400))
+            assert keyword in message, code
+            assert "登录失败，请稍后重试" not in message, code
+            messages.add(message)
+        # 每条错误码的文案必须不同，否则又回到「看不出该做什么」
+        assert len(messages) == len(expectations)
+
+    def test_unknown_code_and_http_error_fall_back(self):
+        from account.session import _human_error
+
+        assert _human_error(ApiError("brand_new_code")) == "登录失败，请稍后重试"
+        assert (
+            _human_error(ApiError("http_404", status=404))
+            == "积磊服务暂时不可用（404），请稍后重试"
+        )
+
+    def test_register_mode_hint_covers_existing_jilei_account(self, qapp):
+        dialog = LoginDialog()
+        dialog.switch_btn.click()
+        assert dialog._mode == LoginDialog.MODE_REGISTER
+        # 已有积磊账号的手机号必须知道「请输入原安全码」，否则会误以为要设新码
+        hint = dialog.hint_label.text()
+        assert "6-digit security code" in hint
+        assert "Existing Jilei account" in hint
+        dialog.deleteLater()
+        qapp.processEvents()
+
+
+# ============================================================================
 # Gate 对话框
 # ============================================================================
 

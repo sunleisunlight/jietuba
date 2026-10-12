@@ -3947,7 +3947,7 @@ Replace it?</source>
     <message><source>Security code</source><translation>セキュリティコード</translation></message>
     <message><source>Enter your 6-digit security code</source><translation>6桁のセキュリティコードを入力してください</translation></message>
     <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>セキュリティコードはSMS認証コードではなく、ご自身で設定した6桁の数字です。</translation></message>
-    <message><source>Set a 6-digit security code for your new account.</source><translation>新しいアカウント用に6桁のセキュリティコードを設定してください。</translation></message>
+    <message><source>New phone number: set a 6-digit security code. Existing Jilei account: enter your current security code.</source><translation>新しい電話番号は6桁のセキュリティコードを設定してください。既存のJileiアカウントは現在のセキュリティコードを入力してください。</translation></message>
     <message><source>Sign In</source><translation>ログイン</translation></message>
     <message><source>Create Account</source><translation>アカウント登録</translation></message>
     <message><source>Please wait…</source><translation>お待ちください…</translation></message>

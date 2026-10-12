@@ -3950,7 +3950,7 @@ Replace it?</source>
     <message><source>Security code</source><translation>安全码</translation></message>
     <message><source>Enter your 6-digit security code</source><translation>请输入 6 位安全码</translation></message>
     <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>安全码是你设置的 6 位数字，不是短信验证码。</translation></message>
-    <message><source>Set a 6-digit security code for your new account.</source><translation>请为新账号设置 6 位安全码。</translation></message>
+    <message><source>New phone number: set a 6-digit security code. Existing Jilei account: enter your current security code.</source><translation>新手机号请设置 6 位安全码；已有积磊账号请输入原安全码。</translation></message>
     <message><source>Sign In</source><translation>登录</translation></message>
     <message><source>Create Account</source><translation>注册</translation></message>
     <message><source>Please wait…</source><translation>请稍候…</translation></message>

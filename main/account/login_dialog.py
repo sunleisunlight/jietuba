@@ -144,6 +144,7 @@ class LoginDialog(QDialog):
 
         self.hint_label = CaptionLabel("", self)
         self.hint_label.setObjectName("accountHintLabel")
+        self.hint_label.setWordWrap(True)
         root.addWidget(self.hint_label)
 
         self.error_label = QLabel("", self)
@@ -212,7 +213,10 @@ class LoginDialog(QDialog):
             self.submit_btn.setText(self.tr("Create Account"))
             self.switch_btn.setText(self.tr("Already registered? Sign in"))
             self.hint_label.setText(
-                self.tr("Set a 6-digit security code for your new account.")
+                self.tr(
+                    "New phone number: set a 6-digit security code. "
+                    "Existing Jilei account: enter your current security code."
+                )
             )
 
         valid = (

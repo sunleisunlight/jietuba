@@ -254,16 +254,38 @@ def _settle_login(err_start, data_start, token, phone, eid):
 
 
 def _human_error(err) -> str:
+    """把控制中心的错误码翻译成用户能照做的下一步。
+
+    注册与登录是两条不同的补救路径，必须给出不同文案：以前只覆盖了少数几个
+    错误码，其余（account_not_found / product_registration_required /
+    account_already_exists / device_registration_already_used）全部落回
+    兜底句「登录失败，请稍后重试」，用户看不出到底该登录还是该注册。
+    """
     table = {
         "security_pin_incorrect": "手机号或 6 位安全码不正确",
         "security_pin_locked": "安全码错误次数过多，请 15 分钟后再试",
+        "security_pin_invalid": "安全码必须是 6 位数字",
+        "security_pin_setup_required": "该积磊账号还没有设置 6 位安全码，请先在积磊小程序里设置后再试",
         "device_limit_reached": "该账号绑定设备已达上限，请先在其它设备上解绑",
-        "security_pin_setup_required": "请先完成注册",
         "invalid_product_id": "客户端版本异常（产品未识别），请更新到最新版",
         "user_frozen": "账号已被停用，请联系客服",
         "network_unreachable": "当前网络无法连接积磊服务，请检查网络后重试",
+        # 账号存在性 / 本产品开通状态（决定用户该点「登录」还是「注册账号」）
+        "account_not_found": "该手机号还没有积磊账号，请点下方「注册账号」",
+        "product_registration_required": "该手机号还没开通积磊截图，请点下方「注册账号」开通",
+        "account_already_exists": "该手机号已开通积磊截图，请直接点「登录」",
+        "device_registration_already_used": "本机已注册过其它积磊账号，请在本机登录原账号，或换一台电脑注册",
+        # 设备 / 入参
+        "device_id_required": "设备信息读取失败，请重启软件后重试",
+        "login_fields_required": "请填写手机号与 6 位安全码",
+        "invalid_phone": "手机号格式不正确，请输入 11 位手机号",
+        "invalid_name": "账号昵称不合法，请稍后重试",
     }
-    return table.get(err.code, err.message or "登录失败，请稍后重试")
+    if err.code in table:
+        return table[err.code]
+    if err.code.startswith("http_"):
+        return f"积磊服务暂时不可用（{err.code[5:]}），请稍后重试"
+    return err.message or "登录失败，请稍后重试"
 
 
 _manager: Optional[AccountManager] = None

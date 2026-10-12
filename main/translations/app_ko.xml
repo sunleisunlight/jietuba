@@ -3906,7 +3906,7 @@ Replace it?</source>
     <message><source>Security code</source><translation>보안 코드</translation></message>
     <message><source>Enter your 6-digit security code</source><translation>6자리 보안 코드를 입력하세요</translation></message>
     <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>보안 코드는 SMS 인증번호가 아니라 직접 설정한 6자리 숫자입니다.</translation></message>
-    <message><source>Set a 6-digit security code for your new account.</source><translation>새 계정용 6자리 보안 코드를 설정하세요.</translation></message>
+    <message><source>New phone number: set a 6-digit security code. Existing Jilei account: enter your current security code.</source><translation>새 휴대폰 번호는 6자리 보안 코드를 설정하세요. 기존 Jilei 계정은 기존 보안 코드를 입력하세요.</translation></message>
     <message><source>Sign In</source><translation>로그인</translation></message>
     <message><source>Create Account</source><translation>계정 가입</translation></message>
     <message><source>Please wait…</source><translation>잠시만 기다려 주세요…</translation></message>
