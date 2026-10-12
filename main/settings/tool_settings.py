@@ -340,7 +340,7 @@ class ToolSettingsManager(QObject):
 
         # 截图保存
         "screenshot_save_enabled": True,       # 自动保存截图
-        "screenshot_save_path": os.path.join(os.path.expanduser("~"), "Pictures", "jietuba_photos"),  # 默认保存路径
+        "screenshot_save_path": os.path.join(os.path.expanduser("~"), "Pictures", "JileiScreenshot_photos"),  # 默认保存路径
         "screenshot_format": "PNG",            # 保存格式: PNG / JPG / BMP / WEBP / PDF
         "screenshot_quality": 85,              # 有损格式质量 (1-100, PNG/BMP忽略)
         "clipboard_file_reference_enabled": True,  # 复制时同时写入文件路径（CF_HDROP），需自动保存截图开启才生效
@@ -397,7 +397,7 @@ class ToolSettingsManager(QObject):
         "ui_scale_percent": 100,
         # 独立业务窗口缩放百分比，档位同上
         "dialog_scale_percent": 100,
-        "theme_color": "#40E0D0",              # 主题色（青绿色 Turquoise）
+        "theme_color": "#FF5A1F",              # 主题色（积磊品牌橙）
         # 选区边框笔宽（物理像素），档位见 core/theme.ThemeManager.BORDER_WIDTH_OPTIONS
         "selection_border_width": 4,
         # 选区手柄显示：all=八个 / corners=四角 / none=不显示。
@@ -434,15 +434,12 @@ class ToolSettingsManager(QObject):
 
         # ==================== 6. 日志 ====================
         "log_enabled": True,                   # 日志启用
-        "log_dir": (
-            os.path.join(
-                os.path.expanduser("~"),
-                "Library", "Application Support", "Jietuba", "Logs",
-            )
-            if sys.platform == "darwin"
-            else os.path.join(
-                os.path.expanduser("~"), "AppData", "Local", "Jietuba", "Logs",
-            )
+        "log_dir": os.path.join(
+            os.path.expanduser("~"),
+            "Library", "Application Support", "JileiScreenshot", "Logs",
+        ) if sys.platform == "darwin" else os.path.join(
+            os.path.expanduser("~"),
+            "AppData", "Local", "JileiScreenshot", "Logs",
         ),
         "log_level": "INFO",                  # 日志等级: DEBUG, INFO, WARNING, ERROR
         "log_retention_days": 7,               # 日志保留天数（0表示永久保留）
@@ -480,7 +477,7 @@ class ToolSettingsManager(QObject):
     
     def __init__(self, qsettings: Optional[QSettings] = None):
         super().__init__()
-        self.qsettings = qsettings if qsettings is not None else QSettings("Jietuba", "ToolSettings")
+        self.qsettings = qsettings if qsettings is not None else QSettings("JileiScreenshot", "ToolSettings")
         self._tool_settings: Dict[str, ToolSettings] = {}
         self._initialize_tools()
         # 老用户升上来的配置里还留着旧的字母默认值，这里一次性换成新的 1~9 预设

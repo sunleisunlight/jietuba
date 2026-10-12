@@ -1,12 +1,12 @@
 """
-截图吧 - PP-OCR 版本打包脚本
+积磊截图 - PP-OCR 版本打包脚本
 使用 onefile 模式（单文件）
 
 使用方式：
-  直接运行此脚本，打包生成 jietuba_pp.exe，携带 ppocr_rust，外置 models/ 模型目录
+  直接运行此脚本，打包生成 积磊截图.exe，携带 ppocr_rust，外置 models/ 模型目录
 
 输出：
-  dist/jietuba_pp.exe
+  dist/积磊截图.exe
   dist/models/PP-OCRv6_det_small.onnx
   dist/models/PP-OCRv6_rec_small.onnx
 """
@@ -21,7 +21,7 @@ MAIN_APP = "main/main_app.py"
 SVG_DIR = "svg"
 BUILD_DIR = "build"
 DIST_DIR = "dist"
-EXE_NAME = "jietuba_pp"
+EXE_NAME = "积磊截图"
 
 # 翻译文件
 TRANSLATIONS_DIR = "main/translations"

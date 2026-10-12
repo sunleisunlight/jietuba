@@ -175,7 +175,7 @@ class TextSettingsPanel(QWidget):
         }}
         QSlider#outlineWidthSlider::sub-page:horizontal {{
             margin: 0 {scaled(6)}px;
-            background: #0078d7;
+            background: #FF5A1F;
             border-radius: {scaled(2)}px;
         }}
         QSlider#outlineWidthSlider::add-page:horizontal {{
@@ -187,7 +187,7 @@ class TextSettingsPanel(QWidget):
             width: {scaled(12)}px;
             height: {scaled(12)}px;
             margin: {-scaled(5)}px {-scaled(6)}px;
-            background: #0078d7;
+            background: #FF5A1F;
             border: 2px solid white;
             border-radius: {scaled(7)}px;
         }}

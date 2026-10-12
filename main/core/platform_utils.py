@@ -150,7 +150,7 @@ def get_system_dpi(default: float = 96.0) -> float:
 # 任务栏
 # ──────────────────────────────────────────────
 
-def set_app_user_model_id(app_id: str = "jietuba.app"):
+def set_app_user_model_id(app_id: str = "cc.jilei.jileiscreenshot"):
     """设置 AppUserModelID，确保任务栏图标正确分组（必须在 QApplication 创建之前调用）。
     仅 Windows 生效。"""
     if not is_windows():

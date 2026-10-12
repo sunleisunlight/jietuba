@@ -216,7 +216,7 @@ class SaveService:
                 "Screenshot",
             ))
             writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout.Unit.Point)
-            writer.setCreator("jietuba")
+            writer.setCreator("JileiScreenshot")
 
             painter = QPainter(writer)
             try:

@@ -150,7 +150,7 @@ class SelectionInfoPanel(QWidget):
                 QPushButton {{ background: transparent; border: none;
                                border-radius: {radius}px; padding: {padding}px; }}
                 QPushButton:hover {{ background: rgba(255,255,255,40); }}
-                QPushButton:checked {{ background: rgba(64,224,208,80); }}
+                QPushButton:checked {{ background: rgba(255,90,31,110); }}
             """)
         self._sep.setFixedSize(1, scaled(self.BASE_SEP_HEIGHT))
         self._label_spacer.changeSize(scaled(5), 0,

@@ -105,7 +105,7 @@ def build_settings_panel_stylesheet(
             QComboBox QAbstractItemView {{
                 border: 1px solid #999;
                 background: white;
-                selection-background-color: #0078d7;
+                selection-background-color: #FF5A1F;
                 selection-color: white;
                 font-family: {CSS_FONT_FAMILY};
                 font-size: {font_px}px;
@@ -123,7 +123,7 @@ def build_settings_panel_stylesheet(
                 color: #000;
             }}
             QComboBox QAbstractItemView::item:selected {{
-                background-color: #0078d7;
+                background-color: #FF5A1F;
                 color: white;
             }}
         """

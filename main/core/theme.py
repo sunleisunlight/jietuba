@@ -49,7 +49,7 @@ class ThemeManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             # 硬编码的回退默认值（正常流程会被 init() 覆盖）
-            cls._instance._theme_color = QColor("#40E0D0")
+            cls._instance._theme_color = QColor("#FF5A1F")
             cls._instance._mask_color = QColor(0, 0, 0, 120)
             cls._instance._selection_border_width = cls.DEFAULT_BORDER_WIDTH
             cls._instance._selection_handle_style = cls.HANDLES_ALL
@@ -116,7 +116,7 @@ class ThemeManager:
 
     @property
     def theme_color_hex(self) -> str:
-        """主题色 hex 字符串（不含 alpha），如 '#40E0D0'"""
+        """主题色 hex 字符串（不含 alpha），如 '#FF5A1F'"""
         return self._theme_color.name().upper()
 
     @property
@@ -197,7 +197,7 @@ class ThemeManager:
 
     def reset_to_defaults(self):
         """恢复所有外观设置到默认值"""
-        self.set_theme_color(QColor("#40E0D0"))
+        self.set_theme_color(QColor("#FF5A1F"))
         self.set_mask_color(QColor(0, 0, 0, 120))
         self.set_selection_border_width(self.DEFAULT_BORDER_WIDTH)
         self.set_selection_handle_style(self.HANDLES_ALL)

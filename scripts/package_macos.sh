@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Jietuba macOS 打包 + 签名 + DMG。
+# 积磊截图 macOS 打包 + 签名 + DMG。
 # 用法: ./scripts/package_macos.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,9 +18,9 @@ echo "==> 构建 .app（版本 $VERSION）"
 "$PY" build_macos.py
 
 echo "==> 制作 DMG"
-DMG="dist/Jietuba-${VERSION}-arm64.dmg"
+DMG="dist/JileiScreenshot-${VERSION}-arm64.dmg"
 rm -f "$DMG"
-hdiutil create -volname "Jietuba" -srcfolder dist/Jietuba.app \
+hdiutil create -volname "积磊截图" -srcfolder dist/JileiScreenshot.app \
   -ov -format UDZO "$DMG"
 hdiutil verify "$DMG"
 

@@ -79,7 +79,7 @@ def fetch_latest_release(timeout_ms: int) -> ReleaseInfo:
         PROJECT_LATEST_RELEASE_API_URL,
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "jietuba-update-checker",
+            "User-Agent": "jilei-screenshot-update-checker",
         },
     )
     try:

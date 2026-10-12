@@ -1,11 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Jietuba macOS 打包 spec（PyInstaller onedir + .app bundle）。
+"""积磊截图 macOS 打包 spec（PyInstaller onedir + .app bundle）。
 
 用法：
     python build_macos.py            # 或
-    pyinstaller jietuba_macos.spec --noconfirm
+    pyinstaller jileiscreenshot_macos.spec --noconfirm
 
-产物：dist/Jietuba.app（windowed，Apple Silicon arm64）
+产物：dist/JileiScreenshot.app（windowed，Apple Silicon arm64）
 """
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_dynamic_libs
 import glob
@@ -222,7 +222,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Jietuba",
+    name="JileiScreenshot",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -243,20 +243,20 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="Jietuba",
+    name="JileiScreenshot",
 )
 
 app = BUNDLE(
     coll,
-    name="Jietuba.app",
-    icon="assets/Jietuba.icns",
-    bundle_identifier="cc.jilei.jietuba",
+    name="JileiScreenshot.app",
+    icon="assets/JileiScreenshot.icns",
+    bundle_identifier="cc.jilei.jileiscreenshot",
     info_plist={
-        "CFBundleIdentifier": "cc.jilei.jietuba",
-        "CFBundleName": "Jietuba",
-        "CFBundleDisplayName": "截图吧",
-        "CFBundleExecutable": "Jietuba",
-        "CFBundleIconFile": "Jietuba.icns",
+        "CFBundleIdentifier": "cc.jilei.jileiscreenshot",
+        "CFBundleName": "JileiScreenshot",
+        "CFBundleDisplayName": "积磊截图",
+        "CFBundleExecutable": "JileiScreenshot",
+        "CFBundleIconFile": "JileiScreenshot.icns",
         "CFBundlePackageType": "APPL",
         # 版本来自 main/main_app.py 的 APP_VERSION（禁止在此写死）
         "CFBundleShortVersionString": APP_VERSION,

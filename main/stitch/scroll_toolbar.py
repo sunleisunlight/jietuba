@@ -149,9 +149,9 @@ class FloatingToolbar(QWidget):
         theme_hex = get_theme().theme_color_hex
         return f"""
             QWidget#toolbar_container {{
-                background-color: white;
-                border: 2px solid {theme_hex};
-                border-radius: {scaled(5)}px;
+                background-color: rgba(255, 255, 255, 0.98);
+                border: 1.5px solid {theme_hex};
+                border-radius: {scaled(12)}px;
             }}
         """
 
@@ -194,7 +194,8 @@ class FloatingToolbar(QWidget):
 
         # 钉图按钮
         self.pin_btn = QPushButton()
-        self.pin_btn.setIcon(ResourceManager.get_icon(ResourceManager.get_resource_path("svg/钉图.svg")))
+        self.pin_btn.setIcon(ResourceManager.get_icon(
+            ResourceManager.get_resource_path("svg/钉图.svg"), tint="#FF5A1F"))
         self._icon_buttons.append(self.pin_btn)
         self.pin_btn.setToolTip(self.tr("Pin to desktop"))
         self.pin_btn.clicked.connect(self.pin_clicked.emit)
@@ -202,7 +203,8 @@ class FloatingToolbar(QWidget):
 
         # 完成按钮
         self.finish_btn = QPushButton()
-        self.finish_btn.setIcon(ResourceManager.get_icon(ResourceManager.get_resource_path("svg/确定.svg")))
+        self.finish_btn.setIcon(ResourceManager.get_icon(
+            ResourceManager.get_resource_path("svg/确定.svg"), tint="#FF5A1F"))
         self._icon_buttons.append(self.finish_btn)
         self.finish_btn.setToolTip(self.tr("Finish and save"))
         self.finish_btn.clicked.connect(self.finish_clicked.emit)
@@ -227,17 +229,20 @@ class FloatingToolbar(QWidget):
         """
         return f"""
             QPushButton {{
-                background-color: #2196F3;
+                background-color: #FF5A1F;
                 color: white;
                 border: none;
                 padding: {scaled(5)}px {scaled(10)}px;
                 font-size: {scaled(9)}pt;
-                border-radius: {scaled(3)}px;
+                border-radius: {scaled(8)}px;
                 font-weight: bold;
                 min-width: {scaled(50)}px;
             }}
             QPushButton:hover {{
-                background-color: #1976D2;
+                background-color: #E84B12;
+            }}
+            QPushButton:pressed {{
+                background-color: #D23E0A;
             }}
         """
 
@@ -248,13 +253,13 @@ class FloatingToolbar(QWidget):
             QPushButton {{
                 background-color: transparent;
                 border: none;
-                border-radius: {scaled(3)}px;
+                border-radius: {scaled(8)}px;
             }}
             QPushButton:hover {{
-                background-color: rgba(0, 0, 0, 0.05);
+                background-color: rgba(255, 90, 31, 0.10);
             }}
             QPushButton:pressed {{
-                background-color: rgba(0, 0, 0, 0.1);
+                background-color: rgba(255, 90, 31, 0.18);
             }}
         """
 

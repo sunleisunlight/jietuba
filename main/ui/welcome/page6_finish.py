@@ -232,14 +232,14 @@ class FinishPage(BasePage):
             self._make_setting_row_with_refs(
                 _tr("快捷方式"),
                 self._desktop_switch,
-                brand_text(_tr("完成向导时在桌面创建截图吧快捷方式。"))
+                brand_text(_tr("完成向导时在桌面创建积磊截图快捷方式。"))
             )
         layout.addWidget(row_desktop)
 
     # ── 开机自启辅助（注册表 HKCU\Run 方案）─────────────────
 
     _AUTOSTART_REG_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-    _AUTOSTART_APP_NAME = "Jietuba"
+    _AUTOSTART_APP_NAME = "JileiScreenshot"
 
     @classmethod
     def _get_exe_path(cls) -> str:
@@ -256,7 +256,7 @@ class FinishPage(BasePage):
         )
         return f'"{sys.executable}" "{main_script}"'
 
-    _AUTOSTART_LAUNCH_AGENT_LABEL = "cc.jilei.jietuba"
+    _AUTOSTART_LAUNCH_AGENT_LABEL = "cc.jilei.jileiscreenshot"
 
     @classmethod
     def _get_launch_agent_path(cls) -> str:
@@ -489,7 +489,7 @@ class FinishPage(BasePage):
             self._desktop_lbl.setText(_tr("快捷方式"))
         if hasattr(self, "_desktop_desc") and self._desktop_desc:
             self._desktop_desc.setText(
-                brand_text(_tr("完成向导时在桌面创建截图吧快捷方式。"))
+                brand_text(_tr("完成向导时在桌面创建积磊截图快捷方式。"))
             )
 
     def save(self):

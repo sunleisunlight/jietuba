@@ -2,9 +2,9 @@
 
 TRANSLATIONS: dict[str, str] = {
     # core/logger.py 自身的启动/关闭诊断信息
-    "\n{sep}\nJietuba 截图工具 - 运行日志\n启动时间: {start_time}\n日志目录: {log_dir}\n"
+    "\n{sep}\n积磊截图 - 运行日志\n启动时间: {start_time}\n日志目录: {log_dir}\n"
     "日志级别: {file_level} (文件) / {console_level} (控制台)\n{sep}\n":
-        "\n{sep}\nJietuba Screenshot Tool - Runtime Log\nStarted: {start_time}\nLog directory: {log_dir}\n"
+        "\n{sep}\nJilei Screenshot - Runtime Log\nStarted: {start_time}\nLog directory: {log_dir}\n"
         "Log level: {file_level} (file) / {console_level} (console)\n{sep}\n",
     "[WARN] [Logger] 日志功能已禁用": "[WARN] [Logger] Logging is disabled",
     "[WARN] [Logger] 日志系统已经初始化": "[WARN] [Logger] Logging system already initialized",

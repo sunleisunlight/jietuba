@@ -1,6 +1,6 @@
 **[中文](README_zh-CN.md)** | [English](README.md) | [日本語](README_JA.md)
 
-# 截图吧 — Windows / macOS 截图、OCR、钉图、翻译与剪贴板工具
+# 积磊截图 — Windows / macOS 截图、OCR、钉图、翻译与剪贴板工具
 
 [![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
@@ -15,7 +15,7 @@
 > 保留 Windows 2.4.0 基线：Note 的 AUTO/FREE 与目标框/文字独立移动、文字双模式与宽度/字号缩放、
 > 数字快捷键与可定制工具栏、剪贴板列表三种显示方案。两端读取同一个 `APP_VERSION`。
 
-截图吧是一款免费开源的跨平台截图工具，Windows 与 macOS 共用同一套代码：区域与窗口截图、滚动长截图拼接、标注、OCR 文字识别、翻译、钉图、GIF 录制、二维码/条形码识别、PDF 导出，以及完整的剪贴板历史管理。所有功能本地运行。
+积磊截图是一款免费开源的跨平台截图工具，Windows 与 macOS 共用同一套代码：区域与窗口截图、滚动长截图拼接、标注、OCR 文字识别、翻译、钉图、GIF 录制、二维码/条形码识别、PDF 导出，以及完整的剪贴板历史管理。所有功能本地运行。
 
 界面使用 PySide6 构建，图像处理、剪贴板操作和 OCR 由 Rust 实现。Windows 支持 x86_64 与 ARM64；macOS 支持 Apple Silicon（arm64）。
 
@@ -49,8 +49,8 @@ Windows 发行包可直接运行；macOS 目前支持从源码构建 `.app` / `.
 普通用户可以直接使用对应架构的 Windows x86_64 或 ARM64 发行包，无需安装 Python、Rust 或配置开发环境。
 
 1. 打开 [Releases 下载页](https://github.com/1003129155/jietuba/releases/latest)，根据设备下载以 `-x64.zip` 或 `-arm64.zip` 结尾的程序包。
-2. 完整解压压缩包，保留 `jietuba_pp.exe` 和同级的 `models/` 目录。
-3. 双击 `jietuba_pp.exe` 启动程序。OCR 所需模型已随程序包提供。
+2. 完整解压压缩包，保留 `积磊截图.exe` 和同级的 `models/` 目录。
+3. 双击 `积磊截图.exe` 启动程序。OCR 所需模型已随程序包提供。
 4. 程序尚未进行数字签名，通过浏览器下载后，Windows 可能显示运行警告。出现提示时，点击“更多信息”，再选择“仍要运行”即可启动。
 
 ---
@@ -121,7 +121,7 @@ python -m pytest main/tests -c main/tests/pytest.ini
 
 [测试目录](main/tests/)包含截图、剪贴板、马赛克、钉图缩放、GIF 回放、OCR 文字层等模块的单元测试与集成测试。[CI 配置](.github/workflows/ci.yml)在 Windows x86_64 与 ARM64 的 Python 3.11 环境中执行测试及覆盖率检查，并在 x86_64 上执行静态检查；运行结果可在 [GitHub Actions](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) 查看。
 
-构建 Windows 发行包可运行 `python build_with_ocr_onefile.py`，产物为 `dist/jietuba_pp.exe` 和 `dist/models/`。自动发行流程见 [build.yml](.github/workflows/build.yml)，会分别生成 x64 与 ARM64 压缩包。
+构建 Windows 发行包可运行 `python build_with_ocr_onefile.py`，产物为 `dist/积磊截图.exe` 和 `dist/models/`。自动发行流程见 [build.yml](.github/workflows/build.yml)，会分别生成 x64 与 ARM64 压缩包。
 
 ---
 
@@ -357,6 +357,7 @@ clipboard/
 core/
 ├── __init__.py
 ├── bootstrap.py             # PreloadManager — 启动引导，环境初始化、DPI感知、单实例控制、链式预加载
+├── brand_migration.py       # 旧品牌（截图吧/jietuba）一次性迁移：数据目录、QSettings、自启项、快捷方式
 ├── logger.py                # Logger — 文件+控制台日志系统，支持多级别 (debug/info/warning/error/exception)
 ├── crash_handler.py         # install_crash_hooks() — 全局异常和线程异常捕获
 ├── resource_manager.py      # ResourceManager — SVG/图片等资源加载管理

@@ -164,7 +164,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
 
         self.new_item_received.connect(self._on_new_item)
         self._init_frameless(edge_margin=8)
-        self._qsettings = QSettings("Jietuba", "ClipboardWindow")
+        self._qsettings = QSettings("JileiScreenshot", "ClipboardWindow")
 
         self.theme_manager = get_theme_manager()
         self.current_theme = self.theme_manager.get_current_theme()

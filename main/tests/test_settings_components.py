@@ -31,12 +31,12 @@ def theme(monkeypatch):
 
 # components 里成对取值的派生函数，以及它们的 (light, dark) 期望值
 DERIVED_COLORS = {
-    "theme_surface_color": ("rgba(239, 244, 250, 0.91)", "#202124"),
-    "theme_sidebar_color": ("rgba(246, 249, 252, 0.54)", "#25272B"),
+    "theme_surface_color": ("rgba(250, 245, 239, 0.92)", "#221F1B"),
+    "theme_sidebar_color": ("rgba(255, 250, 245, 0.60)", "#27241F"),
     "theme_border_color": ("rgba(255, 255, 255, 0.76)", "rgba(255, 255, 255, 0.08)"),
-    "theme_input_background": ("rgba(255, 255, 255, 0.78)", "#2B2D31"),
-    "theme_popup_background": ("#FFFFFF", "#2A2C30"),
-    "theme_popup_hover_background": ("#EAF2FA", "#36393F"),
+    "theme_input_background": ("rgba(255, 255, 255, 0.78)", "#2D2924"),
+    "theme_popup_background": ("#FFFFFF", "#2A2622"),
+    "theme_popup_hover_background": ("#FFF4EE", "#37302A"),
 }
 
 

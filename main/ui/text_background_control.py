@@ -67,7 +67,7 @@ def popup_controls_qss() -> str:
             border-color: #bbb;
         }}
         QPushButton:checked {{
-            border: 2px solid #0078d7;
+            border: 2px solid #FF5A1F;
         }}
         QSlider {{
             background-color: transparent;

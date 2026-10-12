@@ -107,7 +107,7 @@ class SettingsDialog(FrostedFramelessDialog):
         # 自定义 Fluent 标题栏（在 setWindowTitle 之前，以接收信号）
         self._setup_titlebar()
 
-        self.setWindowTitle("jietuba")
+        self.setWindowTitle("积磊截图")
         self.resize(dialog_scaled(1050), dialog_scaled(750))
         self.setFont(QFont(DEFAULT_FONT_FAMILY, dialog_scaled(11)))
         self.setObjectName("SettingsDialog")
@@ -186,7 +186,7 @@ class SettingsDialog(FrostedFramelessDialog):
         text_box = QVBoxLayout()
         text_box.setContentsMargins(0, 0, 0, 0)
         text_box.setSpacing(dialog_scaled(2))
-        app_name_lbl = BodyLabel(self.tr("jietuba"))
+        app_name_lbl = BodyLabel(self.tr("积磊截图"))
         apply_theme_text_style(app_name_lbl, 16, bold=True)
         app_desc_lbl = QLabel(self.tr("Settings"))
         apply_theme_text_style(app_desc_lbl, 13, caption=True)
@@ -1418,7 +1418,7 @@ class SettingsDialog(FrostedFramelessDialog):
             QIcon(_icon_path).paint(p, 0, 0, 32, 32)
             p.end()
 
-            tmp_ico = os.path.join(tempfile.gettempdir(), "jietuba_win_icon.ico")
+            tmp_ico = os.path.join(tempfile.gettempdir(), "jilei_screenshot_win_icon.ico")
             pix.save(tmp_ico, "ICO")
 
             IMAGE_ICON = 1

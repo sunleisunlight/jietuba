@@ -1,12 +1,12 @@
 [中文](README_zh-CN.md) | [English](README.md) | **[日本語](README_JA.md)**
 
-# jietuba — Windows / macOS 向けスクリーンショット・OCR・ピン留め・翻訳・クリップボードツール
+# 積磊スクリーンショット — Windows / macOS 向けスクリーンショット・OCR・ピン留め・翻訳・クリップボードツール
 
 [![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
 [Windows 版をダウンロード](https://github.com/1003129155/jietuba/releases/latest) · [ソースから実行](#source-setup) · [開発とテスト](#development)
 
-![jietuba demo](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
+![積磊スクリーンショット demo](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
 
 ## 概要
 
@@ -16,7 +16,7 @@
 > 数字ショートカットとカスタムツールバー、クリップボード一覧の 3 表示モードを保持しています。
 > 両プラットフォームは同じ `APP_VERSION` を使用します。
 
-jietuba は Windows と macOS が同一コードベースを共有する、無料・オープンソースのクロスプラットフォーム・スクリーンショットツールです。領域/ウィンドウキャプチャ、スクロール（長い）スクリーンショット、注釈、OCR 文字認識、翻訳、画像のピン留め、GIF 録画、QR コード/バーコード読み取り、PDF エクスポート、そして完全なクリップボード履歴管理を備えています。すべてローカルで動作します。
+積磊スクリーンショットは Windows と macOS が同一コードベースを共有する、無料・オープンソースのクロスプラットフォーム・スクリーンショットツールです。領域/ウィンドウキャプチャ、スクロール（長い）スクリーンショット、注釈、OCR 文字認識、翻訳、画像のピン留め、GIF 録画、QR コード/バーコード読み取り、PDF エクスポート、そして完全なクリップボード履歴管理を備えています。すべてローカルで動作します。
 
 UI は PySide6、画像処理・クリップボード操作・OCR は Rust で実装しています。Windows は x86_64 / ARM64、macOS は Apple Silicon（arm64）に対応します。
 
@@ -49,8 +49,8 @@ Windows 版はすぐに使える配布パッケージを用意しています。
 Windows x86_64 版および ARM64 版の配布パッケージは、そのまま実行できます。Python、Rust、開発環境のインストールは不要です。
 
 1. [Releases ページ](https://github.com/1003129155/jietuba/releases/latest)を開き、端末に合わせて `-x64.zip` または `-arm64.zip` で終わるファイルをダウンロードします。
-2. ZIP 全体を展開し、`jietuba_pp.exe` と `models/` フォルダを同じ階層に置きます。
-3. `jietuba_pp.exe` をダブルクリックして起動します。OCR モデルは配布パッケージに同梱されています。
+2. ZIP 全体を展開し、`积磊截图.exe` と `models/` フォルダを同じ階層に置きます。
+3. `积磊截图.exe` をダブルクリックして起動します。OCR モデルは配布パッケージに同梱されています。
 4. アプリにはデジタル署名がないため、ブラウザーからダウンロードすると Windows の警告が表示される場合があります。表示された場合は「詳細情報」をクリックし、「実行」を選択すると起動できます。
 
 ---
@@ -121,7 +121,7 @@ python -m pytest main/tests -c main/tests/pytest.ini
 
 [テストディレクトリ](main/tests/)には、キャプチャ、クリップボード、モザイク編集、ピン留め画像のズーム、GIF 再生、OCR テキストレイヤーなどのユニットテスト・統合テストがあります。[CI 設定](.github/workflows/ci.yml)では Windows x86_64 と ARM64 の Python 3.11 環境でテストとカバレッジ検査を実行し、x86_64 では静的解析も行います。実行結果は [GitHub Actions](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) で確認できます。
 
-Windows 版のビルドは `python build_with_ocr_onefile.py` で実行できます。生成物は `dist/jietuba_pp.exe` と `dist/models/` です。[自動リリースワークフロー](.github/workflows/build.yml)では、x64 と ARM64 のアーカイブを個別に生成します。
+Windows 版のビルドは `python build_with_ocr_onefile.py` で実行できます。生成物は `dist/积磊截图.exe` と `dist/models/` です。[自動リリースワークフロー](.github/workflows/build.yml)では、x64 と ARM64 のアーカイブを個別に生成します。
 
 ---
 
@@ -203,7 +203,7 @@ barcode/
 ### canvas/ — キャンバスモジュール
 
 シーン管理、ビューレンダリング、アイテム選択、アンドゥ/リドゥ機能を備えたグラフィックス編集キャンバスシステム。
-![jietuba_gif_20260404_000903](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
+![JileiScreenshot_gif_20260404_000903](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
 
 <details>
 <summary>ディレクトリ構造を表示</summary>
@@ -256,7 +256,7 @@ capture/
 
 Ditto風のクリップボード履歴マネージャーで、controllers・core・services・ui の4層構成に再編されています。
 テキスト、画像、HTML、ファイルに対応し、グループと内容を管理する独立した3ペイン管理ウィンドウも備えています。
-![jietuba_gif_20260404_001128](https://github.com/user-attachments/assets/b0a116e8-d944-43c9-b895-e6fc10d8c08a)
+![JileiScreenshot_gif_20260404_001128](https://github.com/user-attachments/assets/b0a116e8-d944-43c9-b895-e6fc10d8c08a)
 
 <details>
 <summary>ディレクトリ構造を表示</summary>
@@ -338,6 +338,7 @@ clipboard/
 ```text
 core/
 ├── bootstrap.py             # PreloadManager — 起動ブートストラップ、環境初期化、DPI、シングルインスタンス
+├── brand_migration.py       # 旧ブランド（截图吧/jietuba）の一回限り移行：データ目录・QSettings・自動起動・ショートカット
 ├── logger.py                # Logger — ファイル＋コンソールログ（debug/info/warning/error/exception）
 ├── crash_handler.py         # install_crash_hooks() — グローバル例外キャッチ
 ├── resource_manager.py      # ResourceManager — SVG/画像リソースローディング
@@ -456,7 +457,7 @@ settings/
 ---
 
 ### stitch/ — 長いスクリーンショット結合モジュール
-![jietuba_gif_20260404_001930](https://github.com/user-attachments/assets/a9720f08-5128-447d-b425-6d0640272e6a)
+![JileiScreenshot_gif_20260404_001930](https://github.com/user-attachments/assets/a9720f08-5128-447d-b425-6d0640272e6a)
 
 <details>
 <summary>ディレクトリ構造を表示</summary>

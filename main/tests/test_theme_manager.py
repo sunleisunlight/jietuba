@@ -41,10 +41,10 @@ class TestThemeManager:
         assert a is c
 
     def test_default_theme_color(self):
-        """默认主题色应为 #40E0D0"""
+        """默认主题色应为积磊品牌橙 #FF5A1F"""
         from core.theme import get_theme
         tm = get_theme()
-        assert tm.theme_color_hex == "#40E0D0"
+        assert tm.theme_color_hex == "#FF5A1F"
 
     def test_default_mask_color(self):
         """默认遮罩色"""
@@ -81,7 +81,7 @@ class TestThemeManager:
         tm.set_theme_color(QColor("#FF0000"))
         tm.set_mask_color(QColor(100, 100, 100))
         tm.reset_to_defaults()
-        assert tm.theme_color_hex == "#40E0D0"
+        assert tm.theme_color_hex == "#FF5A1F"
         assert tm.mask_color.red() == 0
 
     def test_theme_color_returns_copy(self):
@@ -91,7 +91,7 @@ class TestThemeManager:
         c1 = tm.theme_color
         c1.setRed(255)  # 修改副本
         c2 = tm.theme_color
-        assert c2.red() != 255 or tm.theme_color_hex == "#40E0D0"
+        assert c2.red() != 255 or tm.theme_color_hex == "#FF5A1F"
 
     def test_init_with_mock_config(self):
         """使用 mock 配置管理器初始化"""

@@ -104,7 +104,7 @@ class _MoreHandle(QAbstractButton):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        _paint_vertical_dots(painter, self.rect(), QColor(0, 0, 0))
+        _paint_vertical_dots(painter, self.rect(), QColor(TOOLBAR_ICON_COLOR))
         painter.end()
 
 
@@ -112,52 +112,79 @@ def resource_path(relative_path):
     """获取资源文件路径（兼容函数）"""
     return ResourceManager.get_resource_path(relative_path)
 
+# ── 积磊品牌工具栏视觉常量 ─────────────────────────────────
+TOOLBAR_ICON_COLOR = "#FF5A1F"   # 工具栏图标统一染品牌橙
+TOOLBAR_GAP = 4                  # 按钮之间的视觉间隙（100% 比例像素，偶数便于上下左右对称留半）
+TOOLBAR_RADIUS = 10              # 按钮圆角
+TOOLBAR_FRAME_RADIUS = 12        # 外框圆角
+
+# 需要"保留白色/点缀色"的图标：只替换 SVG 里的近黑色，白底和彩色点缀保留
+_RECOLOR_ICONS = frozenset((
+    "svg/序号.svg",
+    "svg/荧光笔.svg",
+))
+
+
 def cached_icon(relative_path):
-    """获取缓存的 QIcon（首次加载 SVG，后续复用）"""
-    return ResourceManager.get_icon(ResourceManager.get_resource_path(relative_path))
+    """获取缓存的 QIcon（首次加载 SVG 后统一染成积磊品牌橙，后续复用）。
+
+    工具栏所有图标都是单色线条，染色后整排视觉与品牌一致；带白底/彩色点缀的
+    少数图标走 recolor（仅替换近黑色）。
+    """
+    recolor = relative_path in _RECOLOR_ICONS
+    return ResourceManager.get_icon(
+        ResourceManager.get_resource_path(relative_path),
+        tint=TOOLBAR_ICON_COLOR, recolor=recolor,
+    )
 
 def _paint_toolbar_frame(widget):
-    """白底圆角 + 主题色描边。工具栏和「…」弹层共用，四角靠 WA_TranslucentBackground 保持透明"""
+    """白底圆角卡片 + 半透明主题色细描边。
+
+    工具栏和「…」弹层共用，四角靠 WA_TranslucentBackground 保持透明。
+    卡片贴满整个 widget（不留外 margin），窗口定位逻辑不用为阴影留位。
+    """
     painter = QPainter(widget)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    radius = scaled_f(6.0)
-    pen_width = scaled_f(2.0)
+    radius = scaled_f(TOOLBAR_FRAME_RADIUS)
+    pen_width = scaled_f(1.5)
     half = pen_width / 2
     rect = QRectF(widget.rect()).adjusted(half, half, -half, -half)
 
     path = QPainterPath()
     path.addRoundedRect(rect, radius, radius)
 
-    painter.setPen(QPen(get_theme().theme_color, pen_width))
-    painter.setBrush(QBrush(QColor(255, 255, 255)))
+    tc = get_theme().theme_color
+    painter.setPen(QPen(QColor(tc.red(), tc.green(), tc.blue(), 150), pen_width))
+    painter.setBrush(QBrush(QColor(255, 255, 255, 250)))
     painter.drawPath(path)
     painter.end()
 
 def _button_qss():
-    """工具栏按钮样式。
+    """工具栏按钮样式（圆角卡片风）。
 
     按钮会在工具栏和「…」弹层之间换父部件，而样式表沿父子链级联，所以两边必须挂
     同一份，否则按钮一挪进弹层就变回系统默认外观。
+    几何上按钮仍占满整个格子，背景只画在内缩的圆角块里（见 _arrange 的内边距），
+    相邻按钮之间自然留出间隙。
     """
     tc = get_theme().theme_color
+    radius = scaled(TOOLBAR_RADIUS)
     return f"""
         QPushButton {{
-            background-color: rgba(0, 0, 0, 0.02);
+            background-color: rgba(255, 90, 31, 0.0);
             border: none;
-            border-radius: 0px;
+            border-radius: {radius}px;
             padding: 0px;
         }}
         QPushButton:hover {{
-            background-color: rgba(0, 0, 0, 0.08);
-            border-radius: 0px;
+            background-color: rgba(255, 90, 31, 0.10);
         }}
         QPushButton:pressed {{
-            background-color: rgba(0, 0, 0, 0.15);
-            border-radius: 0px;
+            background-color: rgba(255, 90, 31, 0.18);
         }}
         QPushButton:checked {{
-            background-color: rgba({tc.red()}, {tc.green()}, {tc.blue()}, 0.3);
+            background-color: rgba({tc.red()}, {tc.green()}, {tc.blue()}, 0.16);
             border: {scaled(1)}px solid {get_theme().theme_color_hex};
         }}
     """
@@ -253,24 +280,31 @@ class _MorePopup(QWidget):
         self.adjust_btn.setIconSize(QSize(icon, icon))
 
     def set_buttons(self, buttons, cell):
-        """把 buttons 按每行 COLUMNS 个排成网格，每格 cell 大小；「调整」放在网格下方靠右"""
+        """把 buttons 按每行 COLUMNS 个排成网格，每格 cell 大小（含按钮间间隙）；
+        「调整」放在网格下方靠右。"""
         pad = scaled(self.BASE_PADDING)
+        gap = max(1, round(scaled(TOOLBAR_GAP)))
+        half_gap = gap // 2
+        btn_w = cell.width() - gap
+        btn_h = cell.height() - gap
         for index, button in enumerate(buttons):
             if button.parent() is not self:
                 button.setParent(self)
             row, column = divmod(index, self.COLUMNS)
-            button.setGeometry(pad + column * cell.width(), pad + row * cell.height(),
-                               cell.width(), cell.height())
+            button.setGeometry(pad + half_gap + column * cell.width(),
+                               pad + half_gap + row * cell.height(),
+                               btn_w, btn_h)
             button.show()
 
         rows = -(-len(buttons) // self.COLUMNS)   # 向上取整
         grid_width = min(len(buttons), self.COLUMNS) * cell.width()
         adjust_width = self.adjust_btn.sizeHint().width()
-        adjust_height = round(cell.height() * 0.7)
+        adjust_height = round(btn_h * 0.7)
         width = max(grid_width, adjust_width) + 2 * pad
         top = pad + rows * cell.height()
-        self.adjust_btn.setGeometry(width - pad - adjust_width, top, adjust_width, adjust_height)
-        self.resize(width, top + adjust_height + pad)
+        self.adjust_btn.setGeometry(width - pad - adjust_width, top + half_gap,
+                                    adjust_width, adjust_height)
+        self.resize(width, top + cell.height() + pad - half_gap)
 
     @safe_event
     def paintEvent(self, event):
@@ -529,8 +563,10 @@ class Toolbar(QWidget):
         self.setStyleSheet("#toolbar_root { background-color: transparent; border: none; }"
                            + _button_qss())
         self._btn_height = scaled(self.BASE_BTN_HEIGHT)
+        self._btn_gap = scaled(TOOLBAR_GAP)
+        half_gap = self._btn_gap // 2
         handle_w = scaled(self.BASE_BTN_HEIGHT * self.HANDLE_WIDTH_RATIO)
-        self.drag_handle.setGeometry(0, 0, handle_w, self._btn_height)
+        self.drag_handle.setGeometry(0, half_gap, handle_w, self._btn_height)
         for key, (base_width, base_icon) in self._button_bases.items():
             self._button_widths[key] = scaled(base_width)
             if base_icon:
@@ -562,21 +598,27 @@ class Toolbar(QWidget):
         widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
     def _arrange(self, keys):
-        """从拖动手柄右侧起把 keys 对应的按钮排成一行，其余按钮一律隐藏，工具栏宽度随之收缩"""
+        """从拖动手柄右侧起把 keys 对应的按钮排成一行，其余按钮一律隐藏，工具栏宽度随之收缩。
+
+        每个按钮在格子里上下内缩半个间隙，相邻格子之间留一个间隙，圆角 hover 块
+        互不粘连，呈现独立胶囊卡片的观感。
+        """
         for key, button in self._buttons.items():
             if key not in keys:
                 button.hide()
-        x = self.drag_handle.width()
+        half_gap = self._btn_gap // 2
+        x = self.drag_handle.width() + half_gap
         for key in keys:
             button = self._buttons[key]
             if button.parent() is not self:
                 button.setParent(self)   # 刚从「…」弹层里挪回来
             width = self._button_widths[key]
-            button.setGeometry(x, 0, width, self._btn_height)
+            button.setGeometry(x, half_gap, width, self._btn_height)
             button.show()
             self._layout_badge(key)
-            x += width
-        self.resize(x, self._btn_height)
+            x += width + self._btn_gap
+        # 末尾收半个间隙，与起手柄后的半个间隙对称
+        self.resize(x - half_gap, self._btn_height + self._btn_gap)
 
     def _layout_badge(self, key):
         """角标贴在按钮左下角；按钮几何定了才能算，所以只在 _arrange 里调。"""
@@ -646,7 +688,7 @@ class Toolbar(QWidget):
             return
         cell_width = max((self._button_widths[key] for key in self._folded_keys), default=0)
         popup.set_buttons([self._buttons[key] for key in self._folded_keys],
-                          QSize(cell_width, self._btn_height))
+                          QSize(cell_width + self._btn_gap, self._btn_height + self._btn_gap))
         self._sync_panel_position(popup, align_right=True)
         popup.show()
         popup.raise_()

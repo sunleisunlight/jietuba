@@ -36,15 +36,15 @@ def create_fallback_app_icon():
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QBrush(QColor("#40E0D0")))
+    painter.setBrush(QBrush(QColor("#FF5A1F")))
     painter.drawRoundedRect(4, 4, 56, 56, 12, 12)
 
-    font = QFont()
-    font.setPixelSize(38)
+    font = QFont("Microsoft YaHei")
+    font.setPixelSize(36)
     font.setBold(True)
     painter.setFont(font)
-    painter.setPen(QColor("#10322E"))
-    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "J")
+    painter.setPen(QColor("#FFFFFF"))
+    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "截")
     painter.end()
 
     return QIcon(pixmap)
@@ -279,7 +279,7 @@ class MainApp(QObject):
             return
 
         # 更新 tooltip
-        self.tray_icon.setToolTip(self.tr("jietuba - Click to screenshot"))
+        self.tray_icon.setToolTip(self.tr("积磊截图 - 单击截图"))
 
         # 重建菜单
         self.tray_icon.setContextMenu(self._create_tray_menu())
@@ -445,7 +445,7 @@ class MainApp(QObject):
         icon = create_app_icon()
         self.tray_icon.setIcon(icon)
 
-        self.tray_icon.setToolTip(self.tr("jietuba - Click to screenshot"))
+        self.tray_icon.setToolTip(self.tr("积磊截图 - 单击截图"))
 
         # Menu
         self.tray_icon.setContextMenu(self._create_tray_menu())

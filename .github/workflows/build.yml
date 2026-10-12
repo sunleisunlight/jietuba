@@ -78,13 +78,13 @@ jobs:
         run: python build_with_ocr_onefile.py
 
       - name: Package dist as zip
-        run: Compress-Archive -Path dist\* -DestinationPath jietuba_pp-${{ github.ref_name }}-${{ matrix.arch }}.zip
+        run: Compress-Archive -Path dist\* -DestinationPath JileiScreenshot-${{ github.ref_name }}-${{ matrix.arch }}.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jietuba_pp-${{ github.ref_name }}-${{ matrix.arch }}
-          path: jietuba_pp-${{ github.ref_name }}-${{ matrix.arch }}.zip
+          name: JileiScreenshot-${{ github.ref_name }}-${{ matrix.arch }}
+          path: JileiScreenshot-${{ github.ref_name }}-${{ matrix.arch }}.zip
 
   release:
     needs: build
@@ -93,7 +93,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: jietuba_pp-${{ github.ref_name }}-*
+          pattern: JileiScreenshot-${{ github.ref_name }}-*
           path: release-assets
           merge-multiple: true
 

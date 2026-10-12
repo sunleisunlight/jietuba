@@ -2,7 +2,7 @@
 """macOS 打包契约（静态检查，Windows CI 亦可执行）。
 
 目的：``APP_VERSION`` 从 2.4.0 升到 2.5.0 时，任何人都不需要再手动修改
-``build_macos.py`` / ``jietuba_macos.spec`` / ``scripts/*.sh`` 里的版本号，
+``build_macos.py`` / ``jileiscreenshot_macos.spec`` / ``scripts/*.sh`` 里的版本号，
 也不会再出现 Mac 打包漏掉 ppocr_rust / OCR 模型的情况。
 
 这些检查只读文本与 ast，不依赖真实 macOS，也不启动 PyInstaller。
@@ -19,7 +19,7 @@ SCRIPTS = REPOSITORY / "scripts"
 
 MAC_VERSION_FILES = (
     "build_macos.py",
-    "jietuba_macos.spec",
+    "jileiscreenshot_macos.spec",
     "scripts/package_macos.sh",
     "scripts/notarize_macos.sh",
 )
@@ -33,7 +33,7 @@ def _read(rel: str) -> str:
 
 def _load_version_utils():
     spec = importlib.util.spec_from_file_location(
-        "jietuba_version_utils", SCRIPTS / "version_utils.py"
+        "jilei_version_utils", SCRIPTS / "version_utils.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -97,19 +97,19 @@ def test_mac_build_chain_reads_the_single_version_source(rel):
 
 
 def test_mac_spec_and_scripts_derive_dmg_and_plist_from_app_version(app_version):
-    spec = _read("jietuba_macos.spec")
+    spec = _read("jileiscreenshot_macos.spec")
     assert '"CFBundleShortVersionString": APP_VERSION' in spec
     assert '"CFBundleVersion": APP_VERSION' in spec
     for script in ("scripts/package_macos.sh", "scripts/notarize_macos.sh"):
         source = _read(script)
-        assert "Jietuba-${VERSION}-arm64.dmg" in source, script
+        assert "JileiScreenshot-${VERSION}-arm64.dmg" in source, script
     assert app_version
 
 
 # ── 3/4. ppocr_rust 与 OCR 模型必须是 Mac 正式构建的一部分 ─────────────────
 
 def test_mac_spec_does_not_exclude_ppocr_rust():
-    spec = _read("jietuba_macos.spec")
+    spec = _read("jileiscreenshot_macos.spec")
     excludes_block = spec.split("excludes = [", 1)[1].split("]", 1)[0]
     assert "ppocr_rust" not in excludes_block
     # 并且必须作为隐藏导入参与打包
@@ -118,13 +118,13 @@ def test_mac_spec_does_not_exclude_ppocr_rust():
 
 
 def test_mac_spec_bundles_onnxruntime_dylib():
-    spec = _read("jietuba_macos.spec")
+    spec = _read("jileiscreenshot_macos.spec")
     assert "libonnxruntime" in spec
     assert "collect_dynamic_libs(\"ppocr_rust\")" in spec
     assert "binaries=binaries" in spec
 
 
-@pytest.mark.parametrize("rel", ("jietuba_macos.spec", "build_macos.py"))
+@pytest.mark.parametrize("rel", ("jileiscreenshot_macos.spec", "build_macos.py"))
 def test_mac_build_treats_ocr_models_as_required(rel):
     source = _read(rel)
     for model in OCR_MODELS:
@@ -154,7 +154,7 @@ def test_mac_build_checks_native_dependencies_with_otool():
 # ── 5. 最低系统版本与真实实现一致 ─────────────────────────────────────────
 
 def test_mac_min_os_reflects_screencapturekit_requirement():
-    spec = _read("jietuba_macos.spec")
+    spec = _read("jileiscreenshot_macos.spec")
     match = re.search(r'"LSMinimumSystemVersion":\s*"([\d.]+)"', spec)
     assert match, "spec 必须声明 LSMinimumSystemVersion"
     major, minor = (int(x) for x in match.group(1).split(".")[:2])

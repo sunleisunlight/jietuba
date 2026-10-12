@@ -676,8 +676,8 @@ Replace it?</translation>
     
     <!-- Info Page -->
     <message>
-        <source>Jietuba - Screenshot Tool</source>
-        <translation>Jietuba - Screenshot Tool</translation>
+        <source>积磊截图 - 截图工具</source>
+        <translation>Jilei Screenshot - Screenshot Tool</translation>
     </message>
     <message>
         <source>Version: 1.0.0</source>
@@ -1226,8 +1226,8 @@ Replace it?</translation>
 <context>
     <name>SystemTray</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>jietuba - Click to screenshot</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>Jilei Screenshot - Click to screenshot</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -1268,7 +1268,7 @@ Replace it?</translation>
 <!-- ========== Main App (Tray Menu) ========== -->
 <context>
     <name>MainApp</name>
-    <message><source>jietuba - Click to screenshot</source><translation>jietuba - Click to screenshot</translation></message>
+    <message><source>积磊截图 - 单击截图</source><translation>Jilei Screenshot - Click to screenshot</translation></message>
     <message><source>Screenshot</source><translation>Screenshot</translation></message>
     <message><source>Translation</source><translation>Translation</translation></message>
     <message><source>Clipboard</source><translation>Clipboard</translation></message>
@@ -2656,8 +2656,8 @@ Replace it?</translation>
     <name>WelcomeWizard</name>
     <!-- window / nav -->
     <message>
-        <source>欢迎使用截图吧</source>
-        <translation>Welcome to JieTuBa</translation>
+        <source>欢迎使用积磊截图</source>
+        <translation>Welcome to Jilei Screenshot</translation>
     </message>
     <message>
         <source>← 上一步</source>
@@ -2689,8 +2689,8 @@ Replace it?</translation>
     </message>
     <!-- page1 -->
     <message>
-        <source>欢迎使用截图吧 👋</source>
-        <translation>Welcome to JieTuBa 👋</translation>
+        <source>欢迎使用积磊截图 👋</source>
+        <translation>Welcome to Jilei Screenshot 👋</translation>
     </message>
     <message>
         <source>一款轻量的截图与剪贴板管理工具。</source>
@@ -2994,8 +2994,8 @@ You can tweak more options in Settings anytime.</translation>
         <translation>Shortcut</translation>
     </message>
     <message>
-        <source>完成向导时在桌面创建截图吧快捷方式。</source>
-        <translation>Creates a Jietuba shortcut on your desktop when the wizard finishes.</translation>
+        <source>完成向导时在桌面创建积磊截图快捷方式。</source>
+        <translation>Creates a Jilei Screenshot shortcut on your desktop when the wizard finishes.</translation>
     </message>
     <!-- illus strings -->
     <message>

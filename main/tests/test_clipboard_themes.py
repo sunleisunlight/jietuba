@@ -19,7 +19,7 @@ class TestThemeColors:
         colors = ThemeColors()
         assert colors.bg_primary == "#FFFFFF"
         assert colors.text_primary == "#333333"
-        assert colors.accent_primary == "#6F8FAB"
+        assert colors.accent_primary == "#FF5A1F"
 
     def test_to_dict(self):
         """to_dict 应返回包含所有字段的字典"""

@@ -129,10 +129,13 @@ class TestScreenshotToolbar:
         assert all(toolbar.rect().contains(geometry) for geometry in geometries)
 
     def test_more_opener_is_a_strip_as_narrow_as_the_drag_handle(self, qapp):
-        """「…」和左端拖动手柄一样宽、贴着右边缘，不再占一整个按钮的宽度"""
+        """「…」和左端拖动手柄一样宽；卡片风布局下右缘距窗口边缘留半个按钮间隙"""
+        from ui.toolbar import TOOLBAR_GAP
+        from core.ui_scale import scaled
         toolbar = Toolbar()
         assert toolbar.more_btn.width() == toolbar.drag_handle.width() < toolbar.pen_btn.width()
-        assert toolbar.more_btn.geometry().right() == toolbar.rect().right()
+        half_gap = scaled(TOOLBAR_GAP) // 2
+        assert toolbar.more_btn.geometry().right() == toolbar.rect().right() - half_gap
 
     def test_configured_layout_reorders_folds_and_hides(self, qapp):
         default_width = Toolbar().width()

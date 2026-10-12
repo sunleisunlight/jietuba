@@ -65,9 +65,9 @@ class NumberStylePopup(HoverPopup):
             # 的，选中态不能用实心主题色去填，否则图样自己就看不见了。
             "QToolButton { border: 1px solid transparent; border-radius: 3px;"
             " background: transparent; }"
-            "QToolButton:hover { background-color: #f2f8fd; border-color: #d8e8f5; }"
+            "QToolButton:hover { background-color: #FFF6F0; border-color: #F7D3BE; }"
             "QToolButton:checked, QToolButton:checked:hover {"
-            " background-color: #cce4f7; border: 2px solid #0078d7; }"
+            " background-color: #FFE4D6; border: 2px solid #FF5A1F; }"
         )
 
         layout = QHBoxLayout(self)

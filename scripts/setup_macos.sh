@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Jietuba macOS 环境准备：工具链检测 + venv + Python 依赖 + Rust 扩展。
+# 积磊截图 macOS 环境准备：工具链检测 + venv + Python 依赖 + Rust 扩展。
 # 用法: ./scripts/setup_macos.sh
 #
 # 项目只支持 Python 3.11 与 Apple Silicon (arm64)。检测不通过时直接停止，
@@ -66,7 +66,7 @@ echo "==> 安装 Python 依赖（Mac 条件依赖，跳过 pywin32/comtypes）"
 pip install -r requirements.txt -r requirements-dev.txt
 
 echo "==> 构建 Rust 扩展 (arm64 wheel)"
-WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jietuba-wheels.XXXXXX")"
+WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/jilei-screenshot-wheels.XXXXXX")"
 for crate in longstitch pyclipboard ppocr_rust gifrecorder; do
   (cd "rust_libs/$crate" && maturin build --locked --release --out "$WHEEL_DIR")
 done

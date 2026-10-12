@@ -343,7 +343,7 @@ class ScrollCaptureWindow(QWidget):
         # 滚动检测相关
         self.last_scroll_time = 0  # 最后一次滚动的时间戳
         # 从配置读取滚动冷却时间
-        settings = QSettings('Fandes', 'jietuba')
+        settings = QSettings('JileiScreenshot', 'LongStitch')
         self.scroll_cooldown = settings.value('screenshot/scroll_cooldown', 0.15, type=float)
         self.capture_mode = "immediate"  # 截图模式: "immediate"立即 或 "wait"等待停止
         
@@ -1351,7 +1351,7 @@ class ScrollCaptureWindow(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         # 绘制半透明边框（在窗口边缘，不影响截图区域）
-        pen = QPen(QColor(0, 120, 215), 3)  # 蓝色边框，3像素
+        pen = QPen(QColor(255, 90, 31), 3)  # 积磊品牌橙边框，3像素
         painter.setPen(pen)
         
         # 边框应该绘制在整个窗口的边缘

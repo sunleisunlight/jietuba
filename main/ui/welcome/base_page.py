@@ -21,14 +21,14 @@ from core.ui_theme import get_ui_theme
 # 设计规范（欢迎向导全局共享）
 # ─────────────────────────────────────────
 ACCENT_DARK = ACCENT_HOVER  # 兼容欢迎页现有命名
-TEXT_PRIMARY = "#172331"
-TEXT_SECOND = "#667587"
+TEXT_PRIMARY = "#1F1B18"
+TEXT_SECOND = "#6E665F"
 BG_PAGE = "#FFFFFF"
-BG_ILLUS = "#F3F7FA"
-BG_SUBTLE = "#F7F9FB"
-BORDER = "#DDE5EC"
+BG_ILLUS = "#FBF4EE"
+BG_SUBTLE = "#FAF5F0"
+BORDER = "#E4D8CD"
 RADIUS = 16
-PRODUCT_NAME = "Jietuba"
+PRODUCT_NAME = "积磊截图"
 
 
 @dataclass(frozen=True)
@@ -59,41 +59,41 @@ def welcome_theme() -> WelcomeTheme:
     tokens = get_ui_theme().tokens
     if tokens.is_dark:
         return WelcomeTheme(
-            page="#23272C",
-            panel="#2B3036",
-            panel_subtle="#252A30",
-            illustration="#262C32",
-            sidebar="#20252A",
-            border="#3C444D",
-            border_strong="#4B5661",
-            separator="#363E47",
-            text="#F2F4F6",
-            text_muted="#AEB7C1",
-            text_soft="#87919C",
+            page="#25201C",
+            panel="#2D2823",
+            panel_subtle="#28241F",
+            illustration="#2A251F",
+            sidebar="#221E1A",
+            border="#453D35",
+            border_strong="#554B41",
+            separator="#3B342D",
+            text="#F5F1EC",
+            text_muted="#B5ABA2",
+            text_soft="#8D847B",
             accent=tokens.accent,
             accent_hover=tokens.accent_hover,
-            accent_soft="#31404C",
-            toolbar="#171C21",
-            canvas="#303840",
+            accent_soft="#4A2A1C",
+            toolbar="#1C1815",
+            canvas="#372C24",
             is_dark=True,
         )
     return WelcomeTheme(
         page="#FFFFFF",
         panel="#FFFFFF",
-        panel_subtle="#F7F9FB",
-        illustration="#F3F7FA",
-        sidebar="#F5F8FA",
-        border="#DDE5EC",
-        border_strong="#C9D6E0",
-        separator="#E5EBF0",
-        text="#172331",
-        text_muted="#667587",
-        text_soft="#8795A4",
+        panel_subtle="#FAF5F0",
+        illustration="#FBF4EE",
+        sidebar="#FAF5F0",
+        border="#E4D8CD",
+        border_strong="#D2C2B4",
+        separator="#EDE3D9",
+        text="#1F1B18",
+        text_muted="#6E665F",
+        text_soft="#93887E",
         accent=tokens.accent,
         accent_hover=tokens.accent_hover,
-        accent_soft="#E9F0F5",
-        toolbar="#233342",
-        canvas="#EAF0F4",
+        accent_soft="#FFEDE3",
+        toolbar="#332A24",
+        canvas="#F7EDE6",
         is_dark=False,
     )
 
@@ -101,7 +101,7 @@ def welcome_theme() -> WelcomeTheme:
 def brand_text(text: str) -> str:
     """将翻译文件中的历史产品名统一成当前英文品牌写法。"""
     result = str(text)
-    for legacy_name in ("截图吧", "JieTuBa", "JieTuba", "JIETUBA"):
+    for legacy_name in ("截图吧", "Jietuba", "JieTuBa", "JieTuba", "JIETUBA"):
         result = result.replace(legacy_name, PRODUCT_NAME)
     return result
 

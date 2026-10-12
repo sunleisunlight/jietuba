@@ -6,17 +6,15 @@ from PySide6.QtCore import Qt
 from core.ui_scale import dialog_scaled
 from ui.fluent_lite import (
     SettingCard, FluentIcon,
-    HyperlinkButton, PushButton,
+    PushButton,
 )
 from .components import SettingCardGroup
 from ui.dialogs import (
     show_info_dialog,
-    show_text_dialog,
     show_update_dialog,
     show_warning_dialog,
 )
 from core import T, log_warning
-from core.constants import PROJECT_GITHUB_URL
 from core.update_checker import GitHubReleaseChecker, ReleaseInfo, is_newer_version
 from main_app import APP_VERSION
 
@@ -107,49 +105,6 @@ def create_about_page(dialog) -> QScrollArea:
     release_checker.release_found.connect(show_release)
     release_checker.failed.connect(show_check_error)
     check_update_btn.clicked.connect(start_check)
-
-    # 开发者卡片
-    dev_card = SettingCard(
-        FluentIcon.PEOPLE,
-        dialog.tr("Developer"),
-        "JYAARU",
-        parent=group,
-    )
-    group.addSettingCard(dev_card)
-
-    license_card = SettingCard(
-        FluentIcon.DOCUMENT,
-        dialog.tr("Licenses"),
-        "MIT",
-        parent=group,
-    )
-    details_btn = HyperlinkButton(url="", text=dialog.tr("Details"), parent=license_card)
-    details_btn.clicked.connect(
-        lambda: show_text_dialog(
-            dialog,
-            dialog.tr("MIT License"),
-            dialog.tr("MIT License Text"),
-        )
-    )
-    license_card.hBoxLayout.addWidget(details_btn, 0, Qt.AlignmentFlag.AlignRight)
-    license_card.hBoxLayout.addSpacing(dialog_scaled(16))
-    group.addSettingCard(license_card)
-
-    # GitHub 链接卡片
-    github_card = SettingCard(
-        FluentIcon.GITHUB,
-        dialog.tr("Source Code"),
-        "github.com/1003129155/jietuba",
-        parent=group,
-    )
-    link_btn = HyperlinkButton(
-        url=PROJECT_GITHUB_URL,
-        text=dialog.tr("Open GitHub"),
-        parent=github_card,
-    )
-    github_card.hBoxLayout.addWidget(link_btn, 0, Qt.AlignmentFlag.AlignRight)
-    github_card.hBoxLayout.addSpacing(dialog_scaled(16))
-    group.addSettingCard(github_card)
 
     layout.addWidget(group)
     layout.addStretch(1)

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Jietuba macOS 打包脚本。
+"""积磊截图 macOS 打包脚本。
 
 流程：
   1. 准备 .icns（从 托盘.ico / assets 生成，若缺失）
-  2. PyInstaller onedir 构建 dist/Jietuba.app
+  2. PyInstaller onedir 构建 dist/JileiScreenshot.app
   3. 补齐 models/（Contents/Resources + Contents/MacOS 双位置，兼容旧查找路径）
   4. ad-hoc 签名（无 Developer ID 时用 "-"；有则自动使用）
   5. codesign 验证 + 关键资源存在性检查
@@ -21,10 +21,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent
 VENV_PY = REPO / ".venv" / "bin" / "python"
 DIST = REPO / "dist"
-APP = DIST / "Jietuba.app"
-SPEC = REPO / "jietuba_macos.spec"
+APP = DIST / "JileiScreenshot.app"
+SPEC = REPO / "jileiscreenshot_macos.spec"
 ASSETS = REPO / "assets"
-ICNS = ASSETS / "Jietuba.icns"
+ICNS = ASSETS / "JileiScreenshot.icns"
 ENTITLEMENTS = REPO / "packaging" / "entitlements.plist"
 
 sys.path.insert(0, str(REPO / "scripts"))
@@ -61,8 +61,8 @@ def ensure_icns():
         return
     ASSETS.mkdir(exist_ok=True)
     icon_png = REPO / "托盘.ico"
-    tmp_png = "/tmp/jietuba_icon.png"
-    iconset = "/tmp/jietuba.iconset"
+    tmp_png = "/tmp/jilei_screenshot_icon.png"
+    iconset = "/tmp/jilei_screenshot.iconset"
     shutil.rmtree(iconset, ignore_errors=True)
     os.makedirs(iconset, exist_ok=True)
 
@@ -195,8 +195,8 @@ def check_native_dependencies():
 def verify_app():
     ok = True
     checks = [
-        ("executable", APP / "Contents/MacOS/Jietuba"),
-        ("icon", APP / "Contents/Resources/Jietuba.icns"),
+        ("executable", APP / "Contents/MacOS/JileiScreenshot"),
+        ("icon", APP / "Contents/Resources/JileiScreenshot.icns"),
         ("svg", APP / "Contents/Resources/svg/托盘.svg"),
         ("qm", APP / "Contents/Resources/translations/app_zh.qm"),
         ("det model (Resources)", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
@@ -217,7 +217,7 @@ def verify_app():
         for key in ("CFBundleIdentifier", "NSScreenCaptureUsageDescription",
                     "CFBundleShortVersionString", "CFBundleVersion"):
             print(f"  [{'OK' if key in info else 'MISSING'}] Info.plist {key} = {info.get(key)}")
-        if info.get("CFBundleIdentifier") != "cc.jilei.jietuba":
+        if info.get("CFBundleIdentifier") != "cc.jilei.jileiscreenshot":
             ok = False
         for key in ("CFBundleShortVersionString", "CFBundleVersion"):
             if info.get(key) != VERSION:
@@ -242,8 +242,8 @@ def main():
     ensure_icns()
     if APP.exists():
         shutil.rmtree(APP)
-    if (DIST / "Jietuba").exists():
-        shutil.rmtree(DIST / "Jietuba")
+    if (DIST / "JileiScreenshot").exists():
+        shutil.rmtree(DIST / "JileiScreenshot")
     # PyInstaller 必须用带依赖的解释器运行
     run([PYTHON, "-m", "PyInstaller", "--noconfirm", str(SPEC)],
         cwd=REPO)

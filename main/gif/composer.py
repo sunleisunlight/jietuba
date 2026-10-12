@@ -78,7 +78,7 @@ class _ComposeWorker(QObject):
     def _compose(self):
         need_bytes = self._path is None
         if need_bytes:
-            tmp_fd, out_path = tempfile.mkstemp(suffix=".gif", prefix="jietuba_")
+            tmp_fd, out_path = tempfile.mkstemp(suffix=".gif", prefix="JileiScreenshot_")
             os.close(tmp_fd)
         else:
             out_path = self._path

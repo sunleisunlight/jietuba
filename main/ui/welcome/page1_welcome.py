@@ -32,7 +32,7 @@ _theme_label_tr = make_tr("ClipboardWindow")
 
 # ── 首屏产品预览 ────────────────────────────────────────
 class _ProductCanvas(QWidget):
-    """展示 Jietuba 的四项核心能力，而非单一截图编辑器。"""
+    """展示积磊截图的四项核心能力，而非单一截图编辑器。"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,10 +102,10 @@ class _ProductCanvas(QWidget):
         available_h = max(120, content.bottom() - grid_y)
         tile_h = (available_h - gap) / 2
         modules = (
-            ("Capture", "SCREEN", "#6F8FAB"),
-            ("Annotate", "CREATE", "#6FA18F"),
+            ("Capture", "SCREEN", "#FF5A1F"),
+            ("Annotate", "CREATE", "#3FA38C"),
             ("Clipboard", "ORGANIZE", "#8A7FA7"),
-            ("Translate", "LANGUAGE", "#B18468"),
+            ("Translate", "LANGUAGE", "#5B85A8"),
         )
 
         for idx, (title, meta, color) in enumerate(modules):
@@ -249,7 +249,7 @@ class WelcomePage(BasePage):
             self._init_lang = "ja"
 
         super().__init__(
-            title=brand_text(_tr("欢迎使用截图吧 👋")).replace("👋", "").strip(),
+            title=brand_text(_tr("欢迎使用积磊截图 👋")).replace("👋", "").strip(),
             subtitle=_tr("截图 · 标注 · 剪贴板 · 翻译，一站搞定"),
             parent=parent,
         )
@@ -319,7 +319,7 @@ class WelcomePage(BasePage):
     def retranslate(self):
         """语言切换后由 wizard.retranslate_ui() 调用，刷新本页所有可见文字。"""
         self.title_label.setText(
-            brand_text(_tr("欢迎使用截图吧 👋")).replace("👋", "").strip()
+            brand_text(_tr("欢迎使用积磊截图 👋")).replace("👋", "").strip()
         )
         self.subtitle_label.setText(_tr("截图 · 标注 · 剪贴板 · 翻译，一站搞定"))
         if hasattr(self, "_row_lang_lbl") and self._row_lang_lbl:

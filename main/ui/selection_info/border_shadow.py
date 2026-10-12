@@ -244,8 +244,8 @@ class BorderShadowPopup(QWidget):
         radius = scaled(4)
         font_px = scaled(12)
         _ACTIVE = f"""
-            background: rgba(64,224,208,50);
-            border: 1px solid rgba(64,224,208,120);
+            background: rgba(255,90,31,60);
+            border: 1px solid rgba(255,90,31,140);
             border-radius: {radius}px;
         """
         _INACTIVE = f"""

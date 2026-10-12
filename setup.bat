@@ -77,7 +77,7 @@ pause >nul
 exit /b
 
 :lang_zh
-set "MSG_TITLE=Jietuba 一键部署脚本"
+set "MSG_TITLE=积磊截图 一键部署脚本"
 set "MSG_PYTHON_MISSING=[错误] 未检测到 Python 3.11，请安装与系统架构一致的 Python 3.11（x64 或 ARM64）并勾选 "Add to PATH"。"
 set "MSG_DOWNLOAD=下载地址:"
 set "MSG_PYTHON=使用 Python:"
@@ -92,7 +92,7 @@ set "MSG_PAUSE=请按任意键继续 . . ."
 exit /b
 
 :lang_en
-set "MSG_TITLE=Jietuba One-click Setup"
+set "MSG_TITLE=JileiScreenshot One-click Setup"
 set "MSG_PYTHON_MISSING=[Error] Python 3.11 was not found. Install Python 3.11 for your Windows architecture (x64 or ARM64) and select "Add to PATH"."
 set "MSG_DOWNLOAD=Download:"
 set "MSG_PYTHON=Using Python:"
@@ -107,7 +107,7 @@ set "MSG_PAUSE=Press any key to continue . . ."
 exit /b
 
 :lang_ja
-set "MSG_TITLE=Jietuba ワンクリックセットアップ"
+set "MSG_TITLE=積磊スクリーンショット ワンクリックセットアップ"
 set "MSG_PYTHON_MISSING=[エラー] Python 3.11 が見つかりません。Windows のシステム構成に合った Python 3.11（x64 または ARM64）をインストールし、"Add to PATH" にチェックを入れてください。"
 set "MSG_DOWNLOAD=ダウンロード:"
 set "MSG_PYTHON=使用する Python:"
@@ -122,7 +122,7 @@ set "MSG_PAUSE=続行するには何かキーを押してください . . ."
 exit /b
 
 :lang_ko
-set "MSG_TITLE=Jietuba 원클릭 설치"
+set "MSG_TITLE=积磊 스크린샷 원클릭 설치"
 set "MSG_PYTHON_MISSING=[오류] Python 3.11을 찾을 수 없습니다. Windows 아키텍처에 맞는 Python 3.11(x64 또는 ARM64)을 설치하고 "Add to PATH"를 선택하세요."
 set "MSG_DOWNLOAD=다운로드:"
 set "MSG_PYTHON=사용할 Python:"

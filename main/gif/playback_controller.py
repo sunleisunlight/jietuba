@@ -495,5 +495,5 @@ class PlaybackController(QObject):
 
         os.makedirs(save_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return os.path.join(save_dir, f"jietuba_gif_{ts}.gif")
+        return os.path.join(save_dir, f"JileiScreenshot_gif_{ts}.gif")
  

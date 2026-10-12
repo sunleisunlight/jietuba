@@ -253,7 +253,7 @@ class WelcomeWizard(FrostedFramelessDialog):
         # ── 第一步：检测并加载语言，必须在创建任何页面之前 ──
         self._init_language()
 
-        self.setWindowTitle(brand_text(_tr("欢迎使用截图吧")))
+        self.setWindowTitle(brand_text(_tr("欢迎使用积磊截图")))
         # 必须先设置 WindowFlags（会重建原生窗口句柄），再调用 setFixedSize，
         # 否则 setWindowFlags 会清除固定大小约束，导致拖动时布局反复重算、高度抖动。
         # MSWindowsFixedSizeDialogHint 在 Windows 上额外锁定窗口不可调整大小。
@@ -557,7 +557,7 @@ class WelcomeWizard(FrostedFramelessDialog):
     def retranslate_ui(self):
         """语言切换后刷新向导所有文字（导航按钮 + 各页面）。"""
         # 刷新窗口标题
-        self.setWindowTitle(brand_text(_tr("欢迎使用截图吧")))
+        self.setWindowTitle(brand_text(_tr("欢迎使用积磊截图")))
 
         self._btn_skip.setText(_tr("跳过"))
         self._update_nav()

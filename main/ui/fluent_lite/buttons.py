@@ -36,7 +36,7 @@ def _primary_style(widget=None) -> str:
      font: 600 {s(13)}px {FONT_FAMILY}; outline: none; }}
     QPushButton:hover {{ background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; }}
     QPushButton:pressed {{ background: {ACCENT_PRESSED}; border-color: {ACCENT_PRESSED}; padding-top: {s(5)}px; padding-bottom: {s(3)}px; }}
-    QPushButton:disabled {{ color: rgba(255,255,255,.84); background: #687D8F; border-color: #687D8F; }}
+    QPushButton:disabled {{ color: rgba(255,255,255,.88); background: #E8A488; border-color: #E8A488; }}
     """
 
 

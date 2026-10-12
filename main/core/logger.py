@@ -204,7 +204,7 @@ class Logger:
         
         Args:
             enabled: 是否启用日志
-            log_dir: 日志目录路径（默认：~/AppData/Local/Jietuba/Logs）
+            log_dir: 日志目录路径（默认：~/AppData/Local/JileiScreenshot/Logs）
         """
         self.enabled = enabled
         
@@ -254,7 +254,7 @@ class Logger:
             return
         
         header = T(
-            "\n{sep}\nJietuba 截图工具 - 运行日志\n启动时间: {start_time}\n日志目录: {log_dir}\n"
+            "\n{sep}\n积磊截图 - 运行日志\n启动时间: {start_time}\n日志目录: {log_dir}\n"
             "日志级别: {file_level} (文件) / {console_level} (控制台)\n{sep}\n",
             sep='=' * 80,
             start_time=f"{datetime.now():%Y-%m-%d %H:%M:%S}",

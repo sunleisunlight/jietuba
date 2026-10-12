@@ -4,6 +4,6 @@
   <line x1="15" y1="3" x2="15" y2="21"/>
   <line x1="3" y1="9" x2="21" y2="9"/>
   <line x1="3" y1="15" x2="21" y2="15"/>
-  <path d="M7 12L10.5 8.5M10.5 8.5L7 5M10.5 8.5H7" stroke="#40E0D0" stroke-width="1.5"/>
-  <path d="M17 12L13.5 15.5M13.5 15.5L17 19M13.5 15.5H17" stroke="#40E0D0" stroke-width="1.5"/>
+  <path d="M7 12L10.5 8.5M10.5 8.5L7 5M10.5 8.5H7" stroke="#FF5A1F" stroke-width="1.5"/>
+  <path d="M17 12L13.5 15.5M13.5 15.5L17 19M13.5 15.5H17" stroke="#FF5A1F" stroke-width="1.5"/>
 </svg>

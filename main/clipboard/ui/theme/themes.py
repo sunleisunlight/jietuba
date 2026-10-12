@@ -28,17 +28,17 @@ class ThemeColors:
     text_secondary: str = "#666666"       # 次要文字色
     text_tertiary: str = "#999999"        # 第三级文字色
     text_disabled: str = "#CCCCCC"        # 禁用文字色
-    text_accent: str = "#58738C"          # 强调文字色
-    
+    text_accent: str = "#C24E16"          # 强调文字色（积磊橙）
+
     # 边框色
     border_primary: str = "#E0E0E0"       # 主边框色
     border_secondary: str = "#E8E8E8"     # 次要边框色
-    border_accent: str = "#6F8FAB"        # 强调边框色
-    border_selected: str = "#6F8FAB"      # 选中边框色
-    
+    border_accent: str = "#FF5A1F"        # 强调边框色（积磊橙）
+    border_selected: str = "#FF5A1F"      # 选中边框色
+
     # 功能色
-    accent_primary: str = "#6F8FAB"       # 主强调色（蓝灰色）
-    accent_hover: str = "#627F99"         # 强调色悬停
+    accent_primary: str = "#FF5A1F"       # 主强调色（积磊品牌橙）
+    accent_hover: str = "#E84B12"         # 强调色悬停
     success: str = "#4CAF50"              # 成功色（绿色）
     success_bg: str = "#E8F5E9"           # 成功背景色
     success_hover: str = "#388E3C"        # 成功色悬停
@@ -51,7 +51,7 @@ class ThemeColors:
     # 特殊色
     drag_drop_border: str = "#4DAF50"     # 拖放边框色
     separator: str = "#E0E0E0"            # 分隔线颜色
-    shortcut_key_color: str = "#58738C"   # 快捷键徽标文字颜色
+    shortcut_key_color: str = "#C24E16"   # 快捷键徽标文字颜色（积磊橙）
     
     def to_dict(self) -> Dict[str, str]:
         """转换为字典"""
@@ -113,25 +113,25 @@ THEME_DARK = Theme(
         bg_secondary="#3B3B3D",
         bg_tertiary="#2D2D30",
         bg_hover="#3E3E42",
-        bg_selected="#0B4B75",
-        bg_selected_highlight="rgba(0, 122, 204, 0.5)",  # 加深选中高亮
-        
+        bg_selected="#7A2E0E",
+        bg_selected_highlight="rgba(255, 90, 31, 0.45)",  # 加深选中高亮（积磊橙）
+
         # 文字色
         text_primary="#E0E0E0",
         text_secondary="#AAAAAA",
         text_tertiary="#888888",
         text_disabled="#555555",
-        text_accent="#4FC3F7",
-        
+        text_accent="#FFB088",
+
         # 边框色
         border_primary="#3E3E42",
         border_secondary="#2D2D30",
-        border_accent="#007ACC",
-        border_selected="#007ACC",
-        
+        border_accent="#FF5A1F",
+        border_selected="#FF5A1F",
+
         # 功能色
-        accent_primary="#007ACC",
-        accent_hover="#005A9E",
+        accent_primary="#FF5A1F",
+        accent_hover="#E84B12",
         success="#4CAF50",
         success_bg="#1B5E20",
         success_hover="#388E3C",
@@ -144,7 +144,7 @@ THEME_DARK = Theme(
         # 特殊色
         drag_drop_border="#4CAF50",
         separator="#3E3E42",
-        shortcut_key_color="#9CA2C5",   # 浅蓝色，在深色背景上清晰可见
+        shortcut_key_color="#F0B596",   # 浅橙色，在深色背景上清晰可见
     )
 )
 

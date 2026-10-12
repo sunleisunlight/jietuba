@@ -94,7 +94,7 @@ def test_fetch_latest_release_builds_github_request(monkeypatch):
     assert release.tag_name == "v2.0.5"
     assert timeout == 4.321
     assert request.get_header("Accept") == "application/vnd.github+json"
-    assert request.get_header("User-agent") == "jietuba-update-checker"
+    assert request.get_header("User-agent") == "jilei-screenshot-update-checker"
 
 
 def test_fetch_latest_release_reports_network_errors(monkeypatch):

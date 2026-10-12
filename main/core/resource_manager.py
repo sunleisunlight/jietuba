@@ -2,9 +2,26 @@
 资源管理器 - 统一管理应用资源路径和图标缓存
 """
 import os
+import re
 import sys
 
 from core.logger import log_exception, log_warning, T
+
+
+# SVG 里常见的"近黑"颜色写法（小写匹配）。recolor 染色时把这些换成目标色，
+# 白色/灰色/品牌点缀色（如荧光笔笔尖的黄）保持原样。
+_DARK_SVG_COLORS = (
+    "black", "#000000", "#000", "#0f0f0f", "#0f1729", "#212121",
+)
+_DARK_SVG_RE = re.compile(
+    r"((?:fill|stroke)\s*=\s*['\"])(?:" + "|".join(_DARK_SVG_COLORS) + r")(['\"])",
+    flags=re.IGNORECASE,
+)
+
+
+def recolor_svg(svg_text: str, color: str) -> str:
+    """把 SVG 文本里近黑色的 fill/stroke 替换为 color，其余颜色保留。"""
+    return _DARK_SVG_RE.sub(lambda m: f"{m.group(1)}{color}{m.group(2)}", svg_text)
 
 
 # 立即光栅化时覆盖的目标框尺寸。
@@ -47,7 +64,8 @@ class ResourceManager:
         return ResourceManager.get_resource_path(os.path.join("svg", icon_name))
 
     @staticmethod
-    def _rasterize(svg_path: str, size: int = 0):
+    def _rasterize(svg_path: str, size: int = 0, tint: str | None = None,
+                   recolor: bool = False):
         """把 SVG 立即渲染成位图 QIcon，之后不再依赖源文件。
 
         Args:
@@ -55,15 +73,28 @@ class ResourceManager:
             size:     > 0 时渲染成 size×size 的正方形（铺满画布，与旧行为一致，
                       GIF 工具栏依赖这一点来保证各图标视觉大小统一）；
                       为 0 时按原始宽高比渲染多个尺寸。
+            tint:     品牌染色。渲染后用 SourceIn 把所有不透明像素统一染成该色
+                      （半透明抗锯齿保留），适合纯深色线条图标。
+            recolor:  与 tint 配合使用的另一种染色：渲染前把 SVG 里近黑色的
+                      fill/stroke 替换为 tint，白/灰/点缀色保留，适合序号、
+                      荧光笔这类带白底或彩色点缀的图标。
 
         Returns:
             QIcon；渲染失败返回 None，由调用方决定如何回退。
         """
         from PySide6.QtCore import Qt, QSize
-        from PySide6.QtGui import QIcon, QPixmap, QPainter
+        from PySide6.QtGui import QIcon, QPixmap, QPainter, QColor
         from PySide6.QtSvg import QSvgRenderer
 
-        renderer = QSvgRenderer(svg_path)
+        svg_bytes: bytes | None = None
+        if tint and recolor:
+            try:
+                with open(svg_path, "r", encoding="utf-8") as f:
+                    svg_bytes = recolor_svg(f.read(), tint).encode("utf-8")
+            except OSError:
+                svg_bytes = None
+
+        renderer = QSvgRenderer(svg_bytes if svg_bytes is not None else svg_path)
         if not renderer.isValid():
             return None
 
@@ -75,6 +106,18 @@ class ResourceManager:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             renderer.render(painter)
             painter.end()
+            if tint and not recolor:
+                # 整图染成目标色：alpha 通道不变，RGB 全部替换
+                tinted = QPixmap(pm.size())
+                tinted.fill(Qt.GlobalColor.transparent)
+                tp = QPainter(tinted)
+                tp.setRenderHint(QPainter.RenderHint.Antialiasing)
+                tp.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                tp.drawPixmap(0, 0, pm)
+                tp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+                tp.fillRect(tinted.rect(), QColor(tint))
+                tp.end()
+                pm = tinted
             return pm
 
         icon = QIcon()
@@ -104,18 +147,20 @@ class ResourceManager:
         return icon if not icon.isNull() else None
 
     @staticmethod
-    def get_icon(svg_path: str, size: int = 0):
+    def get_icon(svg_path: str, size: int = 0, tint: str | None = None,
+                 recolor: bool = False):
         """获取 QIcon（带缓存，内容已光栅化，不再依赖源文件）。
 
         Args:
             svg_path: SVG 文件的绝对路径
             size: 若 > 0，则渲染到 size×size 的正方形，确保不同 SVG 图标大小一致。
                   若为 0（默认），按原始宽高比渲染一组常用尺寸。
+            tint/recolor: 见 _rasterize 的染色说明。
 
         Returns:
             QIcon 对象
         """
-        cache_key = (svg_path, size)
+        cache_key = (svg_path, size, tint or "", recolor)
         icon = ResourceManager._icon_cache.get(cache_key)
         if icon is not None:
             return icon
@@ -123,7 +168,7 @@ class ResourceManager:
         from PySide6.QtGui import QIcon
 
         try:
-            icon = ResourceManager._rasterize(svg_path, size)
+            icon = ResourceManager._rasterize(svg_path, size, tint=tint, recolor=recolor)
         except Exception as e:
             log_exception(e, T("SVG 渲染图标"))
             icon = None
@@ -138,8 +183,9 @@ class ResourceManager:
         return icon
 
     @staticmethod
-    def get_icon_by_name(icon_name: str, size: int = 0):
+    def get_icon_by_name(icon_name: str, size: int = 0, tint: str | None = None,
+                         recolor: bool = False):
         """按 svg/ 下的文件名取图标，等价于 get_icon(get_icon_path(name), size)。"""
         return ResourceManager.get_icon(
-            ResourceManager.get_icon_path(icon_name), size
+            ResourceManager.get_icon_path(icon_name), size, tint=tint, recolor=recolor
         )

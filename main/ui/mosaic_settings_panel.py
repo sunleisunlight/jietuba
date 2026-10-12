@@ -266,7 +266,7 @@ class MosaicSettingsPanel(QWidget):
         level_button_qss = (
             "QPushButton { padding: 0px; border: 1px solid #ddd; }"
             "QPushButton:hover { border-color: #bbb; }"
-            "QPushButton:checked { border: 2px solid #0078d7; }"
+            "QPushButton:checked { border: 2px solid #FF5A1F; }"
         )
         self._swatch_side = scaled(self.BASE_ICON)
         for index, level in enumerate(MosaicTool.BLOCK_SIZE_LEVELS):

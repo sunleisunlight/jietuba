@@ -173,7 +173,7 @@ class NoteSettingsPanel(QWidget):
         return build_settings_panel_stylesheet() + """
             QPushButton#noteDirection:checked {
                 background-color: #cfe6fb;
-                border: 1px solid #0078d7;
+                border: 1px solid #FF5A1F;
             }
             QPushButton#noteDirection:hover {
                 border: 1px solid #bbb;

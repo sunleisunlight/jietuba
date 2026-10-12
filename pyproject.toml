@@ -1,10 +1,10 @@
 [project]
-name = "jietuba"
+name = "jileiscreenshot"
 # 注意：这里的 version 只是 Python 工程元数据，**不是应用发布版本**，
 # 也不参与 Windows / macOS 打包。应用版本唯一源是 main/main_app.py 的
 # APP_VERSION（见 AGENTS.md 版本规则），请勿把两者混为一谈。
 version = "1.0.0"
-description = "截图 & 剪切板管理软件 - 基于 PySide6 和 Rust 的 Windows 与 macOS 截图和剪贴板管理工具"
+description = "积磊截图 - 基于 PySide6 和 Rust 的 Windows 与 macOS 截图和剪贴板管理工具"
 requires-python = "==3.11.*"
 license = {text = "MIT"}
 
@@ -37,7 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-jietuba = "main.core.bootstrap:run"
+jileiscreenshot = "main.core.bootstrap:run"
 
 [tool.pytest.ini_options]
 testpaths = ["main/tests"]

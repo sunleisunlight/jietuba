@@ -22,11 +22,12 @@ def theme_color(light: str, dark: str) -> str:
 
 
 def theme_surface_color() -> str:
-    return theme_color("rgba(239, 244, 250, 0.91)", "#202124")
+    # 暖白（浅）/ 暖炭灰（深），与 ui_theme 的窗口色同体系
+    return theme_color("rgba(250, 245, 239, 0.92)", "#221F1B")
 
 
 def theme_sidebar_color() -> str:
-    return theme_color("rgba(246, 249, 252, 0.54)", "#25272B")
+    return theme_color("rgba(255, 250, 245, 0.60)", "#27241F")
 
 
 def theme_border_color() -> str:
@@ -34,15 +35,15 @@ def theme_border_color() -> str:
 
 
 def theme_input_background() -> str:
-    return theme_color("rgba(255, 255, 255, 0.78)", "#2B2D31")
+    return theme_color("rgba(255, 255, 255, 0.78)", "#2D2924")
 
 
 def theme_popup_background() -> str:
-    return theme_color("#FFFFFF", "#2A2C30")
+    return theme_color("#FFFFFF", "#2A2622")
 
 
 def theme_popup_hover_background() -> str:
-    return theme_color("#EAF2FA", "#36393F")
+    return theme_color("#FFF4EE", "#37302A")
 
 
 def theme_text_style(font_size: int = 14, bold: bool = False, extra: str = "") -> str:

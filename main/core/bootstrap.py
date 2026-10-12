@@ -116,8 +116,8 @@ def ensure_single_instance():
 
     frozen = getattr(sys, 'frozen', False)
     exe_name = os.path.basename(sys.executable if frozen else sys.argv[0])
-    # 打包后用 exe 名，开发时固定用 jietuba_app，避免与其他 python 进程冲突
-    pid_name = exe_name if frozen else "jietuba_app"
+    # 打包后用 exe 名，开发时固定用 jileiscreenshot_app，避免与其他 python 进程冲突
+    pid_name = exe_name if frozen else "jileiscreenshot_app"
     pid_file = os.path.join(tempfile.gettempdir(), f"{pid_name}.pid")
 
     my_pid = os.getpid()
@@ -507,11 +507,16 @@ def run():
     # 2. 模块路径
     ensure_module_path()
 
+    # 2.5 品牌升级迁移（截图吧/jietuba → 积磊截图/JileiScreenshot）。
+    # 必须在任何 QSettings 实例化和数据目录创建之前完成。
+    from core.brand_migration import run_brand_migration
+    run_brand_migration()
+
     # 3. 锁定打包资源，防止运行期被系统清理工具删除
     pin_bundled_resources()
 
     # 4. Windows 任务栏图标（必须在 QApplication 创建之前）
-    set_app_user_model_id("jietuba.app")
+    set_app_user_model_id("cc.jilei.jileiscreenshot")
 
     # 5. 单实例检查
     ensure_single_instance()

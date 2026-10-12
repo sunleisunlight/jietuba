@@ -1,4 +1,4 @@
-# 截图吧 (Jietuba) - Python 依赖
+# 积磊截图 (JileiScreenshot) - Python 依赖
 # Python 3.11 + Windows x86_64 / ARM64 / macOS Apple Silicon (arm64)
 #
 # Windows 专属依赖用 `; sys_platform == "win32"` 标记，macOS 专属依赖用

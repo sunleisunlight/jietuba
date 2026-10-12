@@ -680,8 +680,8 @@ Replace it?</source>
     
     <!-- Info Page -->
     <message>
-        <source>Jietuba - Screenshot Tool</source>
-        <translation>截图吧 - 截图工具</translation>
+        <source>积磊截图 - 截图工具</source>
+        <translation>积磊截图 - 截图工具</translation>
     </message>
     <message>
         <source>Version: 1.0.0</source>
@@ -1271,8 +1271,8 @@ Replace it?</source>
 <context>
     <name>SystemTray</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>截图吧 - 单击截图</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>积磊截图 - 单击截图</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -1314,8 +1314,8 @@ Replace it?</source>
 <context>
     <name>MainApp</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>截图吧 - 单击截图</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>积磊截图 - 单击截图</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -2827,8 +2827,8 @@ Replace it?</source>
     <name>WelcomeWizard</name>
     <!-- window / nav -->
     <message>
-        <source>欢迎使用截图吧</source>
-        <translation>欢迎使用截图吧</translation>
+        <source>欢迎使用积磊截图</source>
+        <translation>欢迎使用积磊截图</translation>
     </message>
     <message>
         <source>← 上一步</source>
@@ -2860,8 +2860,8 @@ Replace it?</source>
     </message>
     <!-- page1 -->
     <message>
-        <source>欢迎使用截图吧 👋</source>
-        <translation>欢迎使用截图吧 👋</translation>
+        <source>欢迎使用积磊截图 👋</source>
+        <translation>欢迎使用积磊截图 👋</translation>
     </message>
     <message>
         <source>一款轻量的截图与剪贴板管理工具。</source>
@@ -3173,8 +3173,8 @@ Replace it?</source>
         <translation>快捷方式</translation>
     </message>
     <message>
-        <source>完成向导时在桌面创建截图吧快捷方式。</source>
-        <translation>完成向导时在桌面创建截图吧快捷方式。</translation>
+        <source>完成向导时在桌面创建积磊截图快捷方式。</source>
+        <translation>完成向导时在桌面创建积磊截图快捷方式。</translation>
     </message>
     <!-- illus strings -->
     <message>

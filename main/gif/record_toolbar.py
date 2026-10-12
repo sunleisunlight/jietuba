@@ -110,7 +110,7 @@ class RecordToolbar(QWidget):
             QPushButton:hover {{ background: rgba(0,0,0,0.06); }}
             QPushButton:pressed {{ background: rgba(0,0,0,0.12); }}
             QPushButton:disabled {{ opacity: 0.4; }}
-            QPushButton:checked {{ background: rgba(0,120,215,0.15); border: 1px solid #0078D7; }}
+            QPushButton:checked {{ background: rgba(255,90,31,0.15); border: 1px solid #FF5A1F; }}
         """
 
     def _time_label_qss(self) -> str:

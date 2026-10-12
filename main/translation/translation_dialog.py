@@ -306,7 +306,7 @@ class DashboardTitleBar(FluentTitleBar):
             self.logo.setPixmap(logo_pixmap)
 
         self.app_name = self.titleLabel
-        self.app_name.setText("jietuba")
+        self.app_name.setText("积磊截图")
         self.app_name.setObjectName("appName")
 
         self.pin_button = PinIconButton(self)
@@ -407,7 +407,7 @@ class TranslationDialog(FramelessWindow):
         self._is_on_top = TranslationDialog._stay_on_top
 
         self.setObjectName("dashboardWindow")
-        self.setWindowTitle("jietuba")
+        self.setWindowTitle("积磊截图")
         self.setMinimumSize(dialog_scaled(self.MINIMUM_WIDTH), dialog_scaled(self.MINIMUM_HEIGHT))
         self.resize(dialog_scaled(self.DEFAULT_WIDTH), dialog_scaled(self.DEFAULT_HEIGHT))
         self.setFont(QFont("Microsoft YaHei UI", dialog_scaled(10)))

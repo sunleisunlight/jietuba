@@ -12,14 +12,14 @@ from core.ui_theme import get_ui_theme
 
 
 FONT_FAMILY = '"Segoe UI Variable", "Microsoft YaHei UI", "Segoe UI", sans-serif'
-# A restrained blue-grey accent.  Keeping this in one module prevents dialogs
-# from quietly drifting back to unrelated Material/Windows blues.
-ACCENT = "#6F8FAB"
-ACCENT_HOVER = "#627F99"
-ACCENT_PRESSED = "#526D85"
-ACCENT_SOFT = "#DFE8EF"
-ACCENT_SUBTLE = "rgba(111, 143, 171, 0.18)"
-FOCUS_RING = "rgba(111, 143, 171, 0.24)"
+# 积磊品牌橙（与 core.ui_theme 同源，保持本组件库常量便于 QSS 直接拼串）。
+# 收敛在一个模块里，防止对话框悄悄漂回互不相关的 Windows/Material 蓝。
+ACCENT = "#FF5A1F"
+ACCENT_HOVER = "#E84B12"
+ACCENT_PRESSED = "#D23E0A"
+ACCENT_SOFT = "#FFF1EA"
+ACCENT_SUBTLE = "rgba(255, 90, 31, 0.16)"
+FOCUS_RING = "rgba(255, 90, 31, 0.28)"
 
 def ui_tokens(widget=None):
     """Return semantic colours, honoring an optional top-level theme scope."""

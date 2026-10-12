@@ -100,8 +100,8 @@ jobs:
       - name: Verify macOS .app bundle
         run: |
           set -euo pipefail
-          APP=dist/Jietuba.app
-          test -x "$APP/Contents/MacOS/Jietuba"
+          APP=dist/JileiScreenshot.app
+          test -x "$APP/Contents/MacOS/JileiScreenshot"
           codesign --verify --deep --strict "$APP"
           VERSION="$(python scripts/version_utils.py)"
           PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
@@ -200,7 +200,7 @@ jobs:
 
       - name: Record Windows artifact provenance
         run: |
-          $files = @(Get-Item dist/jietuba_pp.exe) + @(Get-ChildItem dist/models/*.onnx)
+          $files = @(Get-ChildItem dist/*.exe) + @(Get-ChildItem dist/models/*.onnx)
           if ($files.Count -ne 3) { throw "Expected exe and both OCR models" }
           $manifest = @{
             commit = '${{ github.sha }}'
@@ -217,9 +217,9 @@ jobs:
       - name: Upload current Windows software
         uses: actions/upload-artifact@v4
         with:
-          name: jietuba-windows-${{ matrix.arch }}-${{ github.sha }}
+          name: JileiScreenshot-windows-${{ matrix.arch }}-${{ github.sha }}
           path: |
-            dist/jietuba_pp.exe
+            dist/*.exe
             dist/models/*.onnx
             dist/build-manifest.json
           if-no-files-found: error

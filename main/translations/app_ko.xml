@@ -675,8 +675,8 @@ Replace it?</source>
     
     <!-- Info Page -->
     <message>
-        <source>Jietuba - Screenshot Tool</source>
-        <translation>Jietuba - 스크린샷 도구</translation>
+        <source>积磊截图 - 截图工具</source>
+        <translation>积磊 스크린샷 - 스크린샷 도구</translation>
     </message>
     <message>
         <source>Version: 1.0.0</source>
@@ -1257,8 +1257,8 @@ Replace it?</source>
 <context>
     <name>SystemTray</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>jietuba - 클릭하여 스크린샷</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>积磊 스크린샷 - 클릭하여 스크린샷</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -1300,8 +1300,8 @@ Replace it?</source>
 <context>
     <name>MainApp</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>jietuba - 클릭하여 스크린샷</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>积磊 스크린샷 - 클릭하여 스크린샷</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -2743,8 +2743,8 @@ Replace it?</source>
     <name>WelcomeWizard</name>
     <!-- window / nav -->
     <message>
-        <source>欢迎使用截图吧</source>
-        <translation>JieTuBa에 오신 것을 환영합니다</translation>
+        <source>欢迎使用积磊截图</source>
+        <translation>积磊 스크린샷에 오신 것을 환영합니다</translation>
     </message>
     <message>
         <source>← 上一步</source>
@@ -2776,8 +2776,8 @@ Replace it?</source>
     </message>
     <!-- page1 -->
     <message>
-        <source>欢迎使用截图吧 👋</source>
-        <translation>JieTuBa에 오신 것을 환영합니다 👋</translation>
+        <source>欢迎使用积磊截图 👋</source>
+        <translation>积磊 스크린샷에 오신 것을 환영합니다 👋</translation>
     </message>
     <message>
         <source>一款轻量的截图与剪贴板管理工具。</source>
@@ -3081,8 +3081,8 @@ Replace it?</source>
         <translation>바로가기</translation>
     </message>
     <message>
-        <source>完成向导时在桌面创建截图吧快捷方式。</source>
-        <translation>마법사를 마치면 바탕 화면에 Jietuba 바로가기를 만듭니다.</translation>
+        <source>完成向导时在桌面创建积磊截图快捷方式。</source>
+        <translation>마법사를 마치면 바탕 화면에 积磊 스크린샷 바로가기를 만듭니다.</translation>
     </message>
     <!-- illus strings -->
     <message>

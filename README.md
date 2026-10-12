@@ -1,12 +1,12 @@
 [中文](README_zh-CN.md) | **[English](README.md)** | [日本語](README_JA.md)
 
-# jietuba — Screenshot, OCR, Pin, Translation & Clipboard Tool for Windows and macOS
+# Jilei Screenshot — Screenshot, OCR, Pin, Translation & Clipboard Tool for Windows and macOS
 
 [![build](https://img.shields.io/github/actions/workflow/status/1003129155/jietuba/ci.yml?branch=master2&label=build&style=flat-square)](https://github.com/1003129155/jietuba/actions/workflows/ci.yml) [![license](https://img.shields.io/github/license/1003129155/jietuba?style=flat-square)](LICENSE) [![release](https://img.shields.io/github/v/release/1003129155/jietuba?style=flat-square)](https://github.com/1003129155/jietuba/releases/latest) ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4?style=flat-square)
 
 [Download for Windows](https://github.com/1003129155/jietuba/releases/latest) · [Run from Source](#source-setup) · [Development and Tests](#development)
 
-![jietuba demo](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
+![Jilei Screenshot demo](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
 
 ## Overview
 
@@ -16,7 +16,7 @@
 > point/paragraph text with width/font-size handles, numeric shortcuts and customizable toolbar,
 > and three clipboard list display modes. Both platforms read the same `APP_VERSION`.
 
-jietuba is a free, open-source cross-platform screenshot tool: Windows and macOS share one codebase — region and window capture, scrolling (long) screenshots, annotation, OCR text recognition, translation, image pinning, GIF recording, QR code and barcode scanning, PDF export, and a full clipboard history manager. Everything runs locally.
+Jilei Screenshot is a free, open-source cross-platform screenshot tool: Windows and macOS share one codebase — region and window capture, scrolling (long) screenshots, annotation, OCR text recognition, translation, image pinning, GIF recording, QR code and barcode scanning, PDF export, and a full clipboard history manager. Everything runs locally.
 
 The interface is built with PySide6; image processing, clipboard access, and OCR are implemented in Rust. Windows runs on x86_64 and ARM64; macOS runs on Apple Silicon (arm64).
 
@@ -49,8 +49,8 @@ A smooth, three-way "screenshot ⇄ clipboard ⇄ pin" workflow.
 The Windows x86_64 and ARM64 releases are ready to run. You do not need to install Python, Rust, or a development environment.
 
 1. Open the [Releases page](https://github.com/1003129155/jietuba/releases/latest) and download the archive ending in `-x64.zip` or `-arm64.zip` for your device.
-2. Extract the entire archive, keeping `jietuba_pp.exe` and the `models/` folder together.
-3. Double-click `jietuba_pp.exe` to start. The OCR models are included in the archive.
+2. Extract the entire archive, keeping `积磊截图.exe` and the `models/` folder together.
+3. Double-click `积磊截图.exe` to start. The OCR models are included in the archive.
 4. The application is not digitally signed, so Windows may display a warning after you download it through a browser. If prompted, click **More info**, then **Run anyway** to start the application.
 
 ---
@@ -121,7 +121,7 @@ python -m pytest main/tests -c main/tests/pytest.ini
 
 The [test directory](main/tests/) contains unit and integration tests for capture, clipboard operations, mosaic editing, pin zoom, GIF playback, OCR text layers, and other modules. The [CI workflow](.github/workflows/ci.yml) runs tests and coverage checks on Windows x86_64 and ARM64 with Python 3.11, plus static analysis on x86_64. Results are available in [GitHub Actions](https://github.com/1003129155/jietuba/actions/workflows/ci.yml).
 
-To build a Windows release, run `python build_with_ocr_onefile.py`. It produces `dist/jietuba_pp.exe` and `dist/models/`. The automated [release workflow](.github/workflows/build.yml) creates separate x64 and ARM64 archives.
+To build a Windows release, run `python build_with_ocr_onefile.py`. It produces `dist/积磊截图.exe` and `dist/models/`. The automated [release workflow](.github/workflows/build.yml) creates separate x64 and ARM64 archives.
 
 ---
 
@@ -203,7 +203,7 @@ barcode/
 ### canvas/ — Canvas Module
 
 Graphics editing canvas system with scene management, view rendering, item selection, and undo/redo.
-![jietuba_gif_20260404_000903](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
+![JileiScreenshot_gif_20260404_000903](https://github.com/user-attachments/assets/5318b991-b0de-46a2-9c0e-d75eeae2a827)
 
 <details>
 <summary>Expand directory structure</summary>
@@ -257,7 +257,7 @@ capture/
 
 Ditto-like clipboard history manager, now organized into controllers, core, services, and ui layers.
 Supports text, images, HTML, files, a dedicated three-pane management window, and pin creation from history items.
-![jietuba_gif_20260404_001128](https://github.com/user-attachments/assets/b0a116e8-d944-43c9-b895-e6fc10d8c08a)
+![JileiScreenshot_gif_20260404_001128](https://github.com/user-attachments/assets/b0a116e8-d944-43c9-b895-e6fc10d8c08a)
 
 <details>
 <summary>Expand directory structure</summary>
@@ -339,6 +339,7 @@ Logging, resource loading, theme management, i18n, hotkeys, and other infrastruc
 ```text
 core/
 ├── bootstrap.py             # PreloadManager — startup bootstrap, env init, DPI, single instance
+├── brand_migration.py       # one-time migration from legacy jietuba brand (data dir, QSettings, autostart, shortcuts)
 ├── logger.py                # Logger — file + console logging (debug/info/warning/error/exception)
 ├── crash_handler.py         # install_crash_hooks() — global exception catching
 ├── resource_manager.py      # ResourceManager — SVG/image resource loading
@@ -457,7 +458,7 @@ settings/
 ---
 
 ### stitch/ — Long Screenshot Stitching Module
-![jietuba_gif_20260404_001930](https://github.com/user-attachments/assets/a9720f08-5128-447d-b425-6d0640272e6a)
+![JileiScreenshot_gif_20260404_001930](https://github.com/user-attachments/assets/a9720f08-5128-447d-b425-6d0640272e6a)
 
 <details>
 <summary>Expand directory structure</summary>

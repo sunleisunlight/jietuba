@@ -682,8 +682,8 @@ Replace it?</source>
     
     <!-- Info Page -->
     <message>
-        <source>Jietuba - Screenshot Tool</source>
-        <translation>Jietuba</translation>
+        <source>积磊截图 - 截图工具</source>
+        <translation>積磊スクリーンショット - キャプチャツール</translation>
     </message>
     <message>
         <source>Version: 1.0.0</source>
@@ -1270,8 +1270,8 @@ Replace it?</source>
 <context>
     <name>SystemTray</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>jietuba</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>積磊スクリーンショット</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -1313,8 +1313,8 @@ Replace it?</source>
 <context>
     <name>MainApp</name>
     <message>
-        <source>jietuba - Click to screenshot</source>
-        <translation>jietuba - スクリーンショット</translation>
+        <source>积磊截图 - 单击截图</source>
+        <translation>積磊スクリーンショット - クリックでキャプチャ</translation>
     </message>
     <message>
         <source>Screenshot</source>
@@ -2788,8 +2788,8 @@ Replace it?</source>
     <name>WelcomeWizard</name>
     <!-- window / nav -->
     <message>
-        <source>欢迎使用截图吧</source>
-        <translation>截图吧へようこそ</translation>
+        <source>欢迎使用积磊截图</source>
+        <translation>積磊スクリーンショットへようこそ</translation>
     </message>
     <message>
         <source>← 上一步</source>
@@ -2821,8 +2821,8 @@ Replace it?</source>
     </message>
     <!-- page1 -->
     <message>
-        <source>欢迎使用截图吧 👋</source>
-        <translation>截图吧へようこそ 👋</translation>
+        <source>欢迎使用积磊截图 👋</source>
+        <translation>積磊スクリーンショットへようこそ 👋</translation>
     </message>
     <message>
         <source>一款轻量的截图与剪贴板管理工具。</source>
@@ -3126,7 +3126,7 @@ Replace it?</source>
         <translation>ショートカット</translation>
     </message>
     <message>
-        <source>完成向导时在桌面创建截图吧快捷方式。</source>
+        <source>完成向导时在桌面创建积磊截图快捷方式。</source>
         <translation>デスクトップへショートカットを作成</translation>
     </message>
     <!-- illus strings -->

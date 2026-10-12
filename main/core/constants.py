@@ -9,13 +9,19 @@ from pathlib import Path
 
 # ── 应用数据目录 ──────────────────────────────────────────
 
+# 应用数据目录名（日志、崩溃记录等）。品牌升级为积磊截图后改用新名，
+# 老用户的 Jietuba 目录由 core.brand_migration 在启动早期一次性迁移。
+APP_DIR_NAME = "JileiScreenshot"
+LEGACY_APP_DIR_NAME = "Jietuba"
+
+
 def get_app_data_dir() -> Path:
     """返回应用数据根目录（日志、崩溃记录等都放在这里）。
 
     Windows 读 %LOCALAPPDATA% 而不是拼 Path.home()/"AppData"/"Local"：
     域环境下用户目录可能被重定向到网络位置，硬拼会落到错误的地方，
     而崩溃日志恰恰是出问题时最需要能被找到的东西。
-    macOS 遵循 ~/Library/Application Support/Jietuba（Qt 标准路径体系）。
+    macOS 遵循 ~/Library/Application Support/JileiScreenshot（Qt 标准路径体系）。
     """
     if sys.platform == "darwin":
         try:
@@ -27,12 +33,22 @@ def get_app_data_dir() -> Path:
                 return Path(path)
         except Exception:
             pass
-        return Path.home() / "Library" / "Application Support" / "Jietuba"
+        return Path.home() / "Library" / "Application Support" / APP_DIR_NAME
 
     base = os.environ.get("LOCALAPPDATA")
     if base:
-        return Path(base) / "Jietuba"
-    return Path.home() / "AppData" / "Local" / "Jietuba"
+        return Path(base) / APP_DIR_NAME
+    return Path.home() / "AppData" / "Local" / APP_DIR_NAME
+
+
+def get_legacy_app_data_dir() -> Path:
+    """品牌升级前（截图吧/jietuba 时代）的应用数据根目录。仅供迁移逻辑使用。"""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / LEGACY_APP_DIR_NAME
+    base = os.environ.get("LOCALAPPDATA")
+    if base:
+        return Path(base) / LEGACY_APP_DIR_NAME
+    return Path.home() / "AppData" / "Local" / LEGACY_APP_DIR_NAME
 
 
 def get_log_dir() -> Path:
