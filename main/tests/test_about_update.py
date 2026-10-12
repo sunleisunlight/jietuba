@@ -1,123 +1,166 @@
-from PySide6.QtCore import QObject, Qt, Signal
+# -*- coding: utf-8 -*-
+"""应用内更新交互测试。
+
+重点回归：更新检查在后台线程跑，但**弹窗必须建在 GUI 线程**。
+以前把后台线程的信号连到了普通闭包，槽在后台线程里执行，弹窗创建在非 GUI 线程上，
+表现就是用户点「检查更新」什么都不弹。
+"""
+from __future__ import annotations
+
+import threading
+
+import pytest
+from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QDialog, QPushButton
 
-from core.constants import PROJECT_RELEASES_LATEST_URL
-from core.update_checker import ReleaseInfo
+import ui.update_flow as update_flow
 from ui.settings_ui import page_about
 
 
-class FakeReleaseChecker(QObject):
-    release_found = Signal(object)
-    failed = Signal(str)
-    instances = []
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.started = False
-        self.instances.append(self)
-
-    def check(self):
-        self.started = True
-        return True
+def _reset_controller(monkeypatch):
+    """每个用例拿一个干净的控制器（模块级单例会跨用例复用）。"""
+    monkeypatch.setattr(update_flow, "_controller", None)
+    return update_flow.get_update_controller()
 
 
-def _create_page(monkeypatch, qapp):
-    FakeReleaseChecker.instances.clear()
-    monkeypatch.setattr(page_about, "GitHubReleaseChecker", FakeReleaseChecker)
-    dialog = QDialog()
-    page = page_about.create_about_page(dialog)
-    button = page.findChild(QPushButton, "checkUpdateButton")
-    return dialog, page, button, FakeReleaseChecker.instances[-1]
+@pytest.fixture
+def restore_skipped_version():
+    original = update_flow.skipped_update_version()
+    yield
+    update_flow.skip_update_version(original)
 
 
-def test_check_button_reports_when_current_version_is_latest(monkeypatch, qapp, qtbot):
-    info_calls = []
-    monkeypatch.setattr(
-        page_about,
-        "show_info_dialog",
-        lambda *args: info_calls.append(args),
-    )
-    dialog, page, button, checker = _create_page(monkeypatch, qapp)
-
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    version_card = button.parentWidget()
-    assert version_card.titleLabel.text() == "Version"
-    assert version_card.contentLabel.text() == page_about.APP_VERSION
-    assert checker.started
-    assert not button.isEnabled()
-    assert button.text() == "Checking..."
-
-    checker.release_found.emit(
-        ReleaseInfo("release-2.0", "Release 2.0", "Notes", PROJECT_RELEASES_LATEST_URL)
+def _fake_info(version: str = "9.9.9"):
+    return update_flow.updater.UpdateInfo(
+        version=version, notes="修复若干问题", url="https://cc.jilei.cc/a.exe",
+        sha256="a" * 64, size=1_048_576,
     )
 
-    assert button.isEnabled()
-    assert button.text() == "Check for Updates"
-    assert info_calls[0][1] == "Update Check"
-    assert page_about.APP_VERSION in info_calls[0][2]
-    page.deleteLater()
-    dialog.deleteLater()
 
-
-def _newer_version_tag() -> str:
-    """构造一个必然比当前 APP_VERSION 新的 tag。
-
-    旧用例硬编码 "v2.1.0"，APP_VERSION 涨到 2.4.0 之后它就不再"更新"了，
-    is_newer_version() 返回 False，代码走进"已是最新"分支弹真实模态框，
-    整个测试会话被卡死。这里按当前版本的 MAJOR+1 现算，永远不会过期。
-    """
-    major = int(page_about.APP_VERSION.split(".")[0])
-    return f"v{major + 1}.0.0"
-
-
-def test_new_release_shows_notes_and_download_address(monkeypatch, qapp, qtbot):
-    update_calls = []
-    monkeypatch.setattr(
-        page_about,
-        "show_update_dialog",
-        lambda *args: update_calls.append(args),
-    )
-    dialog, page, button, checker = _create_page(monkeypatch, qapp)
-
-    latest_tag = _newer_version_tag()
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    checker.release_found.emit(
-        ReleaseInfo(
-            latest_tag,
-            "Version 2.1",
-            "Added update checking.",
-            PROJECT_RELEASES_LATEST_URL,
+class TestUpdateCheckThreading:
+    def test_manual_check_reports_latest_on_gui_thread(self, monkeypatch, qapp, qtbot):
+        monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: None)
+        calls = []
+        monkeypatch.setattr(
+            update_flow, "show_info_dialog",
+            lambda *args: calls.append((args, QThread.currentThread())),
         )
-    )
+        controller = _reset_controller(monkeypatch)
 
-    assert len(update_calls) == 1
-    _, title, content, download_caption, url, action_text = update_calls[0]
-    assert title == "Update Available"
-    assert f"Current version: {page_about.APP_VERSION}" in content
-    assert f"Latest version: {latest_tag}" in content
-    assert "Added update checking." in content
-    assert download_caption == "Download:"
-    assert url == PROJECT_RELEASES_LATEST_URL
-    assert action_text == "Open Download Page"
-    page.deleteLater()
-    dialog.deleteLater()
+        assert controller.check(silent=False) is True
+        qtbot.waitUntil(lambda: bool(calls), timeout=5000)
+
+        _, thread = calls[0]
+        assert thread is qapp.thread()          # 弹窗必须在 GUI 线程
+        assert update_flow.APP_VERSION in calls[0][0][2]
+
+    def test_manual_check_offers_new_version_on_gui_thread(self, monkeypatch, qapp, qtbot):
+        info = _fake_info()
+        monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: info)
+        shown = []
+
+        class _FakeDialog:
+            def __init__(self, parent, info):
+                shown.append((parent, info, QThread.currentThread()))
+
+            def exec(self):
+                return 1
+
+        monkeypatch.setattr(update_flow, "_UpdateDialog", _FakeDialog)
+        controller = _reset_controller(monkeypatch)
+
+        assert controller.check(silent=False) is True
+        qtbot.waitUntil(lambda: bool(shown), timeout=5000)
+
+        _, shown_info, thread = shown[0]
+        assert shown_info is info
+        assert thread is qapp.thread()
+
+    def test_silent_check_is_quiet_and_respects_skip(
+        self, monkeypatch, qapp, qtbot, restore_skipped_version
+    ):
+        info = _fake_info("9.9.9")
+        monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: info)
+        shown = []
+        monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: shown.append(a))
+
+        class _FakeDialog:
+            def __init__(self, parent, info):
+                shown.append((parent, info))
+
+            def exec(self):
+                return 1
+
+        monkeypatch.setattr(update_flow, "_UpdateDialog", _FakeDialog)
+        controller = _reset_controller(monkeypatch)
+
+        # 静默检查：无更新 / 网络失败一律不打扰
+        monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: None)
+        controller.check(silent=True)
+        qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
+        assert shown == []
+
+        # 用户点过「跳过此版本」后，静默检查不再提示
+        update_flow.skip_update_version("9.9.9")
+        monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: info)
+        controller.check(silent=True)
+        qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
+        assert shown == []
+
+        # 手动检查仍然提示（跳过的只是后台打扰，不是永久屏蔽）
+        controller.check(silent=False)
+        qtbot.waitUntil(lambda: bool(shown), timeout=5000)
+        assert len(shown) == 1
+
+    def test_failed_check_does_not_block_next_check(self, monkeypatch, qapp, qtbot):
+        def _boom():
+            raise RuntimeError("network down")
+
+        monkeypatch.setattr(update_flow.updater, "check_for_update", _boom)
+        calls = []
+        monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: calls.append(a))
+        controller = _reset_controller(monkeypatch)
+
+        controller.check(silent=False)
+        qtbot.waitUntil(lambda: bool(calls), timeout=5000)
+        # 线程异常也必须归还忙碌态，按钮不能卡在「检查中」
+        qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
 
 
-def test_failed_check_restores_button_and_shows_warning(monkeypatch, qapp, qtbot):
-    warning_calls = []
-    monkeypatch.setattr(page_about, "log_warning", lambda *args: None)
-    monkeypatch.setattr(
-        page_about,
-        "show_warning_dialog",
-        lambda *args: warning_calls.append(args),
-    )
-    dialog, page, button, checker = _create_page(monkeypatch, qapp)
+class TestAboutPageCheckButton:
+    def test_button_busy_state_follows_controller(self, monkeypatch, qapp, qtbot):
+        gate = threading.Event()
 
-    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-    checker.failed.emit("timed out")
+        def _slow_check():
+            gate.wait(5)
+            return None
 
-    assert button.isEnabled()
-    assert button.text() == "Check for Updates"
-    assert warning_calls[0][1] == "Update Check Failed"
-    page.deleteLater()
-    dialog.deleteLater()
+        monkeypatch.setattr(update_flow.updater, "check_for_update", _slow_check)
+        monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: None)
+        controller = _reset_controller(monkeypatch)
+
+        dialog = QDialog()
+        page = page_about.create_about_page(dialog)
+        button = page.findChild(QPushButton, "checkUpdateButton")
+        assert button.text() == "Check for Updates"
+
+        button.click()
+        assert button.text() == "Checking..."
+        assert not button.isEnabled()
+
+        gate.set()
+        qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
+        assert button.isEnabled()
+        assert button.text() == "Check for Updates"
+        page.deleteLater()
+        dialog.deleteLater()
+
+
+class TestVersionComparison:
+    def test_is_newer_uses_three_part_semver(self):
+        from core import updater
+
+        assert updater.is_newer("2.6.2", "2.6.1")
+        assert not updater.is_newer("2.6.1", "2.6.1")
+        assert not updater.is_newer("2.6.0", "2.6.1")
+        assert updater.is_newer("2.7.0", "2.6.9")

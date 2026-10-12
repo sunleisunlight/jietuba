@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.6.1"
+APP_VERSION = "2.6.2"
 
 
 def create_fallback_app_icon():
@@ -1009,7 +1009,32 @@ class MainApp(QObject):
         self.app.quit()
         
     def run(self):
+        self._schedule_startup_update_check()
         sys.exit(self.app.exec())
+
+    def _schedule_startup_update_check(self):
+        """启动后延迟静默检查一次更新（对齐积磊其它桌面端）。
+
+        只有发现新版本才弹窗；无更新 / 网络失败一律静默，不打扰启动。
+        """
+        from PySide6.QtCore import QTimer
+        from ui.update_flow import STARTUP_CHECK_DELAY_MS
+
+        QTimer.singleShot(STARTUP_CHECK_DELAY_MS, self._run_startup_update_check)
+
+    def _run_startup_update_check(self):
+        from PySide6.QtCore import QTimer
+
+        from ui.update_flow import BUSY_RETRY_DELAY_MS, start_auto_update_checker
+
+        try:
+            # 正在框选 / 标注时推迟，避免弹窗打断用户
+            if self.screenshot_window is not None and self.screenshot_window.isVisible():
+                QTimer.singleShot(BUSY_RETRY_DELAY_MS, self._run_startup_update_check)
+                return
+            start_auto_update_checker()
+        except Exception as e:
+            log_warning(T("启动更新检查失败: {e}", e=e), "Updater")
 
 if __name__ == "__main__":
     from core.bootstrap import run

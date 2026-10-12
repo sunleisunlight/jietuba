@@ -1,16 +1,40 @@
 ﻿# -*- coding: utf-8 -*-
 """关于页面"""
 
+from PySide6.QtCore import QObject, Qt, Slot
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea
-from PySide6.QtCore import Qt
 from core.ui_scale import dialog_scaled
 from ui.fluent_lite import (
     SettingCard, FluentIcon,
     PushButton,
 )
 from .components import SettingCardGroup
-from ui.update_flow import check_and_offer_update
+from ui.update_flow import check_for_update_interactive, get_update_controller
 from main_app import APP_VERSION
+
+
+class _CheckButtonState(QObject):
+    """让按钮忙碌态跟随更新控制器。
+
+    以按钮为父对象，按钮随设置窗销毁时本对象一起销毁，控制器信号自动断开，
+    不会回调到已删除的控件上。
+    """
+
+    def __init__(self, button: PushButton, dialog):
+        super().__init__(button)
+        self._button = button
+        self._dialog = dialog
+        controller = get_update_controller()
+        controller.checking_changed.connect(self.apply)
+        self.apply(controller.is_checking)
+
+    @Slot(bool)
+    def apply(self, busy: bool) -> None:
+        self._button.setEnabled(not busy)
+        self._button.setText(
+            self._dialog.tr("Checking...") if busy
+            else self._dialog.tr("Check for Updates")
+        )
 
 
 def create_about_page(dialog) -> QScrollArea:
@@ -43,15 +67,10 @@ def create_about_page(dialog) -> QScrollArea:
     name_card.hBoxLayout.addSpacing(dialog_scaled(16))
     group.addSettingCard(name_card)
 
-    def start_check():
-        # 应用内更新：走积磊控制中心清单，支持下载校验后一键重启安装
-        check_update_btn.setEnabled(False)
-        check_update_btn.setText(dialog.tr("Checking..."))
-        check_and_offer_update(dialog)
-        check_update_btn.setEnabled(True)
-        check_update_btn.setText(dialog.tr("Check for Updates"))
-
-    check_update_btn.clicked.connect(start_check)
+    # 应用内更新：查控制中心清单，下载校验后一键重启安装。检查在后台线程里跑，
+    # 按钮的忙碌/恢复由控制器信号驱动，点击后不会立刻弹回原状。
+    check_update_btn.clicked.connect(check_for_update_interactive)
+    _CheckButtonState(check_update_btn, dialog)
 
     layout.addWidget(group)
     layout.addStretch(1)
