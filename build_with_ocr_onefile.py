@@ -26,10 +26,17 @@ EXE_NAME = "积磊截图"
 # 翻译文件
 TRANSLATIONS_DIR = "main/translations"
 
+# PP-OCR 模型目录
+MODELS_DIR = "models"
+
 # 数据文件
+# OCR 模型必须打进 onefile 包内（_MEIPASS/models）：控制中心发布页只接受
+# 单一安装包 + updater artifact，没有「附加资产」通道，模型外置无法随官网分发。
+# 同时仍会在构建后复制一份到 dist/models/，方便本地开发替换模型。
 datas = [
     f"{SVG_DIR};svg",
     f"{TRANSLATIONS_DIR};translations",
+    f"{MODELS_DIR};models",
 ]
 
 # 隐藏导入

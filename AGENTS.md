@@ -132,7 +132,7 @@ GET /updates/jilei-screenshot/stable/windows/<x86_64|arm64>/<当前版本>
 2. 递增并同步版本（只改 `main/main_app.py` 的 `APP_VERSION`，唯一源，禁止在打包
    脚本 / spec / 控制中心写死版本）；
 3. 构建当前平台真实软件：`python build_with_ocr_onefile.py`
-   → `dist/积磊截图.exe` + 外置 `dist/models/`；
+   → `dist/积磊截图.exe`（OCR 模型已打进包内，不再外置分发）；
 4. **产出四件套**（一键脚本，见下）；
 5. Commit；
 6. Tag（annotated）；
@@ -144,25 +144,36 @@ GET /updates/jilei-screenshot/stable/windows/<x86_64|arm64>/<当前版本>
 
 ### Windows 四件套（平铺在同一个目录，脚本自动生成）
 
-运行：`python scripts/make_release_bundle.py`（会先确保已构建最新 exe）。
+运行：`python scripts/make_release_bundle.py --build`（会先构建最新 exe 再出包）。
 产物目录 `dist/release/`：
 
 ```text
-① 积磊截图-v<版本>-<YYMMDD>-Windows-x64.exe   主程序，首装包与应用内更新是同一个 onefile exe
-② models.zip                                  外置 OCR 模型（det + rec 两个 onnx）
-③ v<版本>-<YYMMDD>-更新说明.txt                更新日志（控制中心发布时解析为客户端 notes）
-④ 积磊截图-v<版本>-<YYMMDD>-Windows-x64.sha256 ① 的 SHA-256（十六进制 + 文件名，一行）
+① 积磊截图-v<版本>-<YYMMDD>-Windows-x64.exe       控制中心角色 Updater（artifact）
+② 积磊截图-v<版本>-<YYMMDD>-Windows-x64.exe.sig   ① 的 Tauri updater 签名，角色 Signature
+③ 积磊截图-v<版本>-<YYMMDD>-Windows-x64-setup.exe 首次安装包，角色 安装包
+④ v<版本>-<YYMMDD>-更新说明.txt                    发布信息 TXT，角色 更新说明
+⑤ 积磊截图-v<版本>-<YYMMDD>-Windows-x64.sha256     仅本地校验记录，生成在 dist/（不在 release/ 内）
 ```
 
-- ① 与 ② 必须同级分发：exe 启动时在同级 `models/` 找 OCR 模型。
-- ③ 更新说明必须非空，首行是版本标题，其后逐条写本次变化（供应用内更新弹窗展示）。
-- ④ 由脚本实算，禁止手填；控制中心落盘时也会自己重算 SHA-256 与 size。
+- `dist/release/` 里**只放发布页要传的 4 个文件**；`.sha256` 一律写在 `dist/`，
+  避免被顺手拖进发布页。
+
+- ① 与 ③ 都是同一个 onefile exe，只是文件名不同：控制中心靠文件名里是否含 `setup`
+  区分「updater artifact」与「首次安装包」，所以 **① 的文件名里绝对不能出现 setup**。
+- ② 必须存在且文件名严格等于「artifact 文件名 + `.sig`」，内容非空；缺失时发布页会报
+  「缺少自动更新签名文件（.sig），不能发布。」签名用 `tauri signer sign`，复用
+  `~/.tauri/sunget-updater-20260825.key`（口令走同目录 `.password.dpapi`），口令绝不入库。
+- ④ 必须能被控制中心 `parse_release_info_txt()` 解析：独立一行 `更新说明`，其后每行以 `- ` 开头；
+  脚本已按该格式生成，禁止手写成自由散文。
+- ⑤ **不要拖进发布页**：控制中心 Tauri 白名单只有 `.sig/.exe/.app.tar.gz/.dmg/.txt`，
+  多余文件会报「Tauri 发布不支持这些文件」。
+- OCR 模型已打进 exe（`_MEIPASS/models/`），**不再分发 models.zip**：控制中心没有
+  「附加资产」通道，官网一个平台只服务一个下载文件，模型必须随包走。
 - ARM64 构建把文件名里的 `x64` 换成 `arm64`（在 ARM64 机器上构建）。
 
 > 应用内更新（`main/core/updater.py`）下载 ① 后用清单 SHA-256 校验，再通过
-> 等待进程退出的批处理覆盖运行中的 exe 并自动重启。onefile 不使用 Tauri minisign，
-> 控制中心摄入本产品时**不要求 `.sig`**（部署侧 release profile 已按无签名单 exe 配置；
-> 完整性由 HTTPS + SHA-256 保证）。
+> 等待进程退出的批处理覆盖运行中的 exe 并自动重启。客户端不读 `.sig`，但控制中心
+> **发布时必须收到 `.sig`**（见上），所以四件套里始终要有 ②，不能省略。
 
 Commit：
 
