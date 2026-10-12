@@ -19,10 +19,10 @@ Git 远端：origin
 - 技术栈：Python 3.11 + PySide6（Qt6）；性能核心为 Rust（PyO3 / maturin）：
   `rust_libs/gifrecorder`（GIF 录制）、`rust_libs/longstitch`（长截图拼接）、
   `rust_libs/pyclipboard`（剪贴板历史库）、`rust_libs/ppocr_rust`（PaddleOCR）。
-- 构建产物：Windows `dist/积磊截图.exe`（onefile，OCR 模型已打进包内）；
-  macOS `.app` / `.dmg`。
+- 构建产物：Windows `dist/积磊截图.exe`（onefile，OCR 模型已打进包内）+
+  `dist/release/` 四件套（其中 ③ 是 NSIS 安装器）；macOS `.app` / `.dmg`。
 - 依赖安装：`pip install -r requirements.txt`（构建 / 测试另需 `requirements-dev.txt`）。
-- 应用内"检查更新"读取 GitHub Releases 的 tag 并与本地版本比较（`main/core/update_checker.py`）。
+- 应用内"检查更新"读取积磊控制中心的更新清单并与本地版本比较（`main/core/updater.py`）。
 
 ## 1. 架构边界（跨平台核心规则）
 
@@ -167,8 +167,21 @@ GET /updates/jilei-screenshot/stable/windows/<x86_64|arm64>/<当前版本>
 - `dist/release/` 里**只放发布页要传的 4 个文件**；`.sha256` 一律写在 `dist/`，
   避免被顺手拖进发布页。
 
-- ① 与 ③ 都是同一个 onefile exe，只是文件名不同：控制中心靠文件名里是否含 `setup`
-  区分「updater artifact」与「首次安装包」，所以 **① 的文件名里绝对不能出现 setup**。
+- ① 与 ③ 是**两个不同的东西**，别再当成同一份 exe：
+  - ① 是 PyInstaller onefile 裸 exe，供应用内自动更新下载（`main/core/updater.py`
+    直接改名替换 exe），**必须保持裸 exe**；换成安装器会让自动更新失效。
+  - ③ 是 NSIS 打出来的真安装器（`packaging/jietuba_setup.nsi`）：向导里可以选择安装
+    路径、创建开始菜单 / 桌面快捷方式、写「应用和功能」卸载入口；官网下载页给新用户
+    的就是它。
+  - 控制中心靠文件名里是否含 `setup` / `installer` 区分两者，所以
+    **① 的文件名里绝对不能出现 setup**。
+- ③ 由 `makensis` 编译（NSIS 3，中文必须用 Unicode 版，本机可用 Tauri 缓存里的
+  `%LOCALAPPDATA%\tauri\NSIS\makensis.exe`，或用 `JILEI_MAKENSIS` 指定）。
+  安装器按当前用户安装（`RequestExecutionLevel user`，默认
+  `%LOCALAPPDATA%\Programs\积磊截图`），安装过程不弹 UAC —— 这是为了让应用内自动
+  更新能直接替换 exe；装到 Program Files 会因为没权限导致自动更新失败。
+  安装器脚本必须存成 UTF-8 with BOM（NSIS 3 靠 BOM 判断编码，构建脚本会自动补），
+  传给 makensis 的路径一律走 ASCII 临时目录，避免中文参数按错误代码页解析。
 - ② 必须存在且文件名严格等于「artifact 文件名 + `.sig`」，内容非空；缺失时发布页会报
   「缺少自动更新签名文件（.sig），不能发布。」签名用 `tauri signer sign`，复用
   `~/.tauri/sunget-updater-20260825.key`（口令走同目录 `.password.dpapi`），口令绝不入库。

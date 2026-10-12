@@ -4,11 +4,17 @@
 产出到 dist/release/（平铺，全部在同一个目录）：
   ① 积磊截图-v<版本>-<YYMMDD>-Windows-<arch>.exe        控制中心角色：Updater（artifact）
   ② 积磊截图-v<版本>-<YYMMDD>-Windows-<arch>.exe.sig    ① 的 minisign 签名，角色：Signature
-  ③ 积磊截图-v<版本>-<YYMMDD>-Windows-<arch>-setup.exe  首次安装包，角色：安装包
+  ③ 积磊截图-v<版本>-<YYMMDD>-Windows-<arch>-setup.exe  首次安装包（NSIS 安装器），角色：安装包
   ④ v<版本>-<YYMMDD>-更新说明.txt                        发布信息 TXT，角色：更新说明
   另有 ⑤ 积磊截图-v<版本>-<YYMMDD>-Windows-<arch>.sha256：只作本地校验记录，
   写在 `dist/`（不在 `release/` 内），**不要上传**（控制中心不接受 .sha256，
   会报「Tauri 发布不支持这些文件」）。
+
+① 与 ③ 是两个不同的东西，别再混为一谈：
+  ① 是 PyInstaller onefile 裸 exe，应用内自动更新下载的就是它（main/core/updater.py
+     直接改名替换 exe）；它必须是裸 exe，换成安装器会让自动更新失效。
+  ③ 是 NSIS 打出来的真安装器（packaging/jietuba_setup.nsi）：向导里可以选安装路径、
+     装开始菜单/桌面快捷方式、写「应用和功能」卸载入口；官网下载页给新用户的是它。
 
 为什么必须是这四个角色（不能只传一个 exe）：
   控制中心 services/release_intake_service.py 的发布前检查硬性要求
@@ -16,6 +22,9 @@
   storage/repositories/releases.py 再校验 .sig 名称必须等于「artifact 文件名 + .sig」。
   Windows 下安装包与 updater 都是 .exe，控制中心靠文件名里是否含 setup / installer 区分，
   所以 ① 的文件名里绝对不能出现 setup。
+
+③ 由 makensis（NSIS 3，中文需要 Unicode 版）编译；本机可复用 Tauri 缓存里的
+%LOCALAPPDATA%\\tauri\\NSIS\\makensis.exe，或用 JILEI_MAKENSIS 指定。
 
 签名：复用 dizhi-tool 同一把 Tauri updater 私钥（~/.tauri/sunget-updater-20260825.key，
 口令以 DPAPI 存于同目录 .password.dpapi），通过 `tauri signer sign` 生成 .sig。
@@ -55,6 +64,10 @@ EXPECTED_KEY_SHA256 = "241a32e628ac1892b2d1812f031253a201558f8128c171405201856eb
 
 # tauri CLI：优先环境变量，其次 PATH，最后回退到 dizhi-tool 的 node_modules
 FALLBACK_TAURI_CLI = Path(r"D:\Codex\dizhi-tool\node_modules\.bin\tauri.cmd")
+
+# NSIS 安装器脚本（生成「首次安装包」③）
+NSIS_SCRIPT = REPO / "packaging" / "jietuba_setup.nsi"
+APP_ICON = REPO / "托盘.ico"
 
 
 def read_app_version() -> str:
@@ -141,6 +154,121 @@ def decrypt_key_password() -> str:
     if not password:
         raise RuntimeError("私钥口令解密结果为空")
     return password
+
+
+def resolve_makensis() -> Path:
+    """定位 NSIS 编译器：环境变量 → PATH → Tauri 缓存 → 常规安装目录。"""
+    override = os.environ.get("JILEI_MAKENSIS", "").strip()
+    if override:
+        candidate = Path(override)
+        if candidate.exists():
+            return candidate
+        raise RuntimeError(f"JILEI_MAKENSIS 指向的文件不存在：{candidate}")
+
+    found = shutil.which("makensis")
+    if found:
+        return Path(found)
+
+    candidates: list[Path] = []
+    local_appdata = os.environ.get("LOCALAPPDATA", "")
+    if local_appdata:
+        # 积磊其它桌面端（Tauri）自带的 NSIS，本机已存在，优先复用
+        candidates.append(Path(local_appdata) / "tauri" / "NSIS" / "makensis.exe")
+    for env_name in ("ProgramFiles(x86)", "ProgramFiles"):
+        base = os.environ.get(env_name, "")
+        if base:
+            candidates.append(Path(base) / "NSIS" / "makensis.exe")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    raise RuntimeError(
+        "找不到 NSIS 的 makensis，无法生成安装包。请安装 NSIS 3（或用 JILEI_MAKENSIS "
+        "指定路径）；本机也可直接复用 Tauri 缓存里的 %LOCALAPPDATA%\\tauri\\NSIS\\makensis.exe。"
+    )
+
+
+def ensure_utf8_bom(path: Path) -> None:
+    """NSIS 3 靠 BOM 判断脚本编码；缺 BOM 时中文会按本地代码页解析成乱码。"""
+    data = path.read_bytes()
+    if not data.startswith(b"\xef\xbb\xbf"):
+        path.write_bytes(b"\xef\xbb\xbf" + data)
+
+
+def build_installer(version: str, stem: str, exe: Path, out_dir: Path) -> Path:
+    """用 NSIS 生成「点击安装 + 自选路径 + 快捷方式 + 卸载」的真实安装包。
+
+    传给 makensis 的路径一律用 ASCII 临时目录：中文路径经命令行传参时受命令行
+    代码页影响，容易变乱码并静默失败（应用内更新就是栽在这类编码问题上）。
+    """
+    if not NSIS_SCRIPT.exists():
+        raise RuntimeError(f"找不到 NSIS 脚本：{NSIS_SCRIPT}")
+    if not APP_ICON.exists():
+        raise RuntimeError(f"找不到安装器图标：{APP_ICON}")
+    makensis = resolve_makensis()
+
+    # VIProductVersion 只接受 X.X.X.X 四段纯数字，APP_VERSION 是三段 SemVer
+    numeric = [part for part in version.split("-")[0].split(".") if part.isdigit()]
+    while len(numeric) < 4:
+        numeric.append("0")
+    file_version = ".".join(numeric[:4])
+
+    with tempfile.TemporaryDirectory(prefix="jietuba_setup_") as stage:
+        stage_dir = Path(stage)
+        script = stage_dir / "setup.nsi"
+        shutil.copy2(NSIS_SCRIPT, script)
+        ensure_utf8_bom(script)
+        staged_exe = stage_dir / "app.exe"
+        staged_icon = stage_dir / "app.ico"
+        staged_out = stage_dir / "setup.exe"
+        shutil.copy2(exe, staged_exe)
+        shutil.copy2(APP_ICON, staged_icon)
+
+        result = subprocess.run(
+            [
+                str(makensis),
+                f"/DAPP_VERSION={version}",
+                f"/DVI_VERSION={file_version}",
+                f"/DSOURCE_EXE={staged_exe}",
+                f"/DICON_FILE={staged_icon}",
+                f"/DOUT_FILE={staged_out}",
+                str(script),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0 or not staged_out.exists():
+            detail = ((result.stdout or "") + (result.stderr or "")).strip()
+            raise RuntimeError(f"NSIS 编译安装包失败：\n{detail}")
+
+        installer = out_dir / f"{stem}-setup.exe"
+        shutil.copy2(staged_out, installer)
+    return installer
+
+
+def clear_release_dir(out_dir: Path) -> None:
+    """清空发布目录，让 release/ 里最终只剩这一轮的 4 个文件。
+
+    旧包文件经常正被「从发布目录里直接运行的软件」占用（本机就反复出现），
+    这时删不掉不能整体失败：把被占用的文件挪到 dist/previous-release/ 去，
+    既保证发布页拖的文件是干净的，也不影响正在运行的实例。
+    """
+    stash = out_dir.parent / "previous-release"
+    for path in sorted(out_dir.glob("*")):
+        if not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except PermissionError:
+            stash.mkdir(parents=True, exist_ok=True)
+            target = stash / path.name
+            if target.exists():
+                try:
+                    target.unlink()
+                except PermissionError:
+                    target = stash / f"{path.stem}-{os.getpid()}{path.suffix}"
+            shutil.move(str(path), str(target))
+            print(f"   旧文件被占用，已挪到 {target}")
 
 
 def sign_artifact(artifact: Path) -> Path:
@@ -241,17 +369,16 @@ def main() -> int:
         return 1
 
     OUT.mkdir(parents=True, exist_ok=True)
-    for p in OUT.glob("*"):
-        if p.is_file():
-            p.unlink()
+    clear_release_dir(OUT)
 
     # ① updater artifact（文件名里不能出现 setup / installer）
     artifact = OUT / f"{stem}.exe"
     shutil.copy2(exe, artifact)
 
-    # ② 首次安装包：与 ① 是同一份 onefile exe，只靠文件名让控制中心识别成安装包角色
-    installer = OUT / f"{stem}-setup.exe"
-    shutil.copy2(exe, installer)
+    # ② 首次安装包：真实的 NSIS 安装器（向导选路径 + 快捷方式 + 卸载），
+    #    与控制中心「首次安装包」角色对应；官网下载页给新用户的就是这个。
+    print("==> 编译安装包（NSIS）…")
+    installer = build_installer(version, stem, exe, OUT)
 
     # ③ 签名：必须叫「artifact 文件名 + .sig」
     sig = sign_artifact(artifact)
