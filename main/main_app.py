@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.6.3"
+APP_VERSION = "2.6.4"
 
 
 def create_fallback_app_icon():
@@ -1009,8 +1009,18 @@ class MainApp(QObject):
         self.app.quit()
         
     def run(self):
+        self._cleanup_previous_update()
         self._schedule_startup_update_check()
         sys.exit(self.app.exec())
+
+    def _cleanup_previous_update(self):
+        """清掉上一次应用内更新留下的旧 exe / 下载残留（此时已不被占用）。"""
+        try:
+            from core.updater import cleanup_previous_install
+
+            cleanup_previous_install()
+        except Exception as e:
+            log_warning(T("清理更新残留失败: {e}", e=e), "Updater")
 
     def _schedule_startup_update_check(self):
         """启动后延迟静默检查一次更新（对齐积磊其它桌面端）。

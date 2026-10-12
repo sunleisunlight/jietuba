@@ -8,15 +8,16 @@
 
 安全：强制 HTTPS；下载后用服务端清单里的 SHA-256 做完整性校验（清单本身经
 HTTPS 传输，SHA-256 防下载损坏/被篡改）。Windows 下 onefile exe 运行时被锁定，
-采用「下载到 .new.exe → 启动批处理等待本进程退出 → 覆盖 → 重启」的标准替换法。
+采用「先把运行中的 exe 改名 → 新 exe 就位 → 启动新版 → 退出本进程」的进程内替换法
+（Windows 允许重命名运行中的 exe，但不允许覆盖/删除），旧文件下次启动清理。
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import subprocess
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -156,34 +157,68 @@ def download_update(info: UpdateInfo, progress: Optional[Callable[[int, int], No
 
 
 def install_and_restart(new_exe: str) -> bool:
-    """启动替换器并退出当前进程。返回 False 表示无法安装。"""
+    """把新版本顶到当前 exe 的位置并重启。返回 False 表示无法安装。
+
+    为什么不再用批处理：原先写一个 .bat「等本进程退出 → move /Y 覆盖」，但 bat 里带
+    中文路径（积磊截图.exe），脚本按 GBK 写出、cmd 又按 UTF-8 解析，路径直接失效，
+    move 静默失败、软件版本不升——这就是「点了立即更新还是 2.6.2」的原因。
+
+    Windows 不允许覆盖/删除**运行中**的 exe，但允许**重命名**运行中的 exe，所以
+    整个替换在进程内直接完成：旧 exe 改名 → 新 exe 就位 → 启动新版 → 退出本进程。
+    改名后的旧文件此刻仍被占用删不掉，留到下次启动由 cleanup_previous_install() 清理。
+    """
     if sys.platform != "win32":
         return False
     exe_path = sys.executable
-    pid = os.getpid()
-    bat = os.path.join(tempfile.gettempdir(), "jileiscreenshot_update.bat")
-    # 轮询等待本进程退出 → 覆盖 exe → 重启 → 自删批处理
-    content = (
-        "@echo off\r\n"
-        "chcp 65001 >nul\r\n"
-        ":wait\r\n"
-        f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul 2>&1\r\n'
-        "if not errorlevel 1 (\r\n  ping 127.0.0.1 -n 2 >nul\r\n  goto wait\r\n)\r\n"
-        f'move /Y "{new_exe}" "{exe_path}" >nul 2>&1\r\n'
-        f'if exist "{new_exe}" goto wait\r\n'
-        f'start "" "{exe_path}"\r\n'
-        '(goto) 2>nul & del "%~f0"\r\n'
-    )
-    try:
-        with open(bat, "w", encoding="gbk", errors="ignore") as f:
-            f.write(content)
-        import subprocess
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        subprocess.Popen(["cmd.exe", "/c", bat], close_fds=True, creationflags=creationflags)
-        log_info(T("更新已就绪，应用即将退出并重启"), "Updater")
-        from PySide6.QtWidgets import QApplication
-        QApplication.quit()
-        return True
-    except Exception as e:
-        log_warning(T("启动更新失败: {e}", e=e), "Updater")
+    if not os.path.isfile(new_exe):
+        log_warning(T("找不到已下载的新版本文件，无法自动安装"), "Updater")
         return False
+
+    stale = exe_path + ".old"
+    try:
+        if os.path.exists(stale):
+            os.remove(stale)
+        os.replace(exe_path, stale)        # 运行中的 exe 只能改名，不能覆盖
+        try:
+            os.replace(new_exe, exe_path)  # 新版本就位
+        except OSError:
+            os.replace(stale, exe_path)    # 回滚，绝不能让软件文件消失
+            raise
+    except OSError as e:
+        log_warning(T("替换程序文件失败: {e}", e=e), "Updater")
+        return False
+
+    try:
+        subprocess.Popen([exe_path], cwd=os.path.dirname(exe_path), close_fds=True)
+    except OSError as e:
+        # 新版已经就位，只是没能自动拉起：让用户手动重启即可，不再回滚
+        log_warning(T("启动新版本失败: {e}", e=e), "Updater")
+        return False
+
+    log_info(T("更新已就绪，应用即将退出并重启"), "Updater")
+    from PySide6.QtWidgets import QApplication
+    QApplication.quit()
+    return True
+
+
+def cleanup_previous_install() -> None:
+    """启动时清理上一次应用内更新留下的旧 exe 与下载残留。
+
+    上一次更新后，旧 exe 被改名为 ``<exe>.old`` 且当时仍被占用；此刻进程已经重启，
+    这些文件不再被锁，可以安全删除。纯清理动作，失败不影响启动。
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    exe_dir = os.path.dirname(sys.executable)
+    for path in (
+        sys.executable + ".old",
+        os.path.join(exe_dir, "积磊截图.new.exe"),
+        os.path.join(exe_dir, "积磊截图.new.exe.part"),
+    ):
+        if not os.path.exists(path):
+            continue
+        try:
+            os.remove(path)
+        except OSError as e:
+            log_warning(T("清理更新残留失败: {e}", e=e), "Updater")
+

@@ -156,6 +156,65 @@ class TestAboutPageCheckButton:
         dialog.deleteLater()
 
 
+class TestInstallAndRestart:
+    """点「立即更新」必须真的把新 exe 覆盖到原路径。
+
+    回归：以前靠写 .bat「等进程退出再 move 覆盖」，bat 里带中文路径、按 GBK 写出
+    却被 cmd 按 UTF-8 解析，move 静默失败 —— 更新包下载校验都成功，版本却还是旧的。
+    """
+
+    def _fake_exe(self, tmp_path):
+        exe = tmp_path / "积磊截图.exe"
+        exe.write_bytes(b"OLD-VERSION")
+        new = tmp_path / "积磊截图.new.exe"
+        new.write_bytes(b"NEW-VERSION")
+        return exe, new
+
+    def test_replaces_exe_and_keeps_backup(self, monkeypatch, tmp_path, qapp):
+        from core import updater
+
+        exe, new = self._fake_exe(tmp_path)
+        started = []
+        monkeypatch.setattr(updater.sys, "executable", str(exe))
+        monkeypatch.setattr(
+            updater.subprocess, "Popen", lambda *args, **kwargs: started.append(args)
+        )
+
+        assert updater.install_and_restart(str(new)) is True
+        assert exe.read_bytes() == b"NEW-VERSION"
+        assert (tmp_path / "积磊截图.exe.old").read_bytes() == b"OLD-VERSION"
+        assert started and started[0][0] == [str(exe)]
+
+    def test_missing_download_reports_failure(self, monkeypatch, tmp_path, qapp):
+        from core import updater
+
+        exe, _ = self._fake_exe(tmp_path)
+        monkeypatch.setattr(updater.sys, "executable", str(exe))
+
+        assert updater.install_and_restart(str(tmp_path / "不存在.exe")) is False
+        assert exe.read_bytes() == b"OLD-VERSION"
+
+
+class TestCleanupPreviousInstall:
+    def test_removes_leftovers_after_restart(self, monkeypatch, tmp_path):
+        from core import updater
+
+        exe = tmp_path / "积磊截图.exe"
+        exe.write_bytes(b"NEW-VERSION")
+        stale = tmp_path / "积磊截图.exe.old"
+        stale.write_bytes(b"OLD-VERSION")
+        leftover = tmp_path / "积磊截图.new.exe"
+        leftover.write_bytes(b"NEW-VERSION")
+
+        monkeypatch.setattr(updater.sys, "executable", str(exe))
+        monkeypatch.setattr(updater.sys, "frozen", True, raising=False)
+        updater.cleanup_previous_install()
+
+        assert not stale.exists()
+        assert not leftover.exists()
+        assert exe.exists()
+
+
 class TestVersionComparison:
     def test_is_newer_uses_three_part_semver(self):
         from core import updater

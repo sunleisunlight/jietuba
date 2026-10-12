@@ -273,7 +273,9 @@ class _UpdateDialog(QDialog):
         if updater.install_and_restart(path):
             self.accept()
             return
-        self.status.setText(self.tr("无法自动安装，请到积磊官网下载最新版。"))
+        self.status.setText(
+            self.tr("自动替换程序文件失败：请关闭软件后重试，或到积磊官网下载最新版。")
+        )
         self._reset_to_idle()
 
 
