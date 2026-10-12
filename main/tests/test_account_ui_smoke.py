@@ -84,11 +84,34 @@ class TestLoginDialog:
         dialog.switch_btn.click()
         qapp.processEvents()
         assert dialog._mode == LoginDialog.MODE_REGISTER
+        # 注册必须填用户名 + 两次一致的安全码，缺一项都不能提交
+        assert dialog.name_edit.isVisible()
+        assert dialog.confirm_edit.isVisible()
+        assert dialog.submit_btn.isEnabled() is False
+
+        dialog.name_edit.setText("积磊用户")
+        qapp.processEvents()
+        assert dialog.submit_btn.isEnabled() is False
+
+        dialog.confirm_edit.setText("123456")
+        qapp.processEvents()
         assert dialog.submit_btn.isEnabled() is True
+
+        # 两次安全码不一致：就地提示且不能提交
+        dialog.confirm_edit.setText("654321")
+        qapp.processEvents()
+        assert dialog.submit_btn.isEnabled() is False
+        assert dialog.mismatch_label.isVisible()
+
+        dialog.confirm_edit.setText("123456")
+        qapp.processEvents()
 
         dialog.switch_btn.click()
         qapp.processEvents()
         assert dialog._mode == LoginDialog.MODE_LOGIN
+        assert not dialog.name_edit.isVisible()
+        assert not dialog.confirm_edit.isVisible()
+        assert dialog.submit_btn.isEnabled() is True
 
         dialog.close()
         dialog.deleteLater()
@@ -132,7 +155,8 @@ class TestAuthErrorMessages:
 
         expectations = {
             "account_not_found": "注册账号",
-            "product_registration_required": "注册账号",
+            # 登录会自动补开本产品，这个错误码只在补开也失败时出现
+            "product_registration_required": "暂时无法开通",
             "account_already_exists": "登录",
             "device_registration_already_used": "本机",
             "security_pin_incorrect": "安全码",
@@ -257,6 +281,151 @@ class TestMembershipDialog:
         assert _wait_until(
             qapp, lambda: dialog.stack.currentIndex() == 1, timeout_ms=8000
         )
+
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+
+# ============================================================================
+# 积磊账号通用：登录即开通本产品
+# ============================================================================
+
+class TestLoginAutoOpensProduct:
+    """积磊账号适用于所有软件：本产品没开通过时，登录应自动补开而不是报错。"""
+
+    def _manager(self, monkeypatch):
+        from account import session as account_session
+        mgr = account_session.AccountManager()
+        monkeypatch.setattr(
+            mgr, "_consume_auth", lambda data, phone: (True, f"opened:{phone}")
+        )
+        return mgr
+
+    def test_login_falls_back_to_open_product(self, monkeypatch, qapp):
+        from account import api
+        mgr = self._manager(monkeypatch)
+        opened = []
+
+        monkeypatch.setattr(
+            api, "login",
+            lambda phone, pin: (None, ApiError("product_registration_required", 400)),
+        )
+        monkeypatch.setattr(
+            api, "register",
+            lambda phone, pin, name="": (
+                opened.append((phone, pin)) or {"device_access_token": "tok"}, None
+            ),
+        )
+
+        ok, message = mgr.login("13800000000", "123456")
+        assert ok is True
+        assert opened == [("13800000000", "123456")]
+        assert message == "opened:13800000000"
+
+    def test_login_still_reports_real_failure(self, monkeypatch, qapp):
+        from account import api
+        mgr = self._manager(monkeypatch)
+
+        monkeypatch.setattr(
+            api, "login",
+            lambda phone, pin: (None, ApiError("product_registration_required", 400)),
+        )
+        monkeypatch.setattr(
+            api, "register",
+            lambda phone, pin, name="": (None, ApiError("account_already_exists", 409)),
+        )
+
+        ok, message = mgr.login("13800000000", "123456")
+        assert ok is False
+        assert "已开通" in message
+
+
+# ============================================================================
+# 会员套餐卡片
+# ============================================================================
+
+class TestMembershipPlanCards:
+    _PLANS = {
+        "plans": [
+            {
+                "id": "jls-unlimited-monthly", "name": "积磊截图会员月卡",
+                "valid_days": 30, "is_unlimited": True, "badge": "首月限时",
+                "standard_price_cents": 1990, "sale_price_cents": 490, "sort_order": 110,
+            },
+            {
+                "id": "jls-unlimited-2year", "name": "积磊截图会员两年卡",
+                "valid_days": 730, "is_unlimited": True, "badge": "",
+                "standard_price_cents": 9900, "sale_price_cents": None, "sort_order": 120,
+            },
+            {
+                "id": "jls-unlimited-lifetime", "name": "积磊截图会员永久",
+                "valid_days": 0, "is_unlimited": True, "badge": "",
+                "standard_price_cents": 19900, "sale_price_cents": None, "sort_order": 130,
+            },
+        ]
+    }
+
+    def _texts(self, dialog):
+        from PySide6.QtWidgets import QLabel
+        return [w.text() for w in dialog.plans_page.findChildren(QLabel)]
+
+    def test_validity_and_promo_pricing(self, monkeypatch, qapp):
+        from account import api
+        from account.membership_dialog import MembershipDialog
+
+        monkeypatch.setattr(api, "public_plans", lambda: (self._PLANS, None))
+        monkeypatch.setattr(
+            AccountManager, "is_logged_in", property(lambda self: False)
+        )
+
+        dialog = MembershipDialog()
+        dialog.show()
+        assert _wait_until(
+            qapp, lambda: dialog.stack.currentIndex() == 1, timeout_ms=8000
+        )
+        qapp.processEvents()
+        texts = self._texts(dialog)
+
+        # 首月限时：主价显示促销价，下面补一行续费价
+        assert "¥4.9" in texts
+        assert "Then ¥19.9/month" in texts
+        # 时长按 valid_days：月卡 30 天、两年卡 730 天、永久才写永久
+        assert "30 days" in texts
+        assert "730 days" in texts
+        assert "Permanent · free updates" in texts
+
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+    def test_no_promo_when_sale_equals_standard(self, monkeypatch, qapp):
+        from account import api
+        from account.membership_dialog import MembershipDialog
+
+        plans = {
+            "plans": [
+                {
+                    "id": "p1", "name": "月卡", "valid_days": 30, "is_unlimited": True,
+                    "standard_price_cents": 490, "sale_price_cents": 490, "sort_order": 1,
+                }
+            ]
+        }
+        monkeypatch.setattr(api, "public_plans", lambda: (plans, None))
+        monkeypatch.setattr(
+            AccountManager, "is_logged_in", property(lambda self: False)
+        )
+
+        dialog = MembershipDialog()
+        dialog.show()
+        assert _wait_until(
+            qapp, lambda: dialog.stack.currentIndex() == 1, timeout_ms=8000
+        )
+        qapp.processEvents()
+        texts = self._texts(dialog)
+
+        assert "¥4.9" in texts
+        assert not [t for t in texts if t.startswith("Then ")]
 
         dialog.close()
         dialog.deleteLater()

@@ -3905,8 +3905,15 @@ Replace it?</source>
     <message><source>Enter 11-digit phone number</source><translation>휴대폰 번호 11자리를 입력하세요</translation></message>
     <message><source>Security code</source><translation>보안 코드</translation></message>
     <message><source>Enter your 6-digit security code</source><translation>6자리 보안 코드를 입력하세요</translation></message>
-    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>보안 코드는 SMS 인증번호가 아니라 직접 설정한 6자리 숫자입니다.</translation></message>
-    <message><source>New phone number: set a 6-digit security code. Existing Jilei account: enter your current security code.</source><translation>새 휴대폰 번호는 6자리 보안 코드를 설정하세요. 기존 Jilei 계정은 기존 보안 코드를 입력하세요.</translation></message>
+    <message><source>Any Jilei account can sign in here. The security code is the 6-digit number you set, not an SMS verification code.</source><translation>모든 Jilei 계정으로 바로 로그인할 수 있습니다(이 앱 전용 가입 불필요). 보안 코드는 직접 설정한 6자리 숫자이며 SMS 인증번호가 아닙니다.</translation></message>
+    <message><source>Set a username and a 6-digit security code. Existing Jilei account: enter your current security code to unlock this app.</source><translation>사용자 이름과 6자리 보안 코드를 설정하세요(2회 입력). 기존 Jilei 계정은 기존 보안 코드를 입력하면 이 앱을 사용할 수 있습니다.</translation></message>
+    <message><source>Username</source><translation>사용자 이름</translation></message>
+    <message><source>1-10 Chinese characters, letters or digits</source><translation>중국어·영문·숫자 1~10자</translation></message>
+    <message><source>Confirm security code</source><translation>보안 코드 확인</translation></message>
+    <message><source>Enter the same 6-digit security code again</source><translation>같은 6자리 보안 코드를 다시 입력하세요</translation></message>
+    <message><source>The two security codes do not match.</source><translation>두 보안 코드가 일치하지 않습니다.</translation></message>
+    <message><source>Then %1/month</source><translation>이후 %1/월</translation></message>
+    <message><source>Then %1</source><translation>이후 %1</translation></message>
     <message><source>Sign In</source><translation>로그인</translation></message>
     <message><source>Create Account</source><translation>계정 가입</translation></message>
     <message><source>Please wait…</source><translation>잠시만 기다려 주세요…</translation></message>

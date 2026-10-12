@@ -22,6 +22,9 @@ from ui.fluent_lite import (
 
 _PHONE_RE = re.compile(r"^\d{11}$")
 _PIN_RE = re.compile(r"^\d{6}$")
+# 与控制中心 validate_user_identity 的 DISPLAY_NAME_PATTERN 保持一致：
+# 1-10 位中文 / 字母 / 数字，服务端会拒绝其它字符。
+_NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z0-9]{1,10}$")
 
 # 提前关闭对话框时仍在跑的线程由模块集合保活，避免 QThread 被析构。
 _RUNNING_THREADS: set[QThread] = set()
@@ -49,16 +52,17 @@ class _AuthThread(QThread):
 
     finished_auth = Signal(bool, str)
 
-    def __init__(self, mode: str, phone: str, pin: str):
+    def __init__(self, mode: str, phone: str, pin: str, name: str = ""):
         super().__init__()
         self._mode = mode
         self._phone = phone
         self._pin = pin
+        self._name = name
 
     def run(self) -> None:
         mgr = get_account()
         if self._mode == "register":
-            ok, errmsg = mgr.register(self._phone, self._pin)
+            ok, errmsg = mgr.register(self._phone, self._pin, self._name)
         else:
             ok, errmsg = mgr.login(self._phone, self._pin)
         self.finished_auth.emit(bool(ok), errmsg or "")
@@ -127,6 +131,20 @@ class LoginDialog(QDialog):
         self.phone_edit.returnPressed.connect(self._submit)
         root.addWidget(self.phone_edit)
 
+        # 用户名只在注册模式显示（登录用不到，控制中心已存有昵称）
+        self.name_label = BodyLabel(self.tr("Username"), self)
+        self.name_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        root.addWidget(self.name_label)
+
+        self.name_edit = LineEdit(self)
+        self.name_edit.setMaxLength(10)
+        self.name_edit.setPlaceholderText(
+            self.tr("1-10 Chinese characters, letters or digits")
+        )
+        self.name_edit.textChanged.connect(self._update_state)
+        self.name_edit.returnPressed.connect(self._submit)
+        root.addWidget(self.name_edit)
+
         pin_label = BodyLabel(self.tr("Security code"), self)
         pin_label.setStyleSheet("font-size: 13px; font-weight: 600;")
         root.addWidget(pin_label)
@@ -141,6 +159,32 @@ class LoginDialog(QDialog):
         self.pin_edit.textChanged.connect(self._update_state)
         self.pin_edit.returnPressed.connect(self._submit)
         root.addWidget(self.pin_edit)
+
+        # 确认安全码同样只在注册模式显示：注册必须两次输入一致
+        self.confirm_label = BodyLabel(self.tr("Confirm security code"), self)
+        self.confirm_label.setStyleSheet("font-size: 13px; font-weight: 600;")
+        root.addWidget(self.confirm_label)
+
+        self.confirm_edit = LineEdit(self)
+        self.confirm_edit.setMaxLength(6)
+        self.confirm_edit.setEchoMode(LineEdit.EchoMode.Password)
+        self.confirm_edit.setPlaceholderText(
+            self.tr("Enter the same 6-digit security code again")
+        )
+        self.confirm_edit.setValidator(
+            QRegularExpressionValidator(QRegularExpression(r"\d{0,6}"), self)
+        )
+        self.confirm_edit.textChanged.connect(self._update_state)
+        self.confirm_edit.returnPressed.connect(self._submit)
+        root.addWidget(self.confirm_edit)
+
+        # 两次安全码不一致的就地提示（与服务端错误分开，互不覆盖）
+        self.mismatch_label = QLabel("", self)
+        self.mismatch_label.setObjectName("accountErrorLabel")
+        self.mismatch_label.setWordWrap(True)
+        self.mismatch_label.setStyleSheet("font-size: 12px;")
+        self.mismatch_label.hide()
+        root.addWidget(self.mismatch_label)
 
         self.hint_label = CaptionLabel("", self)
         self.hint_label.setObjectName("accountHintLabel")
@@ -200,34 +244,53 @@ class LoginDialog(QDialog):
         self._update_state()
 
     def _update_state(self) -> None:
-        if self._mode == self.MODE_LOGIN:
+        register_mode = self._mode == self.MODE_REGISTER
+        for widget in (self.name_label, self.name_edit,
+                       self.confirm_label, self.confirm_edit):
+            widget.setVisible(register_mode)
+
+        if not register_mode:
             self.submit_btn.setText(self.tr("Sign In"))
             self.switch_btn.setText(self.tr("New here? Create an account"))
             self.hint_label.setText(
                 self.tr(
-                    "The security code is the 6-digit number you set, "
-                    "not an SMS verification code."
+                    "Any Jilei account can sign in here. The security code is the "
+                    "6-digit number you set, not an SMS verification code."
                 )
+            )
+            self.mismatch_label.hide()
+            valid = (
+                _PHONE_RE.match(self.phone_edit.text()) is not None
+                and _PIN_RE.match(self.pin_edit.text()) is not None
             )
         else:
             self.submit_btn.setText(self.tr("Create Account"))
             self.switch_btn.setText(self.tr("Already registered? Sign in"))
             self.hint_label.setText(
                 self.tr(
-                    "New phone number: set a 6-digit security code. "
-                    "Existing Jilei account: enter your current security code."
+                    "Set a username and a 6-digit security code. Existing Jilei "
+                    "account: enter your current security code to unlock this app."
                 )
             )
-
-        valid = (
-            _PHONE_RE.match(self.phone_edit.text()) is not None
-            and _PIN_RE.match(self.pin_edit.text()) is not None
-        )
+            pin = self.pin_edit.text()
+            confirm = self.confirm_edit.text()
+            mismatch = bool(confirm) and confirm != pin
+            self.mismatch_label.setText(
+                self.tr("The two security codes do not match.") if mismatch else ""
+            )
+            self.mismatch_label.setVisible(mismatch)
+            valid = (
+                _PHONE_RE.match(self.phone_edit.text()) is not None
+                and _NAME_RE.match(self.name_edit.text().strip()) is not None
+                and _PIN_RE.match(pin) is not None
+                and confirm == pin
+            )
         self.submit_btn.setEnabled(valid and not self._busy)
 
     def _set_busy(self, busy: bool) -> None:
         self._busy = busy
-        for edit in (self.phone_edit, self.pin_edit):
+        for edit in (self.phone_edit, self.name_edit,
+                     self.pin_edit, self.confirm_edit):
             edit.setEnabled(not busy)
         self.switch_btn.setEnabled(not busy)
         if busy:
@@ -241,13 +304,22 @@ class LoginDialog(QDialog):
             return
         phone = self.phone_edit.text()
         pin = self.pin_edit.text()
-        if not _PHONE_RE.match(phone) or not _PIN_RE.match(pin):
+        name = ""
+        if self._mode == self.MODE_REGISTER:
+            name = self.name_edit.text().strip()
+            if not _NAME_RE.match(name):
+                return
+            if not _PIN_RE.match(pin) or self.confirm_edit.text() != pin:
+                return
+        elif not _PIN_RE.match(pin):
+            return
+        if not _PHONE_RE.match(phone):
             return
 
         self.error_label.hide()
         self._set_busy(True)
 
-        thread = _AuthThread(self._mode, phone, pin)
+        thread = _AuthThread(self._mode, phone, pin, name)
         _RUNNING_THREADS.add(thread)
         thread.finished_auth.connect(self._on_auth_finished)
         thread.finished.connect(lambda: _retire_thread(thread))

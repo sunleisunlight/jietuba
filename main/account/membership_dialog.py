@@ -265,13 +265,39 @@ class MembershipDialog(QDialog):
             return default
 
     def _validity_text(self, plan: dict) -> str:
-        if plan.get("is_unlimited"):
-            days = 0
-        else:
-            days = self._safe_int(plan.get("valid_days"), 0)
+        """时长文案取服务端 valid_days：0 才是永久。
+
+        注意不能看 is_unlimited——它表示「不限次数」，月卡/两年卡同样是 True，
+        以前据此一律显示「永久使用」，把月卡写成了永久。
+        """
+        days = self._safe_int(plan.get("valid_days"), 0)
         if days <= 0:
             return self.tr("Permanent · free updates")
         return self.tr("%1 days").replace("%1", str(days))
+
+    @staticmethod
+    def _promo_prices(plan: dict) -> tuple[object, object]:
+        """返回 (促销价, 标准价)；没有真实促销时促销价为 None。"""
+        standard = plan.get("standard_price_cents")
+        sale = plan.get("sale_price_cents")
+        try:
+            has_promo = (
+                sale is not None and standard is not None
+                and int(sale) > 0 and int(sale) < int(standard)
+            )
+        except (TypeError, ValueError):
+            has_promo = False
+        return (sale if has_promo else None), standard
+
+    def _renewal_caption(self, plan: dict, standard_cents: object) -> str:
+        """促销价下方的续费说明：「之后 ¥19.9/月」。"""
+        price = format_price(standard_cents)
+        if not price:
+            return ""
+        days = self._safe_int(plan.get("valid_days"), 0)
+        if 28 <= days <= 31:
+            return self.tr("Then %1/month").replace("%1", price)
+        return self.tr("Then %1").replace("%1", price)
 
     def _render_plans(self, plans: list[dict]) -> None:
         # 清掉旧卡片（重试场景）
@@ -288,10 +314,13 @@ class MembershipDialog(QDialog):
             name = str(plan.get("name") or plan.get("short_name") or "")
             description = str(plan.get("description") or "")
             badge = str(plan.get("badge") or "")
-            price_cents = plan.get("sale_price_cents")
-            if price_cents is None:
-                price_cents = plan.get("standard_price_cents")
+            sale_cents, standard_cents = self._promo_prices(plan)
+            price_cents = sale_cents if sale_cents is not None else standard_cents
             price = format_price(price_cents)
+            renewal_caption = (
+                self._renewal_caption(plan, standard_cents)
+                if sale_cents is not None else ""
+            )
 
             card = QFrame()
             card.setObjectName("accountPlanCard")
@@ -351,6 +380,13 @@ class MembershipDialog(QDialog):
                 " background: transparent;"
             )
             action_col.addWidget(price_label)
+
+            if renewal_caption:
+                renewal_label = CaptionLabel(renewal_caption)
+                renewal_label.setAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                )
+                action_col.addWidget(renewal_label)
 
             subscribe_btn = PrimaryPushButton(self.tr("Subscribe"))
             subscribe_btn.setObjectName("subscribePlanButton")

@@ -124,12 +124,17 @@ class AccountManager(QObject):
 
     def login(self, phone: str, pin: str) -> tuple[bool, str]:
         data, err = api.login(phone, pin)
-        if err is not None:
-            return False, _human_error(err)
-        return self._consume_auth(data, phone)
+        if err is None:
+            return self._consume_auth(data, phone)
+        if err.code == "product_registration_required":
+            # 积磊账号是通用的：这个手机号在控制中心有账号，只是还没开通过本产品。
+            # 用同一手机号 + 同一安全码幂等补开（服务端只会补开产品、不会重复发权益），
+            # 用户不需要再走一遍注册。
+            return self.register(phone, pin, "")
+        return False, _human_error(err)
 
-    def register(self, phone: str, pin: str) -> tuple[bool, str]:
-        data, err = api.register(phone, pin)
+    def register(self, phone: str, pin: str, name: str = "") -> tuple[bool, str]:
+        data, err = api.register(phone, pin, name)
         if err is not None:
             return False, _human_error(err)
         return self._consume_auth(data, phone)
@@ -272,8 +277,8 @@ def _human_error(err) -> str:
         "network_unreachable": "当前网络无法连接积磊服务，请检查网络后重试",
         # 账号存在性 / 本产品开通状态（决定用户该点「登录」还是「注册账号」）
         "account_not_found": "该手机号还没有积磊账号，请点下方「注册账号」",
-        "product_registration_required": "该手机号还没开通积磊截图，请点下方「注册账号」开通",
-        "account_already_exists": "该手机号已开通积磊截图，请直接点「登录」",
+        "product_registration_required": "该积磊账号暂时无法开通积磊截图，请稍后重试",
+        "account_already_exists": "该手机号已开通过积磊截图，请直接点「登录」",
         "device_registration_already_used": "本机已注册过其它积磊账号，请在本机登录原账号，或换一台电脑注册",
         # 设备 / 入参
         "device_id_required": "设备信息读取失败，请重启软件后重试",

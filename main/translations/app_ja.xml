@@ -3946,8 +3946,15 @@ Replace it?</source>
     <message><source>Enter 11-digit phone number</source><translation>11桁の電話番号を入力してください</translation></message>
     <message><source>Security code</source><translation>セキュリティコード</translation></message>
     <message><source>Enter your 6-digit security code</source><translation>6桁のセキュリティコードを入力してください</translation></message>
-    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>セキュリティコードはSMS認証コードではなく、ご自身で設定した6桁の数字です。</translation></message>
-    <message><source>New phone number: set a 6-digit security code. Existing Jilei account: enter your current security code.</source><translation>新しい電話番号は6桁のセキュリティコードを設定してください。既存のJileiアカウントは現在のセキュリティコードを入力してください。</translation></message>
+    <message><source>Any Jilei account can sign in here. The security code is the 6-digit number you set, not an SMS verification code.</source><translation>どのJileiアカウントでもそのままログインできます（このアプリ専用の登録は不要）。セキュリティコードはご自身で設定した6桁の数字で、SMS認証コードではありません。</translation></message>
+    <message><source>Set a username and a 6-digit security code. Existing Jilei account: enter your current security code to unlock this app.</source><translation>ユーザー名と6桁のセキュリティコードを設定してください（2回入力）。既存のJileiアカウントの場合は、現在のセキュリティコードを入力するとこのアプリが利用可能になります。</translation></message>
+    <message><source>Username</source><translation>ユーザー名</translation></message>
+    <message><source>1-10 Chinese characters, letters or digits</source><translation>中国語・英数字1〜10文字</translation></message>
+    <message><source>Confirm security code</source><translation>セキュリティコードの確認</translation></message>
+    <message><source>Enter the same 6-digit security code again</source><translation>同じ6桁のセキュリティコードをもう一度入力してください</translation></message>
+    <message><source>The two security codes do not match.</source><translation>2つのセキュリティコードが一致しません。</translation></message>
+    <message><source>Then %1/month</source><translation>以降 %1/月</translation></message>
+    <message><source>Then %1</source><translation>以降 %1</translation></message>
     <message><source>Sign In</source><translation>ログイン</translation></message>
     <message><source>Create Account</source><translation>アカウント登録</translation></message>
     <message><source>Please wait…</source><translation>お待ちください…</translation></message>

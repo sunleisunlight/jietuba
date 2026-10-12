@@ -92,10 +92,17 @@ def _auth_payload(security_pin: str) -> dict:
     }
 
 
-def register(phone: str, security_pin: str):
+def _default_name(phone: str) -> str:
+    """用户没填用户名时的兜底昵称（控制中心要求 1-10 位中文 / 字母 / 数字）。"""
+    return f"积磊截图用户{phone[-4:]}" if len(phone) >= 4 else "积磊截图用户"
+
+
+def register(phone: str, security_pin: str, name: str = ""):
     p = _auth_payload(security_pin)
     p["phone"] = phone
-    p["name"] = f"积磊截图用户{phone[-4:]}" if len(phone) >= 4 else "积磊截图用户"
+    # 用户名由用户在注册页填写；为空（自动开通本产品场景）时用兜底昵称，
+    # 服务端对已存在的账号只会补开产品，不会覆盖它原有的用户名。
+    p["name"] = (name or "").strip() or _default_name(phone)
     return _request("POST", "/api/v3/auth/register", payload=p)
 
 
