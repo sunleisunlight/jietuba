@@ -376,13 +376,15 @@ class TestResetCurrentPageDispatch:
             called = [name for name in RESET_METHODS if getattr(fake, name).called]
             assert called == [expected], (index, called)
 
-    def test_about_page_has_nothing_to_reset(self):
-        fake = _dispatch_fake(8)
-        SettingsDialog._reset_current_page(fake)
-        assert not any(getattr(fake, name).called for name in RESET_METHODS)
+    def test_about_and_account_pages_have_nothing_to_reset(self):
+        # 8=账号页、9=关于页，都没有可重置的本地设置
+        for index in (8, 9):
+            fake = _dispatch_fake(index)
+            SettingsDialog._reset_current_page(fake)
+            assert not any(getattr(fake, name).called for name in RESET_METHODS), index
 
     def test_unknown_index_resets_nothing(self):
-        for index in (-1, 9, 99):
+        for index in (-1, 10, 99):
             fake = _dispatch_fake(index)
             SettingsDialog._reset_current_page(fake)
             assert not any(getattr(fake, name).called for name in RESET_METHODS), index
@@ -603,7 +605,8 @@ NAV_TITLES = {
     4: "Translation Settings",
     5: "Log Settings",
     6: "Other Settings",
-    8: "Software Information",
+    8: "Account Settings",
+    9: "Software Information",
 }
 
 
@@ -646,7 +649,8 @@ class TestOnNavChanged:
         assert not fake._refresh_after_page_change.called
 
     def test_unknown_index_changes_nothing(self):
-        for index in (-1, 9, 99):
+        # 10 在两平台都没有标题映射（macOS 权限页不经 title_map 切换）
+        for index in (-1, 10, 99):
             fake = _nav_fake()
             SettingsDialog._on_nav_changed(fake, index)
             assert fake.content_stack.set_indexes == [], index

@@ -93,6 +93,13 @@ class MainApp(QObject):
         # Config - 使用统一的设置管理器
         self.config_manager = get_tool_settings_manager()
 
+        # 积磊账号：后台恢复登录态/会员权益与游客备注额度，绝不阻塞启动
+        try:
+            from account import get_account
+            get_account().startup()
+        except Exception:
+            pass
+
         # 应用界面主题必须在创建任何窗口前初始化。截图强调色由
         # core.theme 单独管理，二者职责互不影响。
         from core.ui_theme import get_ui_theme
@@ -917,11 +924,21 @@ class MainApp(QObject):
         return False
     
     def open_clipboard_window(self):
-        """打开剪切板历史窗口"""
-        
+        """打开剪切板历史窗口（剪贴板历史需登录积磊账号）"""
+
         try:
+            # 门控：剪贴板历史必须登录。已登录直接放行；未登录安静弹登录窗。
+            try:
+                from account import get_account
+                from account.gate_dialog import require_login
+                if not get_account().can_use_clipboard() and not require_login(self._settings_dialog):
+                    return
+            except Exception:
+                # 账号模块任何异常都不阻断剪贴板（功能可用性优先）
+                pass
+
             from clipboard import ClipboardWindow
-            
+
             # 如果窗口已存在且可见，则关闭
             if self.clipboard_window and self.clipboard_window.isVisible():
                 self.clipboard_window.close()

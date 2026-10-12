@@ -374,6 +374,7 @@ core/
 ├── log_translations/        # 各模块日志文本翻译辅助
 ├── constants.py             # 全局常量定义（字体、路径等）
 ├── update_checker.py        # GitHub 最新版本异步查询与版本比较
+├── updater.py               # 积磊应用内更新器 — 控制中心清单、SHA-256 校验、exe 替换重启
 └── ui_theme.py              # UIThemeManager — 应用窗口与原生 Qt 控件的明暗外观（截图配色仍在 theme.py）
 ```
 
@@ -651,6 +652,7 @@ translations/
 ui/
 ├── __init__.py
 ├── toolbar.py               # Toolbar / _DragHandle — 可拖动工具栏基类
+├── update_flow.py           # 应用内更新交互 — 检查、下载进度、校验、重启安装
 ├── toolbar_layout.py        # 截图工具栏按钮排布（顺序 / 显示方式）的归一化与读写
 ├── toolbar_layout_dialog.py # ToolbarLayoutDialog — 截图工具栏排布对话框
 ├── tray_menu.py             # TrayMenu — 系统托盘菜单

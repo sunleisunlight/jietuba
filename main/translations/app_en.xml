@@ -3754,4 +3754,86 @@ Delete it?</translation></message>
     <message><source>这条历史不存在或已损坏。</source><translation>This history does not exist or is damaged.</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>This history's source image or project state is damaged; it cannot be continued.</translation></message>
 </context>
+
+<!-- ========== Jilei Account: settings page ========== -->
+<context>
+    <name>SettingsDialog</name>
+    <message><source>Account</source><translation>Account</translation></message>
+    <message><source>Account Settings</source><translation>Account Settings</translation></message>
+    <message><source>Jilei Account</source><translation>Jilei Account</translation></message>
+    <message><source>Sign in to use clipboard history and other account features.</source><translation>Sign in to use clipboard history and other account features.</translation></message>
+    <message><source>Sign In / Register</source><translation>Sign In / Register</translation></message>
+    <message><source>Membership</source><translation>Membership</translation></message>
+    <message><source>Free account</source><translation>Free account</translation></message>
+    <message><source>Core screenshot features are free forever.</source><translation>Core screenshot features are free forever.</translation></message>
+    <message><source>View Membership Plans</source><translation>View Membership Plans</translation></message>
+    <message><source>Membership active</source><translation>Membership active</translation></message>
+    <message><source>Permanent member · free updates</source><translation>Permanent member · free updates</translation></message>
+    <message><source>Valid until %1</source><translation>Valid until %1</translation></message>
+    <message><source>Renew / View Plans</source><translation>Renew / View Plans</translation></message>
+    <message><source>Sign Out</source><translation>Sign Out</translation></message>
+    <message><source>Sign out of this Jilei account on this device?</source><translation>Sign out of this Jilei account on this device?</translation></message>
+</context>
+
+<!-- ========== Jilei Account: login dialog ========== -->
+<context>
+    <name>LoginDialog</name>
+    <message><source>Sign in to use clipboard history and other account features</source><translation>Sign in to use clipboard history and other account features</translation></message>
+    <message><source>Phone number</source><translation>Phone number</translation></message>
+    <message><source>Enter 11-digit phone number</source><translation>Enter 11-digit phone number</translation></message>
+    <message><source>Security code</source><translation>Security code</translation></message>
+    <message><source>Enter your 6-digit security code</source><translation>Enter your 6-digit security code</translation></message>
+    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>The security code is the 6-digit number you set, not an SMS verification code.</translation></message>
+    <message><source>Set a 6-digit security code for your new account.</source><translation>Set a 6-digit security code for your new account.</translation></message>
+    <message><source>Sign In</source><translation>Sign In</translation></message>
+    <message><source>Create Account</source><translation>Create Account</translation></message>
+    <message><source>Please wait…</source><translation>Please wait…</translation></message>
+    <message><source>New here? Create an account</source><translation>New here? Create an account</translation></message>
+    <message><source>Already registered? Sign in</source><translation>Already registered? Sign in</translation></message>
+    <message><source>Screenshots and annotation are free forever without signing in.</source><translation>Screenshots and annotation are free forever without signing in.</translation></message>
+    <message><source>Sign-in failed, please try again</source><translation>Sign-in failed, please try again</translation></message>
+</context>
+
+<!-- ========== Jilei Account: gate dialogs ========== -->
+<context>
+    <name>GateLoginDialog</name>
+    <message><source>Sign In Required</source><translation>Sign In Required</translation></message>
+    <message><source>This feature requires a Jilei account.</source><translation>This feature requires a Jilei account.</translation></message>
+    <message><source>After signing in, clipboard history is free to use; core screenshot features stay free forever.</source><translation>After signing in, clipboard history is free to use; core screenshot features stay free forever.</translation></message>
+    <message><source>Sign In</source><translation>Sign In</translation></message>
+    <message><source>Not now</source><translation>Not now</translation></message>
+</context>
+<context>
+    <name>GateMembershipDialog</name>
+    <message><source>Membership Required</source><translation>Membership Required</translation></message>
+    <message><source>This feature requires an active membership.</source><translation>This feature requires an active membership.</translation></message>
+    <message><source>Membership benefits:</source><translation>Membership benefits:</translation></message>
+    <message><source>Custom clipboard groups</source><translation>Custom clipboard groups</translation></message>
+    <message><source>Unlimited notes</source><translation>Unlimited notes</translation></message>
+    <message><source>View Membership Plans</source><translation>View Membership Plans</translation></message>
+    <message><source>Maybe later</source><translation>Maybe later</translation></message>
+</context>
+
+<!-- ========== Jilei Account: membership dialog ========== -->
+<context>
+    <name>MembershipDialog</name>
+    <message><source>Jilei Membership</source><translation>Jilei Membership</translation></message>
+    <message><source>Membership covers a small set of high-frequency premium features. Core screenshot features stay free forever.</source><translation>Membership covers a small set of high-frequency premium features. Core screenshot features stay free forever.</translation></message>
+    <message><source>Loading plans…</source><translation>Loading plans…</translation></message>
+    <message><source>Network error. Please try again later.</source><translation>Network error. Please try again later.</translation></message>
+    <message><source>Retry</source><translation>Retry</translation></message>
+    <message><source>Subscribe</source><translation>Subscribe</translation></message>
+    <message><source>Placing order…</source><translation>Placing order…</translation></message>
+    <message><source>The payment page has opened in your browser. After completing payment, tap the button below to refresh your benefits.</source><translation>The payment page has opened in your browser. After completing payment, tap the button below to refresh your benefits.</translation></message>
+    <message><source>I've paid, refresh benefits</source><translation>I've paid, refresh benefits</translation></message>
+    <message><source>Refreshing…</source><translation>Refreshing…</translation></message>
+    <message><source>Close</source><translation>Close</translation></message>
+    <message><source>Activated</source><translation>Activated</translation></message>
+    <message><source>Your membership is active now. Thank you for your support!</source><translation>Your membership is active now. Thank you for your support!</translation></message>
+    <message><source>Membership is not active yet. If you just finished paying, please wait a moment and tap refresh again.</source><translation>Membership is not active yet. If you just finished paying, please wait a moment and tap refresh again.</translation></message>
+    <message><source>Could not create the order. Please try again later.</source><translation>Could not create the order. Please try again later.</translation></message>
+    <message><source>The payment link is from an untrusted source and was blocked.</source><translation>The payment link is from an untrusted source and was blocked.</translation></message>
+    <message><source>Permanent · free updates</source><translation>Permanent · free updates</translation></message>
+    <message><source>%1 days</source><translation>%1 days</translation></message>
+</context>
 </TS>

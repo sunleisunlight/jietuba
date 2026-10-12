@@ -356,6 +356,7 @@ core/
 ├── log_translations/        # per-module log text translation helpers
 ├── constants.py             # Global constants (fonts, paths, etc.)
 ├── update_checker.py        # Asynchronous GitHub release lookup and version comparison
+├── updater.py               # Jilei in-app updater — control-center manifest, SHA-256, exe swap & restart
 └── ui_theme.py              # UIThemeManager — light/dark appearance for app windows and native Qt widgets
 ```
 
@@ -576,6 +577,7 @@ Common UI component library.
 ```text
 ui/
 ├── toolbar.py               # Toolbar / _DragHandle — draggable toolbar base class
+├── update_flow.py           # In-app update dialog flow — check, download with progress, verify, restart
 ├── toolbar_layout.py        # screenshot toolbar button layout (order / visibility): normalize, load, save
 ├── toolbar_layout_dialog.py # ToolbarLayoutDialog — screenshot toolbar layout editor
 ├── tray_menu.py             # TrayMenu — system tray menu

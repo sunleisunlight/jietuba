@@ -230,15 +230,16 @@ class SettingsDialog(FrostedFramelessDialog):
         self.content_stack.addWidget(create_log_page(self))              # 5
         self.content_stack.addWidget(create_misc_page(self))             # 6
         self.content_stack.addWidget(create_developer_page(self))        # 7
-        self.content_stack.addWidget(create_about_page(self))            # 8
+        self.content_stack.addWidget(self.create_account_page())         # 8
+        self.content_stack.addWidget(create_about_page(self))            # 9
         # macOS：追加"系统权限"页（Windows 不创建，保持原 UI）
         self._permissions_stack_index = -1
         import sys as _sys
         if _sys.platform == "darwin":
-            self._permissions_stack_index = 9
-            self.content_stack.addWidget(create_permissions_page(self))   # 9
+            self._permissions_stack_index = 10
+            self.content_stack.addWidget(create_permissions_page(self))   # 10
 
-        # 九个分页都是一次性建完、切换只换可见性（不是懒加载/动态重建），
+        # 所有分页都是一次性建完、切换只换可见性（不是懒加载/动态重建），
         # 建完后统一扫一遍即可覆盖全部分页里的 fluent_lite 控件。
         configure_dialog_controls(self.content_stack)
 
@@ -251,6 +252,11 @@ class SettingsDialog(FrostedFramelessDialog):
         self._apply_dialog_stylesheet()
 
         self._set_current_nav("shortcuts")
+
+    def create_account_page(self):
+        """积磊账号页工厂（惰性导入：避免与 ui.settings_ui 包初始化形成循环导入）。"""
+        from account.page_account import create_account_page
+        return create_account_page(self)
 
     def _create_navigation(self, parent=None):
         """创建左侧导航栏"""
@@ -270,14 +276,15 @@ class SettingsDialog(FrostedFramelessDialog):
             ("translation", FluentIcon.LANGUAGE, self.tr("Translation"), 4, NavigationItemPosition.TOP),
             ("log", FluentIcon.HISTORY, self.tr("Log Settings"), 5, NavigationItemPosition.TOP),
             ("other", FluentIcon.APPLICATION, self.tr("Other"), 6, NavigationItemPosition.TOP),
-            ("about", FluentIcon.INFO, self.tr("About"), 8, NavigationItemPosition.BOTTOM),
+            ("account", FluentIcon.PEOPLE, self.tr("Account"), 8, NavigationItemPosition.TOP),
+            ("about", FluentIcon.INFO, self.tr("About"), 9, NavigationItemPosition.BOTTOM),
         ]
         import sys as _sys2
         if _sys2.platform == "darwin":
-            # 权限页索引：__init__ 中 content_stack 构建时固定为 9
+            # 权限页索引：__init__ 中 content_stack 构建时固定为 10
             self._nav_items.append(
                 ("permissions", FluentIcon.SETTING, self.tr("System Permissions"),
-                 getattr(self, "_permissions_stack_index", 9), NavigationItemPosition.BOTTOM),
+                 getattr(self, "_permissions_stack_index", 10), NavigationItemPosition.BOTTOM),
             )
 
         for route_key, icon, text, stack_index, position in self._nav_items:
@@ -431,7 +438,8 @@ class SettingsDialog(FrostedFramelessDialog):
             4: self.tr("Translation Settings"),
             5: self.tr("Log Settings"),
             6: self.tr("Other Settings"),
-            8: self.tr("Software Information"),
+            8: self.tr("Account Settings"),
+            9: self.tr("Software Information"),
         }
 
         if stack_index in title_map:
@@ -682,6 +690,9 @@ class SettingsDialog(FrostedFramelessDialog):
         elif current_index == 7:
             self._reset_long_screenshot_page()
         elif current_index == 8:
+            # 账号页没有可重置的本地设置
+            pass
+        elif current_index == 9:
             pass
 
     def _reset_hotkey_page(self):

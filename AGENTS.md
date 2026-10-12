@@ -119,13 +119,50 @@ Git 远端：origin
 
 ## 发布
 
-1. 完成修改；
-2. 递增并同步版本（只改 `main/main_app.py` 的 `APP_VERSION`）；
-3. 构建当前平台真实软件；
-4. Commit；
-5. Tag；
-6. Push（推送 `origin` 的 `main` 分支与 Tag）；
-7. 交给用户人工测试。
+积磊截图通过**积磊控制中心**（`jilei.cc` / `cc.sunget.top`）分发与更新，不再走
+GitHub Release 附件。客户端检查更新固定访问：
+
+```text
+GET /updates/jilei-screenshot/stable/windows/<x86_64|arm64>/<当前版本>
+```
+
+发布步骤：
+
+1. 完成修改，跑通相关测试；
+2. 递增并同步版本（只改 `main/main_app.py` 的 `APP_VERSION`，唯一源，禁止在打包
+   脚本 / spec / 控制中心写死版本）；
+3. 构建当前平台真实软件：`python build_with_ocr_onefile.py`
+   → `dist/积磊截图.exe` + 外置 `dist/models/`；
+4. **产出四件套**（一键脚本，见下）；
+5. Commit；
+6. Tag（annotated）；
+7. Push（推送 `origin` 的当前分支与 Tag）；
+8. 把四件套交给用户，由用户在积磊控制中心后台「发布中心」一键发布
+   （analyze → stage → publish）；发布成功后官网自动出现下载页，在线客户端
+   「检查更新」会收到新版本；
+9. 交给用户人工测试。
+
+### Windows 四件套（平铺在同一个目录，脚本自动生成）
+
+运行：`python scripts/make_release_bundle.py`（会先确保已构建最新 exe）。
+产物目录 `dist/release/`：
+
+```text
+① 积磊截图-v<版本>-<YYMMDD>-Windows-x64.exe   主程序，首装包与应用内更新是同一个 onefile exe
+② models.zip                                  外置 OCR 模型（det + rec 两个 onnx）
+③ v<版本>-<YYMMDD>-更新说明.txt                更新日志（控制中心发布时解析为客户端 notes）
+④ 积磊截图-v<版本>-<YYMMDD>-Windows-x64.sha256 ① 的 SHA-256（十六进制 + 文件名，一行）
+```
+
+- ① 与 ② 必须同级分发：exe 启动时在同级 `models/` 找 OCR 模型。
+- ③ 更新说明必须非空，首行是版本标题，其后逐条写本次变化（供应用内更新弹窗展示）。
+- ④ 由脚本实算，禁止手填；控制中心落盘时也会自己重算 SHA-256 与 size。
+- ARM64 构建把文件名里的 `x64` 换成 `arm64`（在 ARM64 机器上构建）。
+
+> 应用内更新（`main/core/updater.py`）下载 ① 后用清单 SHA-256 校验，再通过
+> 等待进程退出的批处理覆盖运行中的 exe 并自动重启。onefile 不使用 Tauri minisign，
+> 控制中心摄入本产品时**不要求 `.sig`**（部署侧 release profile 已按无签名单 exe 配置；
+> 完整性由 HTTPS + SHA-256 保证）。
 
 Commit：
 
@@ -143,14 +180,11 @@ Tag 默认使用 annotated tag。
 
 ## 正式发布
 
-只有用户明确要求正式发布时执行。
-在快速发布的基础上增加本项目实际需要的：
-- GitHub Release：填写版本号、发布说明，附上 `dist/jietuba_pp.exe` 与 `dist/models/`（Windows），
-  以及 macOS 的 `.app` / `.dmg` 产物；
-- 产物附 SHA-256 校验值与文件大小；
-- 发布后用应用内"检查更新"确认能读到新版本（无需做功能测试）。
+只有用户明确要求正式发布时执行。正式发布 = 上面完整九步：四件套 + Commit +
+annotated Tag + Push + 控制中心后台发布。发布后用应用内「设置 → 关于 → 检查更新」
+确认能读到新版本（无需做功能测试）。
 
-正式发布同样不自动做功能测试。
+正式发布同样不自动做功能测试，编译成功不等于功能测试通过，最终由用户人工验收。
 
 ## 测试与质量门
 

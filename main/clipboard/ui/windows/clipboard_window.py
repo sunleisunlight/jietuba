@@ -1011,6 +1011,15 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.group_bar.handle_top_group_switch(delta)
 
     def _on_add_group_clicked(self):
+        # 自定义分组是会员功能：免费用户使用默认的文字/图片分组。
+        # 账号模块异常时不阻断（功能可用性优先）。
+        try:
+            from account import get_account
+            from account.gate_dialog import require_membership
+            if not get_account().can_create_custom_group() and not require_membership(self):
+                return
+        except Exception:
+            pass
         dialog = get_manage_dialog(self.manager)
         self._connect_manage_dialog(dialog)
         dialog.show_and_activate()

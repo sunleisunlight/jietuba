@@ -355,6 +355,7 @@ core/
 ├── log_translations/        # 各モジュールのログ翻訳ヘルパー
 ├── constants.py             # グローバル定数（フォント、パス等）
 ├── update_checker.py        # GitHub 最新リリースの非同期取得とバージョン比較
+├── updater.py               # 積磊アプリ内アップデーター — 管理センター manifest・SHA-256 検証・exe 差し替え再起動
 └── ui_theme.py              # UIThemeManager — アプリ窓と Qt ネイティブ部品のライト/ダーク外観
 ```
 
@@ -574,7 +575,8 @@ translations/
 
 ```text
 ui/
-├── toolbar.py               # Toolbar / _DragHandle — ドラッグ可能なツールバー基底クラス
+├── toolbar.py               # Toolbar / _DragHandle — ドラッグ可能なツールバー基底
+├── update_flow.py           # アプリ内更新フロー — 確認・進捗ダウンロード・検証・再起動クラス
 ├── toolbar_layout.py        # スクリーンショットツールバーのボタン配置（順序・表示方法）の正規化と読み書き
 ├── toolbar_layout_dialog.py # ToolbarLayoutDialog — スクリーンショットツールバーの配置編集ダイアログ
 ├── tray_menu.py             # TrayMenu — システムトレイメニュー

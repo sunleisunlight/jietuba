@@ -9,13 +9,7 @@ from ui.fluent_lite import (
     PushButton,
 )
 from .components import SettingCardGroup
-from ui.dialogs import (
-    show_info_dialog,
-    show_update_dialog,
-    show_warning_dialog,
-)
-from core import T, log_warning
-from core.update_checker import GitHubReleaseChecker, ReleaseInfo, is_newer_version
+from ui.update_flow import check_and_offer_update
 from main_app import APP_VERSION
 
 
@@ -49,61 +43,14 @@ def create_about_page(dialog) -> QScrollArea:
     name_card.hBoxLayout.addSpacing(dialog_scaled(16))
     group.addSettingCard(name_card)
 
-    release_checker = GitHubReleaseChecker(dialog)
-    dialog._release_checker = release_checker
-
-    def finish_check():
+    def start_check():
+        # 应用内更新：走积磊控制中心清单，支持下载校验后一键重启安装
+        check_update_btn.setEnabled(False)
+        check_update_btn.setText(dialog.tr("Checking..."))
+        check_and_offer_update(dialog)
         check_update_btn.setEnabled(True)
         check_update_btn.setText(dialog.tr("Check for Updates"))
 
-    def show_release(release: ReleaseInfo):
-        finish_check()
-        if not is_newer_version(release.tag_name, APP_VERSION):
-            message = dialog.tr("You're using the latest version (%1).").replace(
-                "%1", APP_VERSION
-            )
-            show_info_dialog(dialog, dialog.tr("Update Check"), message)
-            return
-
-        notes = release.notes or dialog.tr("No release notes provided.")
-        content = "\n".join(
-            (
-                dialog.tr("Current version: %1").replace("%1", APP_VERSION),
-                dialog.tr("Latest version: %1").replace("%1", release.tag_name),
-                "",
-                dialog.tr("What's new:"),
-                notes,
-            )
-        )
-        show_update_dialog(
-            dialog,
-            dialog.tr("Update Available"),
-            content,
-            dialog.tr("Download:"),
-            release.url,
-            dialog.tr("Open Download Page"),
-        )
-
-    def show_check_error(reason: str):
-        finish_check()
-        log_warning(T("检查更新失败: {reason}", reason=reason), "Update")
-        show_warning_dialog(
-            dialog,
-            dialog.tr("Update Check Failed"),
-            dialog.tr(
-                "Unable to check for updates. Please check your network connection "
-                "and try again."
-            ),
-        )
-
-    def start_check():
-        if not release_checker.check():
-            return
-        check_update_btn.setEnabled(False)
-        check_update_btn.setText(dialog.tr("Checking..."))
-
-    release_checker.release_found.connect(show_release)
-    release_checker.failed.connect(show_check_error)
     check_update_btn.clicked.connect(start_check)
 
     layout.addWidget(group)

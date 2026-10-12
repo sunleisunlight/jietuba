@@ -1,0 +1,190 @@
+# -*- coding: utf-8 -*-
+"""积磊控制中心 HTTP 客户端（仅标准库 urllib，不引入新依赖）。
+
+约定：
+- 所有方法返回 ``(data: dict | None, error: str)``，永不向调用方抛网络异常；
+- 双 BASE 域名故障转移（品牌域 jilei.cc → cc.sunget.top）；
+- 超时短，门控调用方据此做"放行优先"，网络问题不阻断截图。
+"""
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Optional
+
+from core.logger import log_warning, T
+
+from . import constants as C
+from .device import get_device_id
+
+
+class ApiError(Exception):
+    def __init__(self, code: str, status: int = 0, message: str = ""):
+        super().__init__(message or code)
+        self.code = code
+        self.status = status
+        self.message = message
+
+
+def _request(method: str, path: str, *, payload: Optional[dict] = None,
+             token: str = "", phone: str = "", timeout: float = 8.0):
+    """发起 JSON 请求，依次尝试两个 BASE 域名。
+
+    返回 (data, None) 或 (None, ApiError)。4xx 业务错误不做域名转移（立刻返回，
+    服务端给了明确应答说明链路是通的）；只对网络层错误/5xx 转移。
+    """
+    body = None
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        C.H_DEVICE: get_device_id(),
+    }
+    if token:
+        headers[C.H_TOKEN] = token
+    if phone:
+        headers[C.H_PHONE] = phone
+    if payload is not None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    last_err: Optional[ApiError] = None
+    for base in C.BASE_URLS:
+        url = base + path
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="ignore")
+                data = json.loads(raw) if raw else {}
+                return data, None
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = json.loads(e.read().decode("utf-8", errors="ignore") or "{}")
+            except Exception:
+                err_body = {}
+            err = ApiError(
+                err_body.get("error_code") or err_body.get("error") or f"http_{e.code}",
+                status=e.code,
+                message=err_body.get("message") or "",
+            )
+            # 4xx 是明确业务应答，不换域名重试
+            if 400 <= e.code < 500:
+                return None, err
+            last_err = err
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
+            last_err = ApiError("network_unreachable", message=str(e))
+    return None, last_err or ApiError("network_unreachable")
+
+
+# ---------------------------------------------------------------- 账号
+
+def _auth_payload(security_pin: str) -> dict:
+    from main_app import APP_VERSION
+    return {
+        "phone": "",  # 由调用方填
+        "name": "",
+        "securityPIN": security_pin,
+        "deviceId": get_device_id(),
+        "platform": C.PLATFORM,
+        "appVersion": APP_VERSION,
+        "currentLibraryCount": 0,
+        "productId": C.PRODUCT_ID,
+    }
+
+
+def register(phone: str, security_pin: str):
+    p = _auth_payload(security_pin)
+    p["phone"] = phone
+    p["name"] = f"积磊截图用户{phone[-4:]}" if len(phone) >= 4 else "积磊截图用户"
+    return _request("POST", "/api/v3/auth/register", payload=p)
+
+
+def login(phone: str, security_pin: str):
+    p = _auth_payload(security_pin)
+    p["phone"] = phone
+    return _request("POST", "/api/v3/auth/login", payload=p)
+
+
+# ---------------------------------------------------------------- 权益
+
+def guest_capabilities():
+    return _request(
+        "GET",
+        f"/client/products/{C.PRODUCT_ID}/capabilities?deviceId={get_device_id()}",
+        timeout=6.0,
+    )
+
+
+def entitlement(token: str, phone: str):
+    return _request(
+        "GET",
+        f"/client/products/{C.PRODUCT_ID}/entitlement?phone={urllib.parse.quote(phone)}"
+        f"&deviceId={get_device_id()}",
+        token=token, phone=phone, timeout=6.0,
+    )
+
+
+def export_start(token: str, phone: str, event_id: str, units: int = C.NOTE_UNITS):
+    return _request(
+        "POST", f"/client/products/{C.PRODUCT_ID}/exports/start",
+        payload={"phone": phone, "deviceId": get_device_id(),
+                 "exportEventId": event_id, "units": units, "format": "note"},
+        token=token, phone=phone, timeout=8.0,
+    )
+
+
+def export_finish(token: str, phone: str, event_id: str, outcome: str):
+    return _request(
+        "POST", f"/client/products/{C.PRODUCT_ID}/exports/finish",
+        payload={"phone": phone, "deviceId": get_device_id(),
+                 "exportEventId": event_id, "outcome": outcome},
+        token=token, phone=phone, timeout=8.0,
+    )
+
+
+def guest_export_start(event_id: str, units: int = C.NOTE_UNITS):
+    return _request(
+        "POST", f"/client/products/{C.PRODUCT_ID}/guest/exports/start",
+        payload={"deviceId": get_device_id(), "exportEventId": event_id,
+                 "units": units, "format": "note"},
+        timeout=8.0,
+    )
+
+
+def guest_export_finish(event_id: str, outcome: str):
+    return _request(
+        "POST", f"/client/products/{C.PRODUCT_ID}/guest/exports/finish",
+        payload={"deviceId": get_device_id(), "exportEventId": event_id,
+                 "outcome": outcome},
+        timeout=8.0,
+    )
+
+
+# ---------------------------------------------------------------- 商业
+
+def list_plans(token: str, phone: str):
+    return _request(
+        "GET", f"/client/commerce/plans?product_id={C.PRODUCT_ID}",
+        token=token, phone=phone, timeout=8.0,
+    )
+
+
+def public_plans():
+    return _request(
+        "GET", f"/public/products/{C.PRODUCT_ID}/plans", timeout=8.0)
+
+
+def create_order(token: str, phone: str, plan_id: str):
+    return _request(
+        "POST", "/client/commerce/orders",
+        payload={"product_id": C.PRODUCT_ID, "plan_id": plan_id,
+                 "deviceId": get_device_id()},
+        token=token, phone=phone, timeout=10.0,
+    )
+
+
+def list_orders(token: str, phone: str, limit: int = 20):
+    return _request(
+        "GET", f"/client/commerce/orders?product_id={C.PRODUCT_ID}&limit={limit}",
+        token=token, phone=phone, timeout=8.0,
+    )

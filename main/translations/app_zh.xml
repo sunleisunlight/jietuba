@@ -3920,4 +3920,86 @@ Replace it?</source>
         <translation>GIF 录制</translation>
     </message>
 </context>
+
+<!-- ========== Jilei Account: settings page ========== -->
+<context>
+    <name>SettingsDialog</name>
+    <message><source>Account</source><translation>账号</translation></message>
+    <message><source>Account Settings</source><translation>账号设置</translation></message>
+    <message><source>Jilei Account</source><translation>积磊账号</translation></message>
+    <message><source>Sign in to use clipboard history and other account features.</source><translation>登录后可使用剪贴板历史等账号功能。</translation></message>
+    <message><source>Sign In / Register</source><translation>登录 / 注册</translation></message>
+    <message><source>Membership</source><translation>会员</translation></message>
+    <message><source>Free account</source><translation>免费账号</translation></message>
+    <message><source>Core screenshot features are free forever.</source><translation>核心截图功能永久免费。</translation></message>
+    <message><source>View Membership Plans</source><translation>查看会员套餐</translation></message>
+    <message><source>Membership active</source><translation>会员有效</translation></message>
+    <message><source>Permanent member · free updates</source><translation>永久会员·保持更新</translation></message>
+    <message><source>Valid until %1</source><translation>有效期至 %1</translation></message>
+    <message><source>Renew / View Plans</source><translation>续费/查看套餐</translation></message>
+    <message><source>Sign Out</source><translation>退出登录</translation></message>
+    <message><source>Sign out of this Jilei account on this device?</source><translation>确定要在本机退出当前积磊账号吗？</translation></message>
+</context>
+
+<!-- ========== Jilei Account: login dialog ========== -->
+<context>
+    <name>LoginDialog</name>
+    <message><source>Sign in to use clipboard history and other account features</source><translation>登录后使用剪贴板历史等账号功能</translation></message>
+    <message><source>Phone number</source><translation>手机号</translation></message>
+    <message><source>Enter 11-digit phone number</source><translation>请输入 11 位手机号</translation></message>
+    <message><source>Security code</source><translation>安全码</translation></message>
+    <message><source>Enter your 6-digit security code</source><translation>请输入 6 位安全码</translation></message>
+    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>安全码是你设置的 6 位数字，不是短信验证码。</translation></message>
+    <message><source>Set a 6-digit security code for your new account.</source><translation>请为新账号设置 6 位安全码。</translation></message>
+    <message><source>Sign In</source><translation>登录</translation></message>
+    <message><source>Create Account</source><translation>注册</translation></message>
+    <message><source>Please wait…</source><translation>请稍候…</translation></message>
+    <message><source>New here? Create an account</source><translation>新用户？注册账号</translation></message>
+    <message><source>Already registered? Sign in</source><translation>已有账号？去登录</translation></message>
+    <message><source>Screenshots and annotation are free forever without signing in.</source><translation>截图与标注无需登录即可永久免费使用。</translation></message>
+    <message><source>Sign-in failed, please try again</source><translation>登录失败，请稍后重试</translation></message>
+</context>
+
+<!-- ========== Jilei Account: gate dialogs ========== -->
+<context>
+    <name>GateLoginDialog</name>
+    <message><source>Sign In Required</source><translation>需要登录</translation></message>
+    <message><source>This feature requires a Jilei account.</source><translation>此功能需要登录积磊账号。</translation></message>
+    <message><source>After signing in, clipboard history is free to use; core screenshot features stay free forever.</source><translation>登录后剪贴板历史可免费使用；核心截图功能始终免费。</translation></message>
+    <message><source>Sign In</source><translation>登录</translation></message>
+    <message><source>Not now</source><translation>暂不</translation></message>
+</context>
+<context>
+    <name>GateMembershipDialog</name>
+    <message><source>Membership Required</source><translation>需要会员</translation></message>
+    <message><source>This feature requires an active membership.</source><translation>此功能需要开通会员。</translation></message>
+    <message><source>Membership benefits:</source><translation>会员权益：</translation></message>
+    <message><source>Custom clipboard groups</source><translation>剪贴板自定义分组</translation></message>
+    <message><source>Unlimited notes</source><translation>备注不限次</translation></message>
+    <message><source>View Membership Plans</source><translation>查看会员套餐</translation></message>
+    <message><source>Maybe later</source><translation>以后再说</translation></message>
+</context>
+
+<!-- ========== Jilei Account: membership dialog ========== -->
+<context>
+    <name>MembershipDialog</name>
+    <message><source>Jilei Membership</source><translation>积磊会员</translation></message>
+    <message><source>Membership covers a small set of high-frequency premium features. Core screenshot features stay free forever.</source><translation>会员用于少量高频高级功能，核心截图功能永久免费。</translation></message>
+    <message><source>Loading plans…</source><translation>正在加载套餐…</translation></message>
+    <message><source>Network error. Please try again later.</source><translation>网络异常，稍后再试。</translation></message>
+    <message><source>Retry</source><translation>重试</translation></message>
+    <message><source>Subscribe</source><translation>开通</translation></message>
+    <message><source>Placing order…</source><translation>正在下单…</translation></message>
+    <message><source>The payment page has opened in your browser. After completing payment, tap the button below to refresh your benefits.</source><translation>支付页面已在浏览器中打开。支付完成后，点下方按钮刷新权益。</translation></message>
+    <message><source>I've paid, refresh benefits</source><translation>我已支付，刷新权益</translation></message>
+    <message><source>Refreshing…</source><translation>正在刷新…</translation></message>
+    <message><source>Close</source><translation>关闭</translation></message>
+    <message><source>Activated</source><translation>开通成功</translation></message>
+    <message><source>Your membership is active now. Thank you for your support!</source><translation>会员已开通，感谢支持！</translation></message>
+    <message><source>Membership is not active yet. If you just finished paying, please wait a moment and tap refresh again.</source><translation>暂未检测到会员权益。若刚完成支付，请稍候片刻再点刷新。</translation></message>
+    <message><source>Could not create the order. Please try again later.</source><translation>下单失败，请稍后重试。</translation></message>
+    <message><source>The payment link is from an untrusted source and was blocked.</source><translation>支付链接来源不可信，已阻止打开。</translation></message>
+    <message><source>Permanent · free updates</source><translation>永久使用·保持更新</translation></message>
+    <message><source>%1 days</source><translation>%1 天</translation></message>
+</context>
 </TS>

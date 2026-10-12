@@ -82,10 +82,41 @@ class NoteTool(Tool):
             )
             return
 
+        # 备注工具按次门控：游客每设备 20 次，登录后注册赠送 1000 次，会员不限。
+        # 门控只读本地缓存瞬时返回；撞到墙才弹登录/会员窗，网络异常一律放行。
+        if not self._pass_note_gate():
+            return
+
         item = self._create_note(target_rect, ctx)
         if item is None:
             return
+        # 成功拖出一条有效备注即记一次（乐观扣减、后台结算，不阻断输入）
+        try:
+            from account import get_account
+            get_account().consume_note()
+        except Exception:
+            pass
         self._enter_edit(item, ctx)
+
+    @staticmethod
+    def _pass_note_gate() -> bool:
+        """备注次数门控；需要登录/会员时弹对应对话框，用户完成则放行本次使用。"""
+        try:
+            from account import get_account
+            from account.gate_dialog import require_login, require_membership
+            from PySide6.QtWidgets import QApplication
+        except Exception:
+            return True   # 账号模块异常绝不影响截图主流程
+        acc = get_account()
+        if acc.can_create_note():
+            return True
+        parent = QApplication.activeWindow()
+        if acc.note_gate_reason() == "login":
+            ok = require_login(parent)
+        else:
+            ok = require_membership(parent)
+        # 用户完成登录/开通后放行；若权益快照尚未刷新，刚登录也直接放行本次
+        return ok or acc.is_logged_in
 
     def on_deactivate(self, ctx: ToolContext):
         """工具停用时收掉可能残留的拖框反馈，并让正在输入的备注结算内容"""

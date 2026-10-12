@@ -3876,4 +3876,86 @@ Replace it?</source>
     <message><source>这条历史不存在或已损坏。</source><translation>이 기록이 없거나 손상되었습니다.</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>이 기록의 원본 이미지 또는 프로젝트 상태가 손상되어 이어서 편집할 수 없습니다.</translation></message>
 </context>
+
+<!-- ========== Jilei Account: settings page ========== -->
+<context>
+    <name>SettingsDialog</name>
+    <message><source>Account</source><translation>계정</translation></message>
+    <message><source>Account Settings</source><translation>계정 설정</translation></message>
+    <message><source>Jilei Account</source><translation>지레이 계정</translation></message>
+    <message><source>Sign in to use clipboard history and other account features.</source><translation>로그인하면 클립보드 기록 등 계정 기능을 사용할 수 있습니다.</translation></message>
+    <message><source>Sign In / Register</source><translation>로그인 / 가입</translation></message>
+    <message><source>Membership</source><translation>멤버십</translation></message>
+    <message><source>Free account</source><translation>무료 계정</translation></message>
+    <message><source>Core screenshot features are free forever.</source><translation>핵심 캡처 기능은 영구 무료입니다.</translation></message>
+    <message><source>View Membership Plans</source><translation>멤버십 플랜 보기</translation></message>
+    <message><source>Membership active</source><translation>멤버십 이용 중</translation></message>
+    <message><source>Permanent member · free updates</source><translation>영구 멤버·업데이트 무료</translation></message>
+    <message><source>Valid until %1</source><translation>만료일 %1</translation></message>
+    <message><source>Renew / View Plans</source><translation>갱신 / 플랜 보기</translation></message>
+    <message><source>Sign Out</source><translation>로그아웃</translation></message>
+    <message><source>Sign out of this Jilei account on this device?</source><translation>이 기기에서 지레이 계정을 로그아웃하시겠어요?</translation></message>
+</context>
+
+<!-- ========== Jilei Account: login dialog ========== -->
+<context>
+    <name>LoginDialog</name>
+    <message><source>Sign in to use clipboard history and other account features</source><translation>로그인하면 클립보드 기록 등 계정 기능을 사용할 수 있습니다</translation></message>
+    <message><source>Phone number</source><translation>휴대폰 번호</translation></message>
+    <message><source>Enter 11-digit phone number</source><translation>휴대폰 번호 11자리를 입력하세요</translation></message>
+    <message><source>Security code</source><translation>보안 코드</translation></message>
+    <message><source>Enter your 6-digit security code</source><translation>6자리 보안 코드를 입력하세요</translation></message>
+    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>보안 코드는 SMS 인증번호가 아니라 직접 설정한 6자리 숫자입니다.</translation></message>
+    <message><source>Set a 6-digit security code for your new account.</source><translation>새 계정용 6자리 보안 코드를 설정하세요.</translation></message>
+    <message><source>Sign In</source><translation>로그인</translation></message>
+    <message><source>Create Account</source><translation>계정 가입</translation></message>
+    <message><source>Please wait…</source><translation>잠시만 기다려 주세요…</translation></message>
+    <message><source>New here? Create an account</source><translation>처음이신가요? 계정 가입</translation></message>
+    <message><source>Already registered? Sign in</source><translation>이미 가입하셨나요? 로그인</translation></message>
+    <message><source>Screenshots and annotation are free forever without signing in.</source><translation>캡처와 주석은 로그인 없이도 영구 무료로 사용할 수 있습니다.</translation></message>
+    <message><source>Sign-in failed, please try again</source><translation>로그인에 실패했습니다. 나중에 다시 시도해 주세요</translation></message>
+</context>
+
+<!-- ========== Jilei Account: gate dialogs ========== -->
+<context>
+    <name>GateLoginDialog</name>
+    <message><source>Sign In Required</source><translation>로그인 필요</translation></message>
+    <message><source>This feature requires a Jilei account.</source><translation>이 기능을 사용하려면 지레이 계정 로그인이 필요합니다.</translation></message>
+    <message><source>After signing in, clipboard history is free to use; core screenshot features stay free forever.</source><translation>로그인 후 클립보드 기록을 무료로 사용할 수 있으며, 핵심 캡처 기능은 항상 무료입니다.</translation></message>
+    <message><source>Sign In</source><translation>로그인</translation></message>
+    <message><source>Not now</source><translation>나중에</translation></message>
+</context>
+<context>
+    <name>GateMembershipDialog</name>
+    <message><source>Membership Required</source><translation>멤버십 필요</translation></message>
+    <message><source>This feature requires an active membership.</source><translation>이 기능을 사용하려면 멤버십 가입이 필요합니다.</translation></message>
+    <message><source>Membership benefits:</source><translation>멤버십 혜택:</translation></message>
+    <message><source>Custom clipboard groups</source><translation>클립보드 사용자 정의 그룹</translation></message>
+    <message><source>Unlimited notes</source><translation>무제한 노트</translation></message>
+    <message><source>View Membership Plans</source><translation>멤버십 플랜 보기</translation></message>
+    <message><source>Maybe later</source><translation>나중에 하기</translation></message>
+</context>
+
+<!-- ========== Jilei Account: membership dialog ========== -->
+<context>
+    <name>MembershipDialog</name>
+    <message><source>Jilei Membership</source><translation>지레이 멤버십</translation></message>
+    <message><source>Membership covers a small set of high-frequency premium features. Core screenshot features stay free forever.</source><translation>멤버십은 소수의 고급 기능에 적용됩니다. 핵심 캡처 기능은 영구 무료입니다.</translation></message>
+    <message><source>Loading plans…</source><translation>플랜 불러오는 중…</translation></message>
+    <message><source>Network error. Please try again later.</source><translation>네트워크 오류입니다. 나중에 다시 시도해 주세요.</translation></message>
+    <message><source>Retry</source><translation>다시 시도</translation></message>
+    <message><source>Subscribe</source><translation>가입하기</translation></message>
+    <message><source>Placing order…</source><translation>주문 처리 중…</translation></message>
+    <message><source>The payment page has opened in your browser. After completing payment, tap the button below to refresh your benefits.</source><translation>브라우저에서 결제 페이지가 열렸습니다. 결제 완료 후 아래 버튼으로 혜택을 새로고침하세요.</translation></message>
+    <message><source>I've paid, refresh benefits</source><translation>결제 완료, 혜택 새로고침</translation></message>
+    <message><source>Refreshing…</source><translation>새로고침 중…</translation></message>
+    <message><source>Close</source><translation>닫기</translation></message>
+    <message><source>Activated</source><translation>가입 완료</translation></message>
+    <message><source>Your membership is active now. Thank you for your support!</source><translation>멤버십이 활성화되었습니다. 응원해 주셔서 감사합니다!</translation></message>
+    <message><source>Membership is not active yet. If you just finished paying, please wait a moment and tap refresh again.</source><translation>아직 멤버십이 확인되지 않습니다. 방금 결제하셨다면 잠시 기다린 후 다시 새로고침해 주세요.</translation></message>
+    <message><source>Could not create the order. Please try again later.</source><translation>주문을 생성하지 못했습니다. 나중에 다시 시도해 주세요.</translation></message>
+    <message><source>The payment link is from an untrusted source and was blocked.</source><translation>신뢰할 수 없는 결제 링크라 열기를 차단했습니다.</translation></message>
+    <message><source>Permanent · free updates</source><translation>영구 사용·업데이트 무료</translation></message>
+    <message><source>%1 days</source><translation>%1일</translation></message>
+</context>
 </TS>

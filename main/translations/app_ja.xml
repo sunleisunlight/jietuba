@@ -3917,4 +3917,86 @@ Replace it?</source>
     <message><source>这条历史不存在或已损坏。</source><translation>この履歴は存在しないか破損しています。</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>この履歴の元画像またはプロジェクト状態が破損しており、続きを編集できません。</translation></message>
 </context>
+
+<!-- ========== Jilei Account: settings page ========== -->
+<context>
+    <name>SettingsDialog</name>
+    <message><source>Account</source><translation>アカウント</translation></message>
+    <message><source>Account Settings</source><translation>アカウント設定</translation></message>
+    <message><source>Jilei Account</source><translation>積磊アカウント</translation></message>
+    <message><source>Sign in to use clipboard history and other account features.</source><translation>ログインするとクリップボード履歴などのアカウント機能を利用できます。</translation></message>
+    <message><source>Sign In / Register</source><translation>ログイン / 登録</translation></message>
+    <message><source>Membership</source><translation>メンバーシップ</translation></message>
+    <message><source>Free account</source><translation>無料アカウント</translation></message>
+    <message><source>Core screenshot features are free forever.</source><translation>コアのキャプチャー機能は永遠に無料です。</translation></message>
+    <message><source>View Membership Plans</source><translation>メンバープランを見る</translation></message>
+    <message><source>Membership active</source><translation>メンバー有効</translation></message>
+    <message><source>Permanent member · free updates</source><translation>永久メンバー・アップデート無料</translation></message>
+    <message><source>Valid until %1</source><translation>有効期限：%1</translation></message>
+    <message><source>Renew / View Plans</source><translation>更新 / プランを見る</translation></message>
+    <message><source>Sign Out</source><translation>ログアウト</translation></message>
+    <message><source>Sign out of this Jilei account on this device?</source><translation>このデバイスの積磊アカウントからログアウトしますか？</translation></message>
+</context>
+
+<!-- ========== Jilei Account: login dialog ========== -->
+<context>
+    <name>LoginDialog</name>
+    <message><source>Sign in to use clipboard history and other account features</source><translation>ログインするとクリップボード履歴などのアカウント機能を利用できます</translation></message>
+    <message><source>Phone number</source><translation>電話番号</translation></message>
+    <message><source>Enter 11-digit phone number</source><translation>11桁の電話番号を入力してください</translation></message>
+    <message><source>Security code</source><translation>セキュリティコード</translation></message>
+    <message><source>Enter your 6-digit security code</source><translation>6桁のセキュリティコードを入力してください</translation></message>
+    <message><source>The security code is the 6-digit number you set, not an SMS verification code.</source><translation>セキュリティコードはSMS認証コードではなく、ご自身で設定した6桁の数字です。</translation></message>
+    <message><source>Set a 6-digit security code for your new account.</source><translation>新しいアカウント用に6桁のセキュリティコードを設定してください。</translation></message>
+    <message><source>Sign In</source><translation>ログイン</translation></message>
+    <message><source>Create Account</source><translation>アカウント登録</translation></message>
+    <message><source>Please wait…</source><translation>お待ちください…</translation></message>
+    <message><source>New here? Create an account</source><translation>初めてですか？アカウント登録</translation></message>
+    <message><source>Already registered? Sign in</source><translation>登録済みですか？ログイン</translation></message>
+    <message><source>Screenshots and annotation are free forever without signing in.</source><translation>キャプチャーと注釈はログインなしで永遠に無料でご利用いただけます。</translation></message>
+    <message><source>Sign-in failed, please try again</source><translation>ログインに失敗しました。後でもう一度お試しください</translation></message>
+</context>
+
+<!-- ========== Jilei Account: gate dialogs ========== -->
+<context>
+    <name>GateLoginDialog</name>
+    <message><source>Sign In Required</source><translation>ログインが必要です</translation></message>
+    <message><source>This feature requires a Jilei account.</source><translation>この機能には積磊アカウントへのログインが必要です。</translation></message>
+    <message><source>After signing in, clipboard history is free to use; core screenshot features stay free forever.</source><translation>ログイン後、クリップボード履歴を無料で利用できます。コアのキャプチャー機能は常に無料です。</translation></message>
+    <message><source>Sign In</source><translation>ログイン</translation></message>
+    <message><source>Not now</source><translation>後で</translation></message>
+</context>
+<context>
+    <name>GateMembershipDialog</name>
+    <message><source>Membership Required</source><translation>メンバーシップが必要です</translation></message>
+    <message><source>This feature requires an active membership.</source><translation>この機能にはメンバー登録が必要です。</translation></message>
+    <message><source>Membership benefits:</source><translation>メンバー特典：</translation></message>
+    <message><source>Custom clipboard groups</source><translation>クリップボードのカスタムグループ</translation></message>
+    <message><source>Unlimited notes</source><translation>ノート無制限</translation></message>
+    <message><source>View Membership Plans</source><translation>メンバープランを見る</translation></message>
+    <message><source>Maybe later</source><translation>後で</translation></message>
+</context>
+
+<!-- ========== Jilei Account: membership dialog ========== -->
+<context>
+    <name>MembershipDialog</name>
+    <message><source>Jilei Membership</source><translation>積磊メンバー</translation></message>
+    <message><source>Membership covers a small set of high-frequency premium features. Core screenshot features stay free forever.</source><translation>メンバーシップは一部の高頻度プレミアム機能向けです。コアのキャプチャー機能は永遠に無料です。</translation></message>
+    <message><source>Loading plans…</source><translation>プランを読み込み中…</translation></message>
+    <message><source>Network error. Please try again later.</source><translation>通信エラーです。後でもう一度お試しください。</translation></message>
+    <message><source>Retry</source><translation>再試行</translation></message>
+    <message><source>Subscribe</source><translation>申し込む</translation></message>
+    <message><source>Placing order…</source><translation>注文を処理中…</translation></message>
+    <message><source>The payment page has opened in your browser. After completing payment, tap the button below to refresh your benefits.</source><translation>ブラウザでお支払いページを開きました。お支払い完了後、下のボタンで特典を更新してください。</translation></message>
+    <message><source>I've paid, refresh benefits</source><translation>支払い完了、特典を更新</translation></message>
+    <message><source>Refreshing…</source><translation>更新中…</translation></message>
+    <message><source>Close</source><translation>閉じる</translation></message>
+    <message><source>Activated</source><translation>有効化完了</translation></message>
+    <message><source>Your membership is active now. Thank you for your support!</source><translation>メンバーシップが有効になりました。ご支援ありがとうございます！</translation></message>
+    <message><source>Membership is not active yet. If you just finished paying, please wait a moment and tap refresh again.</source><translation>メンバー特典はまだ確認できません。お支払い直後の場合は、少し待ってからもう一度更新してください。</translation></message>
+    <message><source>Could not create the order. Please try again later.</source><translation>注文を作成できませんでした。後でもう一度お試しください。</translation></message>
+    <message><source>The payment link is from an untrusted source and was blocked.</source><translation>お支払いリンクの提供元が信頼できないため、開くのをブロックしました。</translation></message>
+    <message><source>Permanent · free updates</source><translation>永久利用・アップデート無料</translation></message>
+    <message><source>%1 days</source><translation>%1日間</translation></message>
+</context>
 </TS>
