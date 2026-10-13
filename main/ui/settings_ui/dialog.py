@@ -19,7 +19,7 @@ from PySide6.QtGui import QColor, QFont, QIcon
 
 from ui.fluent_lite import (
     NavigationInterface, NavigationItemPosition,
-    FluentIcon, BodyLabel,
+    FluentIcon, BodyLabel, CaptionLabel,
     PushButton as FluentPushButton,
     PrimaryPushButton, TransparentPushButton,
     FrostedFramelessDialog,
@@ -268,6 +268,14 @@ class SettingsDialog(FrostedFramelessDialog):
         nav.setMinimumWidth(dialog_scaled(188))
         nav.setMaximumWidth(dialog_scaled(196))
 
+        # 底部版本号：摆在「检查更新」导航项上方，用户一眼就能看到当前版本
+        # （点这一项就等于手动检查更新，所以版本号要离它最近）。
+        from main_app import APP_VERSION
+
+        version_label = CaptionLabel(f"v{APP_VERSION}", nav)
+        version_label.setContentsMargins(dialog_scaled(15), 0, 0, 0)
+        nav.addFooterWidget(version_label, NavigationItemPosition.BOTTOM)
+
         self._nav_items = [
             ("shortcuts", FluentIcon.COMMAND_PROMPT, self.tr("Shortcuts"), 0, NavigationItemPosition.TOP),
             ("capture", FluentIcon.CAMERA, self.tr("Capture Settings"), 1, NavigationItemPosition.TOP),
@@ -277,7 +285,7 @@ class SettingsDialog(FrostedFramelessDialog):
             ("log", FluentIcon.HISTORY, self.tr("Log Settings"), 5, NavigationItemPosition.TOP),
             ("other", FluentIcon.APPLICATION, self.tr("Other"), 6, NavigationItemPosition.TOP),
             ("account", FluentIcon.PEOPLE, self.tr("Account"), 8, NavigationItemPosition.TOP),
-            ("about", FluentIcon.INFO, self.tr("About"), 9, NavigationItemPosition.BOTTOM),
+            ("about", FluentIcon.INFO, self.tr("Check for Updates"), 9, NavigationItemPosition.BOTTOM),
         ]
         import sys as _sys2
         if _sys2.platform == "darwin":

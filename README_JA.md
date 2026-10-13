@@ -356,6 +356,7 @@ core/
 ├── constants.py             # グローバル定数（フォント、パス等）
 ├── update_checker.py        # GitHub 最新リリースの非同期取得とバージョン比較
 ├── updater.py               # 積磊アプリ内アップデーター — 管理センター manifest・SHA-256 検証・exe 差し替え再起動
+├── notices.py               # 管理センターのクライアント通知ポーリング（更新通知 / お知らせ）
 └── ui_theme.py              # UIThemeManager — アプリ窓と Qt ネイティブ部品のライト/ダーク外観
 ```
 

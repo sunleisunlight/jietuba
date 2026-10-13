@@ -37,6 +37,21 @@ def _fake_info(version: str = "9.9.9"):
     )
 
 
+def _fake_dialog_class(sink):
+    """替换 _UpdateDialog 的假弹窗：记录"被弹出"的事实。
+
+    必须是真 QDialog——更新流程现在走 show() + finished 信号（非模态），
+    只实现 exec() 的替身接不住这套调用。
+    """
+
+    class _FakeDialog(QDialog):
+        def __init__(self, parent, info):
+            super().__init__(parent)
+            sink.append((parent, info, QThread.currentThread()))
+
+    return _FakeDialog
+
+
 class TestUpdateCheckThreading:
     def test_manual_check_reports_latest_on_gui_thread(self, monkeypatch, qapp, qtbot):
         monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: None)
@@ -59,14 +74,7 @@ class TestUpdateCheckThreading:
         monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: info)
         shown = []
 
-        class _FakeDialog:
-            def __init__(self, parent, info):
-                shown.append((parent, info, QThread.currentThread()))
-
-            def exec(self):
-                return 1
-
-        monkeypatch.setattr(update_flow, "_UpdateDialog", _FakeDialog)
+        monkeypatch.setattr(update_flow, "_UpdateDialog", _fake_dialog_class(shown))
         controller = _reset_controller(monkeypatch)
 
         assert controller.check(silent=False) is True
@@ -83,15 +91,7 @@ class TestUpdateCheckThreading:
         monkeypatch.setattr(update_flow.updater, "check_for_update", lambda: info)
         shown = []
         monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: shown.append(a))
-
-        class _FakeDialog:
-            def __init__(self, parent, info):
-                shown.append((parent, info))
-
-            def exec(self):
-                return 1
-
-        monkeypatch.setattr(update_flow, "_UpdateDialog", _FakeDialog)
+        monkeypatch.setattr(update_flow, "_UpdateDialog", _fake_dialog_class(shown))
         controller = _reset_controller(monkeypatch)
 
         # 静默检查：无更新 / 网络失败一律不打扰
@@ -125,6 +125,77 @@ class TestUpdateCheckThreading:
         qtbot.waitUntil(lambda: bool(calls), timeout=5000)
         # 线程异常也必须归还忙碌态，按钮不能卡在「检查中」
         qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
+
+
+class TestUpdateDialogIsNotModal:
+    """更新弹窗必须非模态。
+
+    模态窗口会屏蔽本应用其它窗口的输入，MainApp._activate_blocking_modal 见到模态
+    就**直接放弃整次截图**——表现就是"检查更新弹窗一出来，截图热键就没用了"。
+    """
+
+    def test_dialog_is_not_modal(self, qapp):
+        dialog = update_flow._UpdateDialog(None, _fake_info())
+        try:
+            assert dialog.isModal() is False
+        finally:
+            dialog.deleteLater()
+
+    def test_presenting_keeps_it_non_modal_and_reuses_the_window(
+        self, monkeypatch, qapp, qtbot
+    ):
+        created = []
+        real_dialog = update_flow._UpdateDialog
+
+        def _factory(parent, info):
+            dialog = real_dialog(parent, info)
+            created.append(dialog)
+            return dialog
+
+        monkeypatch.setattr(update_flow, "_UpdateDialog", _factory)
+        controller = _reset_controller(monkeypatch)
+
+        controller._present_update(_fake_info())
+        controller._present_update(_fake_info())
+
+        assert len(created) == 1, "第二次提示不该再开一个窗口"
+        assert controller.dialog is created[0]
+        assert created[0].isModal() is False
+        created[0].reject()
+        qtbot.waitUntil(lambda: controller.dialog is None, timeout=5000)
+
+
+class TestSidebarUpdateEntry:
+    """侧栏底部入口改成「检查更新」，并在它正上方显示当前版本号。"""
+
+    def test_nav_entry_and_version_label(self, qapp, qtbot):
+        from PySide6.QtCore import QPoint
+        from PySide6.QtWidgets import QLabel
+
+        from main_app import APP_VERSION
+        from ui.settings_ui.dialog import SettingsDialog
+
+        dialog = SettingsDialog()
+        dialog.show()
+        qtbot.waitExposed(dialog)
+        try:
+            entry = dialog.nav_list.widget("about")
+            assert entry is not None, "没有找到原来的「关于/检查更新」导航项"
+            assert entry.text() == "Check for Updates"
+
+            labels = [
+                label for label in dialog.nav_list.findChildren(QLabel)
+                if APP_VERSION in label.text()
+            ]
+            assert labels, "侧栏没有显示版本号"
+            label = labels[0]
+            assert label.text().startswith("v")
+            assert label.mapTo(dialog.nav_list, QPoint(0, 0)).y() < entry.mapTo(
+                dialog.nav_list, QPoint(0, 0)
+            ).y(), "版本号必须显示在「检查更新」上方"
+        finally:
+            dialog.close()
+            dialog.deleteLater()
 
 
 class TestAboutPageCheckButton:

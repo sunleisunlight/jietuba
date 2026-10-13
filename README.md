@@ -357,6 +357,7 @@ core/
 ├── constants.py             # Global constants (fonts, paths, etc.)
 ├── update_checker.py        # Asynchronous GitHub release lookup and version comparison
 ├── updater.py               # Jilei in-app updater — control-center manifest, SHA-256, exe swap & restart
+├── notices.py               # Control-center client notices polling (update reminders / announcements)
 └── ui_theme.py              # UIThemeManager — light/dark appearance for app windows and native Qt widgets
 ```
 

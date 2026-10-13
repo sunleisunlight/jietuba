@@ -69,6 +69,17 @@ class NavigationInterface(QWidget):
         target.addWidget(button)
         return button
 
+    def addFooterWidget(self, widget, position=NavigationItemPosition.BOTTOM):
+        """在导航项之间插一个非交互组件（例如底部版本号）。
+
+        只负责摆放，不接管点击、也不参与选中态；插进来的顺序就是显示顺序，
+        想在某一项上方显示，就先 addFooterWidget 再 addItem 那一项。
+        """
+        target = self._bottom if position == NavigationItemPosition.BOTTOM else self._top
+        widget.setParent(self)
+        target.addWidget(widget)
+        return widget
+
     def _style_button(self, button):
         t = ui_tokens(button)
         button.setStyleSheet(f"""

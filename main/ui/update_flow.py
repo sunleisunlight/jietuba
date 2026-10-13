@@ -1,20 +1,26 @@
 # -*- coding: utf-8 -*-
 """积磊截图应用内更新：检查 → 提示 → 下载（进度）→ SHA-256 校验 → 重启替换。
 
-交互对齐积磊其它桌面端（积磊ERP 等）：
+交互对齐积磊其它桌面端（积磊ERP、地址工具 dizhi-tool 等）：
 
 - **启动后延迟 5 秒静默检查一次**，只有发现新版本才弹窗；无更新 / 网络失败一律静默；
-- 运行期间每 2 小时静默复查一次，控制中心新上传版本后在线客户端也能收到提醒；
+- **每 5 分钟轮询控制中心的客户端通知**（见 core/notices.py）：控制中心「发布中心」
+  上传新版本时会自动生成一条 update 通知，客户端见到它就立刻复查一次更新清单，
+  这样在线客户端在上传后几分钟内就能收到提醒，而不是等下一次两小时复查；
+- 运行期间每 2 小时无条件静默复查一次，作为通知通道失效时的兜底；
 - 手动「检查更新」无论有没有新版都给反馈；
 - 弹窗三选一：立即更新 / 稍后（本次不装，下次仍提示）/ 跳过此版本（记住该版本，
   后台检查不再提示，手动检查仍会提示）；
+- 弹窗**不做成模态**：模态窗口会屏蔽本应用其它窗口的输入，截图热键会被
+  ``MainApp._activate_blocking_modal`` 的模态保护直接放弃（表现就是"弹窗一出，
+  截图就没用了"）。非模态后更新提示与截图可以共存；
 - 下载显示进度、可取消、失败重试；校验通过后一键重启安装。
 
 线程约定（本模块最容易踩的坑，改动前务必读）：
-网络检查与下载都在后台 QThread，**所有对话框只能在 GUI 线程创建**。因此后台线程的
-信号一律连到本模块 QObject 的**绑定方法**槽，由 Qt 自动排队回 GUI 线程；把信号连到
-普通函数 / 闭包会让槽在后台线程里执行，弹窗就会创建在非 GUI 线程上——表现正是
-「点检查更新没反应、什么都不弹」。
+网络检查、通知轮询与下载都在后台 QThread，**所有对话框只能在 GUI 线程创建**。因此
+后台线程的信号一律连到本模块 QObject 的**绑定方法**槽，由 Qt 自动排队回 GUI 线程；
+把信号连到普通函数 / 闭包会让槽在后台线程里执行，弹窗就会创建在非 GUI 线程上——
+表现正是「点检查更新没反应、什么都不弹」。
 """
 from __future__ import annotations
 
@@ -25,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import T
+from core import notices as control_notices
 from core import updater
 from core.logger import log_warning
 from core.ui_scale import dialog_scaled
@@ -37,12 +44,15 @@ from main_app import APP_VERSION
 STARTUP_CHECK_DELAY_MS = 5_000
 # 运行期间的静默复查间隔
 PERIODIC_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000
+# 控制中心通知的轮询间隔：上传后最多这么久就会被在线客户端发现（对齐 dizhi-tool 的 5 分钟）
+NOTICE_POLL_INTERVAL_MS = 5 * 60 * 1000
 # 正在框选 / 标注时推迟弹窗，避免打断用户
 BUSY_RETRY_DELAY_MS = 30_000
 # 下载失败重试次数（含首次）
 DOWNLOAD_ATTEMPTS = 3
 
 _SKIPPED_VERSION_KEY = "update/skipped_version"
+_NOTICE_CURSOR_KEY = "update/notice_cursor"
 
 
 def _settings() -> QSettings:
@@ -57,6 +67,17 @@ def skipped_update_version() -> str:
 def skip_update_version(version: str) -> None:
     s = _settings()
     s.setValue(_SKIPPED_VERSION_KEY, str(version or ""))
+    s.sync()
+
+
+def notice_cursor() -> str:
+    """已读到的最后一条控制中心通知 id（增量轮询的游标）。"""
+    return str(_settings().value(_NOTICE_CURSOR_KEY, "") or "")
+
+
+def set_notice_cursor(notice_id: str) -> None:
+    s = _settings()
+    s.setValue(_NOTICE_CURSOR_KEY, str(notice_id or ""))
     s.sync()
 
 
@@ -82,6 +103,28 @@ class _CheckThread(QThread):
             log_warning(T("检查更新失败: {e}", e=exc), "Updater")
             info = None
         self.done.emit(info)
+
+
+class _NoticeThread(QThread):
+    """后台拉取控制中心的客户端通知；结果经信号回 GUI 线程。
+
+    与 ``_CheckThread`` 同样的约定：网络绝不跑在 GUI 线程上，异常必须兜住，
+    保证信号一定会发出（否则轮询定时器会一直以为还没回来）。
+    """
+
+    done = Signal(object)   # list[dict]
+
+    def __init__(self, after: str, parent: QObject | None = None):
+        super().__init__(parent)
+        self._after = after
+
+    def run(self) -> None:
+        try:
+            items = control_notices.fetch_notices(self._after)
+        except Exception as exc:      # noqa: BLE001 - 后台线程必须兜住
+            log_warning(T("拉取控制中心通知失败: {e}", e=exc), "Notices")
+            items = []
+        self.done.emit(items)
 
 
 class _DownloadThread(QThread):
@@ -123,7 +166,10 @@ class _UpdateDialog(QDialog):
         self._downloading = False
 
         self.setWindowTitle(self.tr("发现新版本"))
-        self.setModal(True)
+        # 刻意非模态：模态窗口会屏蔽本应用其它窗口（含截图窗口）的输入，
+        # MainApp 检测到模态会直接放弃截图（见 _activate_blocking_modal），
+        # 表现就是"更新弹窗一出，截图热键就没用了"。
+        self.setModal(False)
         self.setMinimumWidth(dialog_scaled(400))
 
         tokens = get_ui_theme().tokens
@@ -289,13 +335,21 @@ class UpdateController(QObject):
         self._thread: _CheckThread | None = None
         self._silent = False
         self._periodic_timer = None
+        self._notice_thread: _NoticeThread | None = None
+        self._notice_timer = None
+        self._dialog = None
 
     @property
     def is_checking(self) -> bool:
         return self._thread is not None
 
+    @property
+    def dialog(self):
+        """当前显示着的「发现新版本」弹窗（没有则为 None）。"""
+        return self._dialog
+
     def start_periodic(self, interval_ms: int = PERIODIC_CHECK_INTERVAL_MS) -> None:
-        """运行期间按间隔静默复查，控制中心新上传版本后在线客户端也能收到提醒。"""
+        """运行期间按间隔静默复查（兜底：控制中心通知通道失效时也能收到更新）。"""
         from PySide6.QtCore import QTimer
 
         if self._periodic_timer is None:
@@ -307,6 +361,50 @@ class UpdateController(QObject):
     @Slot()
     def _periodic_check(self) -> None:
         self.check(silent=True)
+
+    def start_notice_polling(self, interval_ms: int = NOTICE_POLL_INTERVAL_MS) -> None:
+        """按间隔轮询控制中心通知：上传新版本后几分钟内就能主动提醒。
+
+        立刻先拉一次，再按间隔轮询——刚启动的客户端不用等满一个周期。
+        """
+        from PySide6.QtCore import QTimer
+
+        if self._notice_timer is None:
+            self._notice_timer = QTimer(self)
+            self._notice_timer.timeout.connect(self._poll_notices)
+        self._notice_timer.setInterval(interval_ms)
+        self._notice_timer.start()
+        self._poll_notices()
+
+    @Slot()
+    def _poll_notices(self) -> None:
+        if self._notice_thread is not None:
+            return                      # 上一轮还没回来，跳过这一拍
+        thread = _NoticeThread(notice_cursor(), self)
+        self._notice_thread = thread
+        thread.done.connect(self._on_notices)
+        thread.finished.connect(self._on_notice_thread_finished)
+        thread.start()
+
+    @Slot()
+    def _on_notice_thread_finished(self) -> None:
+        thread = self._notice_thread
+        self._notice_thread = None
+        if thread is not None:
+            thread.wait(2000)
+            thread.deleteLater()
+
+    @Slot(object)
+    def _on_notices(self, items) -> None:
+        """控制中心通知只是"门铃"：见到 update 通知才去查真正的更新清单。
+
+        能不能装仍以清单（版本号 / 签名 / SHA-256）为准，绝不凭一条通知伪造更新状态。
+        """
+        newest = control_notices.newest_id(items, notice_cursor())
+        if newest != notice_cursor():
+            set_notice_cursor(newest)
+        if control_notices.has_update_notice(items) and not self.is_checking:
+            self.check(silent=True)
 
     def check(self, *, silent: bool = False) -> bool:
         """发起一次检查。返回 False 表示已有检查在进行。"""
@@ -333,7 +431,7 @@ class UpdateController(QObject):
     @Slot(object)
     def _on_checked(self, info) -> None:
         """后台线程的信号经 Qt 排队到这里，本方法保证运行在 GUI 线程。"""
-        # 网络检查已经结束，按钮立刻恢复可点（后面的弹窗是模态的，不占忙碌态）
+        # 网络检查已经结束，按钮立刻恢复可点（后面的弹窗不占忙碌态）
         self.checking_changed.emit(False)
         if info is None:
             if not self._silent:
@@ -344,7 +442,35 @@ class UpdateController(QObject):
             return
         if self._silent and info.version == skipped_update_version():
             return
-        _UpdateDialog(self._dialog_parent(), info).exec()
+        self._present_update(info)
+
+    def _present_update(self, info) -> None:
+        """把「发现新版本」弹窗显示出来（非模态，已开着就提到前面）。
+
+        非模态是刻意的：弹窗存在时用户依然按得动截图热键、截得到这张弹窗本身；
+        模态会屏蔽本应用其它窗口的输入，MainApp 会因此直接放弃整次截图。
+        """
+        dialog = self._dialog
+        if dialog is not None:
+            try:
+                if dialog.isVisible():
+                    dialog.raise_()
+                    dialog.activateWindow()
+                    return
+            except RuntimeError:        # 底层 C++ 对象已经没了
+                dialog = None
+        dialog = _UpdateDialog(self._dialog_parent(), info)
+        self._dialog = dialog
+        dialog.finished.connect(self._on_dialog_finished)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    @Slot(int)
+    def _on_dialog_finished(self, _result: int) -> None:
+        dialog, self._dialog = self._dialog, None
+        if dialog is not None:
+            dialog.deleteLater()
 
     def _dialog_parent(self):
         """弹窗父窗口：取当前活动窗口，避免持有可能已被销毁的设置窗口。"""
@@ -368,7 +494,8 @@ def check_for_update_interactive() -> None:
 
 
 def start_auto_update_checker() -> None:
-    """启动后台静默复查：现在检查一次，此后每 2 小时一次，只有新版本才弹窗。"""
+    """启动后台更新提醒：现在查一次，此后通知轮询 5 分钟一拍、两小时兜底复查。"""
     controller = get_update_controller()
     controller.check(silent=True)
     controller.start_periodic()
+    controller.start_notice_polling()

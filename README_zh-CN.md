@@ -375,6 +375,7 @@ core/
 ├── constants.py             # 全局常量定义（字体、路径等）
 ├── update_checker.py        # GitHub 最新版本异步查询与版本比较
 ├── updater.py               # 积磊应用内更新器 — 控制中心清单、SHA-256 校验、exe 替换重启
+├── notices.py               # 控制中心客户端通知轮询（更新提醒 / 公告）
 └── ui_theme.py              # UIThemeManager — 应用窗口与原生 Qt 控件的明暗外观（截图配色仍在 theme.py）
 ```
 
