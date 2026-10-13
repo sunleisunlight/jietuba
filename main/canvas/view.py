@@ -1023,6 +1023,13 @@ class CanvasView(QGraphicsView):
                 # 检查点击位置是否在当前编辑的文本框内（备注只看文字主体：点在它的
                 # 目标框内部不算"在文字里"，那一下该用来选/拖目标框）
                 if self._point_inside_edited_text(focus_item, scene_pos):
+                    # 空备注例外：文字框里一个字都没有时，"编辑中按住拖拽 = 选文字"
+                    # 等于什么都没发生，用户会以为这条备注拖不动——而点别处又会因为
+                    # "空备注不算数"把整条撤掉，只能重新拖一遍。所以这一下改由备注
+                    # 拖动接管（见 _start_empty_note_drag）。有文字时仍走原生选字。
+                    if self._start_empty_note_drag(focus_item, scene_pos):
+                        event.accept()
+                        return
                     # 点击在文本框内，正常传递事件（移动光标等）
                     super().mousePressEvent(event)
                     return
@@ -1866,6 +1873,23 @@ class CanvasView(QGraphicsView):
             if bool(flags & Qt.TextInteractionFlag.TextEditorInteraction):
                 return focus_item
         return None
+
+    def _start_empty_note_drag(self, item, scene_pos: QPointF) -> bool:
+        """空备注在输入状态下按在文字框上：这一下交给备注拖动，返回是否接管。
+
+        备注创建出来就是"光标已经在框里等着打字"的状态，按在文字框上本来是交给
+        Qt 移动光标的。可文字框里一个字都没有时，这样按住拖拽不会发生任何事：
+        没有字符可选，用户拖不动这条备注；而点别处结束编辑时，空备注会被当作
+        "什么都没发生"整条撤掉，于是这条备注除了重拖一遍再没别的出路。
+
+        所以空文字这一下改由 NotePartDrag 接管：移动超过阈值就把文字框搬走
+        （目标框与箭头由图元自己重连），阈值之内仍是普通点击，继续留在输入状态。
+        有文字时不动：那时"按住拖拽 = 选文字"是用户真正要的行为。
+        """
+        if not isinstance(item, NoteItem) or item.toPlainText().strip():
+            return False
+        self.note_drag.begin(item, "text", scene_pos)
+        return True
 
     def _point_inside_edited_text(self, item, scene_pos: QPointF) -> bool:
         """这一下点的是不是"正在编辑的那段文字本身"。

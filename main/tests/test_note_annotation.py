@@ -15,8 +15,8 @@
 造型（arrow_style）是两码事。
 """
 import pytest
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QImage
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QImage, QMouseEvent
 from PySide6.QtWidgets import QWidget
 
 from canvas.handle_editor import HandleType, LayerEditor
@@ -118,6 +118,53 @@ def _drag_tool(tool, ctx, start, end, steps=4):
             ctx,
         )
     tool.on_release(QPointF(*end), ctx)
+
+
+def _mouse_event(view, event_type, scene_point, *, buttons, button):
+    local = view.mapFromScene(scene_point)
+    return QMouseEvent(
+        event_type,
+        QPointF(local),
+        QPointF(view.mapToGlobal(local)),
+        button,
+        buttons,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
+def _press_at(view, scene_point):
+    view.mousePressEvent(_mouse_event(
+        view, QEvent.Type.MouseButtonPress, scene_point,
+        buttons=Qt.MouseButton.LeftButton, button=Qt.MouseButton.LeftButton,
+    ))
+
+
+def _move_to(view, scene_point):
+    view.mouseMoveEvent(_mouse_event(
+        view, QEvent.Type.MouseMove, scene_point,
+        buttons=Qt.MouseButton.LeftButton, button=Qt.MouseButton.NoButton,
+    ))
+
+
+def _release_at(view, scene_point):
+    view.mouseReleaseEvent(_mouse_event(
+        view, QEvent.Type.MouseButtonRelease, scene_point,
+        buttons=Qt.MouseButton.NoButton, button=Qt.MouseButton.LeftButton,
+    ))
+
+
+def _drag_by(view, start_scene, dx, dy, steps=4):
+    """从 start_scene 按住拖 (dx, dy)：按下 → 若干次移动 → 松手。"""
+    _press_at(view, start_scene)
+    for i in range(1, steps + 1):
+        t = i / steps
+        _move_to(view, QPointF(start_scene.x() + dx * t, start_scene.y() + dy * t))
+    _release_at(view, QPointF(start_scene.x() + dx, start_scene.y() + dy))
+
+
+def _click_at(view, scene_point):
+    _press_at(view, scene_point)
+    _release_at(view, scene_point)
 
 
 # ----------------------------------------------------------------------------
@@ -611,3 +658,66 @@ class TestPinClone:
         assert clone.pos().y() == pytest.approx(src.pos().y() - offset.y(), abs=1)
         # 目标框相对 pos 的偏移不变 → 整条一起平移，不是只有文字在动
         assert clone.target_rect_local() == src.target_rect_local()
+
+
+# ----------------------------------------------------------------------------
+# 空备注（还没打字）也要能拖文字框
+# ----------------------------------------------------------------------------
+
+class TestEmptyNoteIsDraggable:
+    """文字框里一个字都没有的备注，按在文字框上按住拖拽也要能把它搬走。
+
+    备注创建出来就是"光标已经在框里等着打字"的状态，按在文字框上本来一律交给 Qt
+    处理：按住拖拽等于选字。空文字没有任何字符可选，这一下于是什么都不会发生；
+    而点别处结束编辑时，空备注会被当作"什么都没发生"整条撤掉——用户于是发现这条
+    备注拖不动、还只能重新拖一遍。有文字的备注不受影响：那时"按住拖拽 = 选文字"
+    正是用户要的行为。
+    """
+
+    def _editing_note(self, qapp, text):
+        """造一个"正在输入"的备注：和备注工具拖完松手、光标落在框里时一致。"""
+        scene, view = _active_scene(qapp)
+        # 编辑态分支只在选区已确认时生效（截图窗口拖完框就是这个状态）
+        scene.selection_model.initialize_confirmed_rect(QRectF(0, 0, 400, 300))
+        note = _make_note(text=text)
+        scene.addItem(note)
+        view.smart_edit_controller.select_item(note, auto_select=False)
+        note.setFocus()
+        qapp.processEvents()
+        assert view._is_text_editing(), "备注没进入输入状态，用例前提不成立"
+        return scene, view, note
+
+    def test_dragging_the_empty_text_box_moves_it(self, qapp):
+        scene, view, note = self._editing_note(qapp, "")
+        box_before = note.text_box_scene()
+        target_before = note.target_rect_scene()
+
+        _drag_by(view, box_before.center(), 60, 30)
+
+        box_after = note.text_box_scene()
+        assert box_after.left() == pytest.approx(box_before.left() + 60, abs=0.5)
+        assert box_after.top() == pytest.approx(box_before.top() + 30, abs=0.5)
+        # 拖的是文字主体：目标框留在原地，箭头由图元自己重连
+        assert note.target_rect_scene() == target_before
+        assert note.scene() is scene, "空备注被拖没了"
+        assert note.is_editing(), "拖完还要能接着打字"
+
+    def test_a_click_without_moving_keeps_the_empty_note_alive(self, qapp):
+        """只点一下不拖：空备注不能被当成"点了别处"整条撤掉，必须留在输入状态。"""
+        scene, view, note = self._editing_note(qapp, "")
+
+        _click_at(view, note.text_box_scene().center())
+
+        assert note.scene() is scene
+        assert note.is_editing()
+
+    def test_editing_a_note_with_text_still_selects_text(self, qapp):
+        """有文字时保持不变：编辑中按住拖拽是选字，不能把整条备注搬走。"""
+        scene, view, note = self._editing_note(qapp, "这是一条备注")
+        box_before = note.text_box_scene()
+
+        _drag_by(view, box_before.center(), 60, 30)
+
+        box_after = note.text_box_scene()
+        assert box_after.left() == pytest.approx(box_before.left(), abs=0.5)
+        assert box_after.top() == pytest.approx(box_before.top(), abs=0.5)

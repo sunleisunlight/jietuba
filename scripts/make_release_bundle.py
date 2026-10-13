@@ -10,6 +10,11 @@
   写在 `dist/`（不在 `release/` 内），**不要上传**（控制中心不接受 .sha256，
   会报「Tauri 发布不支持这些文件」）。
 
+dist/release/ 是**只增不删的存档**（AGENTS.md「历史发布产物一律保留」）：
+每次出包只在里面新增本轮这 4 个文件，既不清空旧包、也不覆盖同名文件——旧包可能
+还没被拖进控制中心发布中心，也可能正被"从目录里直接运行的软件"占用。所以四件套
+先在临时目录里做完，撞名或中途失败都不会动到存档里的任何东西。
+
 ① 与 ③ 是两个不同的东西，别再混为一谈：
   ① 是 PyInstaller onefile 裸 exe，应用内自动更新下载的就是它（main/core/updater.py
      直接改名替换 exe）；它必须是裸 exe，换成安装器会让自动更新失效。
@@ -246,29 +251,22 @@ def build_installer(version: str, stem: str, exe: Path, out_dir: Path) -> Path:
     return installer
 
 
-def clear_release_dir(out_dir: Path) -> None:
-    """清空发布目录，让 release/ 里最终只剩这一轮的 4 个文件。
+def ensure_names_are_new(out_dir: Path, names) -> None:
+    """出包前先看这一轮的文件名在 dist/release/ 里有没有撞名，撞了就退出。
 
-    旧包文件经常正被「从发布目录里直接运行的软件」占用（本机就反复出现），
-    这时删不掉不能整体失败：把被占用的文件挪到 dist/previous-release/ 去，
-    既保证发布页拖的文件是干净的，也不影响正在运行的实例。
+    dist/release/ 是发布产物的存档，**只增不删**（见 AGENTS.md「历史发布产物一律保留」）：
+    旧包可能还没被拖进控制中心发布中心，也可能正被"从目录里直接运行的软件"占用，
+    所以这里既不清空旧文件、也不覆盖同名文件。撞名说明这一版已经出过一次包，
+    写下去就会覆盖掉手上那份，直接报错让人来确认更安全。
     """
-    stash = out_dir.parent / "previous-release"
-    for path in sorted(out_dir.glob("*")):
-        if not path.is_file():
-            continue
-        try:
-            path.unlink()
-        except PermissionError:
-            stash.mkdir(parents=True, exist_ok=True)
-            target = stash / path.name
-            if target.exists():
-                try:
-                    target.unlink()
-                except PermissionError:
-                    target = stash / f"{path.stem}-{os.getpid()}{path.suffix}"
-            shutil.move(str(path), str(target))
-            print(f"   旧文件被占用，已挪到 {target}")
+    existing = [name for name in names if (out_dir / name).exists()]
+    if existing:
+        raise RuntimeError(
+            "dist/release/ 里已经有同名的发布产物，拒绝覆盖：\n  "
+            + "\n  ".join(existing)
+            + "\n旧包一律原地保留（AGENTS.md「历史发布产物一律保留」）。"
+            "如果确认要重新出同一版，请先自行把那几个文件挪到别处。"
+        )
 
 
 def sign_artifact(artifact: Path) -> Path:
@@ -369,41 +367,60 @@ def main() -> int:
         return 1
 
     OUT.mkdir(parents=True, exist_ok=True)
-    clear_release_dir(OUT)
 
-    # ① updater artifact（文件名里不能出现 setup / installer）
-    artifact = OUT / f"{stem}.exe"
-    shutil.copy2(exe, artifact)
+    artifact_name = f"{stem}.exe"
+    installer_name = f"{stem}-setup.exe"
+    sig_name = f"{artifact_name}.sig"
+    notes_name = f"v{version}-{date}-更新说明.txt"
+    # 存档目录只增不删：本轮文件名已有同名文件就直接退出，绝不覆盖
+    ensure_names_are_new(OUT, (artifact_name, installer_name, sig_name, notes_name))
 
-    # ② 首次安装包：真实的 NSIS 安装器（向导选路径 + 快捷方式 + 卸载），
-    #    与控制中心「首次安装包」角色对应；官网下载页给新用户的就是这个。
-    print("==> 编译安装包（NSIS）…")
-    installer = build_installer(version, stem, exe, OUT)
+    # 先在一个临时目录里把四件套整整齐齐做完，最后一步才搬进 dist/release/：
+    # 中途失败时存档目录里不会留下半套产物（半套产物既不能发布，又因为"不删旧包"
+    # 只能靠人工收拾）。
+    staging = Path(tempfile.mkdtemp(prefix="jilei_release_"))
+    try:
+        # ① updater artifact（文件名里不能出现 setup / installer）
+        artifact = staging / artifact_name
+        shutil.copy2(exe, artifact)
 
-    # ③ 签名：必须叫「artifact 文件名 + .sig」
-    sig = sign_artifact(artifact)
+        # ② 首次安装包：真实的 NSIS 安装器（向导选路径 + 快捷方式 + 卸载），
+        #    与控制中心「首次安装包」角色对应；官网下载页给新用户的就是它。
+        print("==> 编译安装包（NSIS）…")
+        installer = build_installer(version, stem, exe, staging)
 
-    # ④ 发布信息 TXT
-    notes_txt = OUT / f"v{version}-{date}-更新说明.txt"
-    notes_txt.write_text(
-        build_notes_text(version, date, "windows", "x86_64" if args.arch == "x64" else "aarch64", notes),
-        encoding="utf-8",
-    )
+        # ③ 签名：必须叫「artifact 文件名 + .sig」
+        sig = sign_artifact(artifact)
+
+        # ④ 发布信息 TXT
+        notes_txt = staging / notes_name
+        notes_txt.write_text(
+            build_notes_text(version, date, "windows", "x86_64" if args.arch == "x64" else "aarch64", notes),
+            encoding="utf-8",
+        )
+
+        planned = (artifact, sig, installer, notes_txt)
+        for path in planned:
+            shutil.move(str(path), str(OUT / path.name))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+    published_artifact = OUT / artifact_name
 
     # ⑤ 本地校验记录：写到 dist/ 而不是 dist/release/，避免被顺手拖进发布页
     #    （控制中心 Tauri 白名单没有 .sha256，拖进去会报「Tauri 发布不支持这些文件」）
-    digest = sha256_of(artifact)
+    digest = sha256_of(published_artifact)
     sha_file = DIST / f"{stem}.sha256"
-    sha_file.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+    sha_file.write_text(f"{digest}  {published_artifact.name}\n", encoding="utf-8")
 
     print("=" * 60)
     print("发布四件套已生成（dist/release/ 里就是发布页要传的全部文件）：", OUT)
-    for p in (artifact, sig, installer, notes_txt):
-        print(f"  {p.name}  ({p.stat().st_size:,} bytes)")
+    for path in (published_artifact, OUT / sig_name, OUT / installer_name, OUT / notes_name):
+        print(f"  {path.name}  ({path.stat().st_size:,} bytes)")
     print(f"  本地校验记录（不在 release/ 内，勿上传）: {sha_file}")
-    print(f"SHA-256（{artifact.name}）: {digest}")
+    print(f"SHA-256（{published_artifact.name}）: {digest}")
     print("=" * 60)
-    print("下一步：在控制中心发布页把这四个文件一次拖进去（exe / exe.sig / -setup.exe / 更新说明.txt）。")
+    print("控制中心发布页一次拖入本轮这 4 个文件即可；release/ 里其它版本的文件是旧包存档，别删也别传。")
     return 0
 
 
