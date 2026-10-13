@@ -44,7 +44,7 @@ APP_DEFAULT_SETTINGS = {
     "screenshot_save_enabled": True,
     "screenshot_save_path": os.path.join(os.path.expanduser("~"), "Desktop", "スクショ"),
     "screenshot_format": "PNG",
-    "screenshot_quality": 85,
+    "screenshot_quality": 98,
     "clipboard_file_reference_enabled": True,
     "show_main_window": True,
     "ocr_enabled": True,

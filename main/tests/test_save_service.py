@@ -25,6 +25,7 @@ def save_service(qapp, tmp_path):
     from core.save import SaveService
     mock_config = MagicMock()
     mock_config.get_screenshot_save_path.return_value = str(tmp_path)
+    mock_config.get_screenshot_quality.return_value = 98
     return SaveService(config_manager=mock_config)
 
 
@@ -179,4 +180,69 @@ class TestReserveSavePath:
         second = save_service.reserve_save_path(directory=str(tmp_path), prefix="test", image_format="PNG")
 
         assert first != second
+
+
+def _detailed_image() -> QImage:
+    """带细节的图：有损压缩质量差异在文件体积上才看得出来。"""
+    from PySide6.QtGui import QColor, QPainter
+    image = QImage(400, 300, QImage.Format.Format_RGB32)
+    image.fill(QColor(255, 255, 255))
+    painter = QPainter(image)
+    try:
+        for index, x in enumerate(range(0, 400, 2)):
+            painter.setPen(QColor(index % 3 * 90, 80, 160))
+            painter.drawLine(x, 0, x, 300)
+    finally:
+        painter.end()
+    return image
+
+
+class TestLossyQuality:
+    """有损格式必须把用户配置的质量传给编码器。
+
+    此前保存没传 quality，Qt 按 JPG/WEBP 的默认值 75 编码，文字截图会出现
+    明显的块状噪点和发虚，而 screenshot_quality 这项设置一直是死配置。
+    """
+
+    def _service(self, tmp_path, quality):
+        from core.save import SaveService
+        mock_config = MagicMock()
+        mock_config.get_screenshot_save_path.return_value = str(tmp_path)
+        mock_config.get_screenshot_quality.return_value = quality
+        return SaveService(config_manager=mock_config)
+
+    def test_lossy_formats_follow_configured_quality(self, qapp, tmp_path):
+        service = self._service(tmp_path, 98)
+
+        assert service._quality_for("JPG") == 98
+        assert service._quality_for("jpeg") == 98
+        assert service._quality_for("WEBP") == 98
+
+    def test_lossless_formats_use_encoder_default(self, qapp, tmp_path):
+        service = self._service(tmp_path, 98)
+
+        assert service._quality_for("PNG") == -1
+        assert service._quality_for("BMP") == -1
+
+    def test_quality_falls_back_when_config_has_no_getter(self, qapp, tmp_path):
+        from core.save import DEFAULT_LOSSY_QUALITY, SaveService
+        service = SaveService(config_manager=None)
+
+        assert service._quality_for("JPG") == DEFAULT_LOSSY_QUALITY
+
+    def test_quality_reaches_encoder(self, qapp, tmp_path):
+        """低质量确实作用到了编码器上：同一张图的文件体积应明显更小。"""
+        image = _detailed_image()
+        low_path = str(tmp_path / "low.jpg")
+        high_path = str(tmp_path / "high.jpg")
+
+        assert self._service(tmp_path, 10).save_qimage_to_path(
+            image, low_path, image_format="JPG"
+        ) is True
+        assert self._service(tmp_path, 98).save_qimage_to_path(
+            image, high_path, image_format="JPG"
+        ) is True
+
+        assert os.path.getsize(low_path) < os.path.getsize(high_path)
+
 

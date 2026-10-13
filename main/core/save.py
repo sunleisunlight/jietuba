@@ -17,6 +17,14 @@ from settings import get_tool_settings_manager
 from core.logger import log_info, log_warning, log_error, log_exception, T
 
 
+# 有损编码格式：只有这些格式的 quality 才会真正影响像素，PNG/BMP 是无损的
+LOSSY_FORMATS = frozenset({"JPG", "JPEG", "WEBP"})
+# 配置读不到时的兜底质量，与 settings.APP_DEFAULT_SETTINGS["screenshot_quality"] 一致
+DEFAULT_LOSSY_QUALITY = 98
+# PIL 的 JPEG 编码器只认 1-95，高于 95 会被它自己压回来，这里显式截断避免歧义
+PIL_MAX_QUALITY = 95
+
+
 class SaveService:
     """Async save service for screenshots."""
 
@@ -189,9 +197,25 @@ class SaveService:
         threading.Thread(target=worker, daemon=True).start()
         return target_path
 
+    def _quality_for(self, image_format: str) -> int:
+        """返回编码质量：有损格式取用户设置，无损格式返回 -1（用编码器默认）。
+
+        以前保存没传 quality，Qt 就按 JPG/WEBP 的默认值 75 编码，文字截图会
+        出现明显的块状噪点和发虚；设置项里那个 screenshot_quality 一直是死配置。
+        这里把它接上。PNG/BMP 是无损的，传 quality 只会被解读成压缩级别，因此
+        一律不传，保持编码器默认行为。
+        """
+        if self._normalize_format(image_format) not in LOSSY_FORMATS:
+            return -1
+        value = DEFAULT_LOSSY_QUALITY
+        getter = getattr(self.config_manager, "get_screenshot_quality", None)
+        if callable(getter):
+            value = int(getter())
+        return max(1, min(100, value))
+
     def _save_qimage_to_path(self, image: QImage, target_path: str, image_format: str) -> bool:
         try:
-            success = image.save(target_path, image_format.upper())
+            success = image.save(target_path, image_format.upper(), self._quality_for(image_format))
             if success:
                 log_info(T("已保存文件: {target_path}", target_path=target_path), "Save")
             else:
@@ -252,7 +276,11 @@ class SaveService:
             return self._save_qimage_to_pdf_path(qimage.copy(), target_path, pdf_dpi=pdf_dpi)
 
         pil_format = "JPEG" if fmt == "JPG" else fmt
-        pil_image.save(target_path, format=pil_format)
+        quality = self._quality_for(fmt)
+        if quality >= 0:
+            pil_image.save(target_path, format=pil_format, quality=min(quality, PIL_MAX_QUALITY))
+        else:
+            pil_image.save(target_path, format=pil_format)
         log_info(T("已保存文件: {target_path}", target_path=target_path), "Save")
         return True
 

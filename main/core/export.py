@@ -33,6 +33,23 @@ class ExportService:
             
         return QPixmap.fromImage(self.export(selection_rect))
 
+    def _snap_export_rect(self, selection_rect: QRectF) -> QRectF:
+        """把选区对齐到整数像素格点，避免导出时整张重采样。
+
+        选区来自鼠标拖拽（canvas/gestures.py 用 QRectF(start_pos, scene_pos)
+        构造），x/y/宽/高天然带小数。只要源矩形不在整数格点上，Qt 就会把整张
+        背景按非整数比例 + 亚像素偏移重新采样——宽高再被 int() 截断还会引入
+        不完整的比例。预选界面是视图 1:1 直绘，看着清晰；保存/复制/钉图拿到
+        的却是这份重采样过的图，于是整体发虚。对齐后输出与屏幕像素一一对应，
+        等于逐像素拷贝，零重采样。
+        """
+        return QRectF(
+            float(round(selection_rect.x())),
+            float(round(selection_rect.y())),
+            float(max(1, round(selection_rect.width()))),
+            float(max(1, round(selection_rect.height()))),
+        )
+
     def export(self, selection_rect: QRectF) -> QImage:
         """
         导出选区图像（包含背景和绘制内容）
@@ -46,6 +63,8 @@ class ExportService:
         if selection_rect.isNull() or selection_rect.isEmpty():
             log_warning(T("选区为空"), "Export")
             return QImage()
+
+        selection_rect = self._snap_export_rect(selection_rect)
 
         # 输出图像大小按选区逻辑像素
         w = max(1, int(selection_rect.width()))
@@ -84,6 +103,8 @@ class ExportService:
         if selection_rect.isNull() or selection_rect.isEmpty():
             log_warning(T("选区为空"), "Export")
             return QImage()
+
+        selection_rect = self._snap_export_rect(selection_rect)
 
         # 输出图像大小按选区逻辑像素
         w = max(1, int(selection_rect.width()))

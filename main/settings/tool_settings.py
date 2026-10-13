@@ -342,7 +342,7 @@ class ToolSettingsManager(QObject):
         "screenshot_save_enabled": True,       # 自动保存截图
         "screenshot_save_path": os.path.join(os.path.expanduser("~"), "Pictures", "JileiScreenshot_photos"),  # 默认保存路径
         "screenshot_format": "PNG",            # 保存格式: PNG / JPG / BMP / WEBP / PDF
-        "screenshot_quality": 85,              # 有损格式质量 (1-100, PNG/BMP忽略)
+        "screenshot_quality": 98,              # 有损格式质量 (1-100, PNG/BMP忽略)，默认取高值保证截图清晰
         "clipboard_file_reference_enabled": True,  # 复制时同时写入文件路径（CF_HDROP），需自动保存截图开启才生效
 
         # 截图圆角
