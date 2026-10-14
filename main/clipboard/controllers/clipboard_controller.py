@@ -552,6 +552,18 @@ class ClipboardController(QObject):
             return True
         return False
 
+    def copy_item(self, item_id: int) -> bool:
+        """把条目内容写回系统剪贴板：右键菜单的"复制"。
+
+        与 ``paste_item`` 的区别是**只复制**——不触发粘贴按键、不关本窗口、
+        也不改列表顺序。用户要的是"这份内容进剪贴板，我待会儿自己粘"，
+        所以不该受到"粘贴后移到最前"设置的影响。
+        """
+        if self.manager.paste_item(item_id, self.paste_with_html, move_to_top=False):
+            log_info(T("已复制项 {item_id} 到剪贴板", item_id=item_id), "Clipboard")
+            return True
+        return False
+
     def move_item_to_top(self, item_id: int):
         """把条目在当前列表里移到置顶块之后，与后端刚改过的 item_order 对齐。
 

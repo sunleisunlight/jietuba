@@ -44,6 +44,9 @@ class AccountManager(QObject):
         self.phone: str = ""
         self.name: str = ""
         self.is_frozen: bool = False
+        # 服务端是否拒绝过当前令牌（只在内存里记一笔，不动已保存的登录凭证）。
+        # 用于"服务端暂时不认这个令牌"的诊断与后续重试，不影响本机登录态。
+        self._token_rejected: bool = False
         # 账号权益快照
         self.balance_units: int = -1          # -1 表示未知（离线）
         self.unlimited_active: bool = False
@@ -96,16 +99,27 @@ class AccountManager(QObject):
         threading.Thread(target=self.refresh, daemon=True).start()
 
     def refresh(self):
-        """拉取最新权益（后台线程安全）。登录读 entitlement，匿名读游客额度。"""
+        """拉取最新权益（后台线程安全）。登录读 entitlement，匿名读游客额度。
+
+        服务端说令牌失效（401）时**只标记、不删除本地登录**：已保存的令牌与手机号
+        留在原处，登录态保持不变。原因是这个刷新每次启动都会跑一遍，删掉登录就得
+        让用户重新登录一次（这正是"每次更新软件都要重新登录"的由来——升级后第一次
+        启动的刷新若碰上令牌失效，凭证就被清掉了）。标记之后下次刷新会再验一次，
+        服务端恢复/令牌仍有效时自动转回正常，用户那边全程不需要重新登录。
+        """
         if self.is_logged_in:
             data, err = api.entitlement(self.token, self.phone)
             if data and data.get("ok", True):
+                self._token_rejected = False
                 self._apply_entitlement(data)
                 self._persist_entitlement(data)
                 self.state_changed.emit()
             elif err and err.status == 401:
-                # 令牌失效：安静降级为游客
-                self._do_logout_local()
+                # 令牌失效：安静记一笔，保持登录态（门控继续读本地缓存、乐观放行）
+                self._token_rejected = True
+                log_warning(T("登录令牌被服务端拒绝（{status}），本机登录态保持不变，"
+                              "下次刷新再验", status=err.status), "Account")
+            else:
                 self._refresh_guest()
         else:
             self._refresh_guest()
@@ -253,8 +267,9 @@ def _settle_login(err_start, data_start, token, phone, eid):
         mgr.state_changed.emit()
         mgr.note_gate_required.emit("membership")
     elif err_start.status == 401:
-        get_account()._do_logout_local()
-        get_account().state_changed.emit()
+        # 同上：只标记令牌被拒，不删除已保存的登录，避免用户被反复要求重新登录
+        get_account()._token_rejected = True
+        log_warning(T("结算时令牌被服务端拒绝（401），本机登录态保持不变"), "Account")
     # 其它网络错误：保持乐观，不打扰
 
 

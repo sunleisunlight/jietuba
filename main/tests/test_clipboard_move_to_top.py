@@ -128,6 +128,47 @@ def test_paste_inside_a_group_keeps_the_order(pasting, moved):
     assert moved == []
 
 
+# ── copy_item：只复制，不搬行 ──
+
+class _CopyManager:
+    def __init__(self):
+        self.calls = []
+
+    def paste_item(self, item_id, with_html, move_to_top):
+        self.calls.append((item_id, with_html, move_to_top))
+        return True
+
+
+def test_copy_item_only_writes_to_the_clipboard(controller, moved, monkeypatch):
+    """右键「复制」把内容放进剪贴板就够了：不往别的窗口粘、不关窗、也不改顺序。
+
+    所以它必须显式传 move_to_top=False——"粘贴后移到最前"是粘贴的语义，
+    不该被"我就想要这份内容"顺带继承下来。
+    """
+    pastes = []
+    monkeypatch.setattr(controller_module, "paste_to_target", lambda hwnd: pastes.append(hwnd))
+    controller.manager = _CopyManager()
+
+    assert controller.copy_item(3) is True
+
+    assert controller.manager.calls == [(3, True, False)]
+    assert pastes == [], "复制不该触发粘贴按键"
+    assert [i.id for i in controller.current_items] == [5, 4, 3, 2], "复制不该改列表顺序"
+    assert moved == []
+
+
+def test_copy_item_reports_failure(controller):
+    """后端说没复制成功（例如条目已被删掉）时返回 False，界面不用假装成功。"""
+
+    class _Failing:
+        def paste_item(self, item_id, with_html, move_to_top):
+            return False
+
+    controller.manager = _Failing()
+
+    assert controller.copy_item(3) is False
+
+
 def test_selection_index_follows_the_moved_row():
     from clipboard.controllers.selection_manager import SelectionManager
 

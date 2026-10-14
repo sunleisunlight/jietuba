@@ -4,12 +4,14 @@
 """
 from __future__ import annotations
 
+from math import acos, ceil, cos, pi, sin, sqrt
+
 from PySide6.QtWidgets import (
     QGraphicsTextItem,
     QStyle, QStyleOptionGraphicsItem,
 )
-from PySide6.QtGui import QPen, QPainter, QPainterPath, QColor, QFont
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtGui import QImage, QPainter, QPainterPath, QColor, QFont, QTransform
+from PySide6.QtCore import Qt, QPointF, QRect, QRectF, QSize
 from core import log_debug, safe_event
 from core.logger import T
 from core.ui_scale import scaled_f
@@ -74,6 +76,13 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
     # 阴影朝右下偏移的距离，同样按字号比例算，理由同上
     SHADOW_OFFSET_RATIO = 0.08
     DEFAULT_SHADOW_COLOR = "#66000000"  # #AARRGGBB：黑色，40% 不透明
+
+    # 描边用"把字形覆盖层整圈挪着叠一遍"叠出来（见 _paint_effects）：采样点越密越圆，
+    # 每密一级就多叠一次覆盖层。正 K 边形外接圆半径 r 与边的最大偏差是
+    # r(1 - cos(π/K))，按"偏差不超过 RING_MAX_ERROR_PX"反推 K，再夹在上下限之间。
+    RING_MAX_ERROR_PX = 0.4
+    RING_MIN_SAMPLES = 6
+    RING_MAX_SAMPLES = 24
 
     def __init__(
         self,
@@ -386,87 +395,204 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
         """
         return self.hit_rect().contains(point)
 
-    def _glyph_path(self) -> QPainterPath:
-        """文档当前排版出来的字形轮廓，和 super().paint() 画出来的字逐像素重合。
+    @classmethod
+    def ring_offsets_px(cls, radius_px: float) -> list[tuple[float, float]]:
+        """描边外圈的采样偏移（覆盖层像素）。
 
-        向排版引擎要每个字形的实际位置，而不是自己用 QPainterPath.addText 重排一遍：
-        多行、中英混排时的字体回退、粘贴进来的混合字号都由排版引擎决定，自己重排
-        就得另外猜一份和它对齐的边距。历史上那版描边就是卡在这里，最后留下了一个
-        空循环。
+        描边是"把字形覆盖层整圈挪着叠一遍"叠出来的，采样点越密越圆。正 K 边形外接
+        圆半径 r 与边的最大偏差是 r(1 - cos(π/K))（实测 K=8、r=2px 时偏差 0.15px，肉
+        眼看不见），按这个反推 K 再夹在上下限之间：细描边 8 个点就够，粗描边才加密，
+        免得为了 0.4px 多叠十几次。
         """
-        path = QPainterPath()
-        # 非零环绕：相邻字形的轮廓叠在一起时，奇偶填充会把重叠处挖成空洞
-        path.setFillRule(Qt.FillRule.WindingFill)
-        block = self.document().begin()
-        while block.isValid():
-            layout = block.layout()
-            origin = layout.position()
-            # 范围要显式传：PySide6 6.11 里不带参数的 glyphRuns() 返回空列表
-            for run in layout.glyphRuns(0, block.length()):
-                raw_font = run.rawFont()
-                for index, position in zip(run.glyphIndexes(), run.positions()):
-                    path.addPath(raw_font.pathForGlyph(index).translated(origin + position))
-                self._add_decoration_lines(path, run, origin)
-            block = block.next()
-        return path
+        if radius_px <= 0.05:
+            return []
+        ratio = 1.0 - cls.RING_MAX_ERROR_PX / radius_px
+        if ratio >= 1.0:
+            count = cls.RING_MIN_SAMPLES
+        else:
+            count = int(ceil(pi / acos(max(-1.0, ratio))))
+        count = max(cls.RING_MIN_SAMPLES, min(cls.RING_MAX_SAMPLES, count))
+        step = 2.0 * pi / count
+        return [(radius_px * cos(step * i), radius_px * sin(step * i)) for i in range(count)]
+
+    def paint_text_coverage(self, painter, rect: QRectF):
+        """把这段字按当前排版画进给定画笔，调用方只取它的覆盖（alpha）。
+
+        用 ``document().drawContents()`` 而不是 ``QGraphicsTextItem.paint()``：后者会把
+        选中高亮一起画进去，那块是不透明的大矩形，会在描边里凭空多出一个方框。
+        画成什么颜色无所谓——覆盖层只当蒙版用。
+        """
+        area = self.document_rect().intersected(QRectF(rect))
+        if area.isEmpty():
+            return
+        painter.save()
+        try:
+            self.document().drawContents(painter, area)
+        finally:
+            painter.restore()
+
+    def _fx_layer(self, name: str, size: QSize) -> QImage:
+        """按名字复用一块覆盖层画布；尺寸不够就换一块更大的。
+
+        画布只增不减，所以每次用之前必须把"这次要用的那一块"清掉（见 _fx_clear），
+        并且所有叠圈、着色都只在这块范围里做——不然复用下来的大画布会让每次叠圈都
+        按整块算，白白多花几倍时间。
+
+        不缓存结果：内容每次都可能变，缓存只在"打字时每键重建一次"这种场景下省一次
+        计算，却要背一套失效逻辑；这里宁可每次重画，只复用缓冲，省掉的是每次分配的
+        那几 MB 内存。
+        """
+        layer = getattr(self, name, None)
+        if layer is None or layer.width() < size.width() or layer.height() < size.height():
+            layer = QImage(size, QImage.Format.Format_ARGB32_Premultiplied)
+            setattr(self, name, layer)
+        return layer
 
     @staticmethod
-    def _add_decoration_lines(path: QPainterPath, run, origin: QPointF):
-        """下划线、删除线不在字形轮廓里，按字形串上的标记补成矩形。
+    def _fx_clear(layer: QImage, size: QSize):
+        """清空这次要用的那一块（画布可能比它大）。
 
-        不补的话，开了描边的下划线是光秃秃的一条，阴影里也没有它。位置照 Qt
-        自己画这几种线的取法：下划线在基线下 underlinePosition，删除线、上划线
-        分别在基线上 ascent 的 1/3 和整个 ascent。
+        必须是 Source 合成：默认的 SourceOver 画一层全透明等于什么都没做，旧内容会
+        原封不动留在那儿。
         """
-        positions = run.positions()
-        if not positions:
+        painter = QPainter(layer)
+        try:
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            painter.fillRect(QRect(0, 0, size.width(), size.height()), QColor(0, 0, 0, 0))
+        finally:
+            painter.end()
+
+    def _paint_effects(self, painter, option):
+        """描边与阴影：画一次字形覆盖层，再靠位图叠圈做加粗。
+
+        为什么不再沿字形轮廓描边：那要沿着整段字的轮廓走一圈笔，代价随字数增长而且
+        常数极大——本机实测 2000 字一次 ``strokePath`` 要 2.7 秒、800 字 0.4 秒，而
+        打字时每个按键都要重画整块，字一多就卡成幻灯片（40 字只要 4ms，所以"字少了
+        不卡"）。改成"渲染一次覆盖层、再把它整圈叠几遍"之后，唯一的文字绘制交给 Qt
+        自己的字形缓存（2000 字约 3ms），叠圈是纯位图操作、与字数无关；描边的外沿
+        半径仍然是 ``outline_extent()``，观感和包围盒都不变。
+
+        覆盖层按设备像素出图（用画笔当前的变换），所以缩放到多大都清晰；最后画回
+        目标画笔时变换归零，覆盖层像素已经在设备坐标里了。
+        """
+        if option is None:
             return
-        raw_font = run.rawFont()
-        baseline = origin.y() + positions[0].y()
-        thickness = raw_font.lineThickness()
-        span = run.boundingRect().translated(origin)
-        for enabled, offset in (
-            (run.underline(), raw_font.underlinePosition()),
-            (run.strikeOut(), -raw_font.ascent() / 3),
-            (run.overline(), -raw_font.ascent()),
-        ):
-            if enabled:
-                top = baseline + offset - thickness / 2
-                path.addRect(QRectF(span.left(), top, span.width(), thickness))
+        outline_extent = self.outline_extent()
+        shadow_distance = self.shadow_distance()
+        if outline_extent <= 0 and shadow_distance <= 0:
+            return
 
-    def _outline_pen(self) -> QPen:
-        # 路径描边骑在字形边缘上，里面那一半会被随后画的字盖住，所以笔宽取两倍外扩
-        pen = QPen(self.outline_color, 2 * self.outline_extent())
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        return pen
+        transform = painter.transform()
+        scale = sqrt(abs(transform.determinant())) or 1.0
+        exposed = QRectF(option.exposedRect)
+        if exposed.isEmpty():
+            # 自己造 QStyleOptionGraphicsItem 直接调 paint() 时（测试、导出）没有失效区，
+            # 就按图元自己的范围算
+            exposed = self.content_rect()
+        # 覆盖层要比失效区多画一圈：叠圈和阴影都要用到失效区外面那点源像素，否则描边
+        # 会在小块失效区（例如压在上面的手柄浮层重绘）边缘断掉。
+        pad = (outline_extent + shadow_distance) * scale + 2.0
+        device_rect = transform.mapRect(exposed).toAlignedRect()
+        device_rect = device_rect.adjusted(-ceil(pad), -ceil(pad), ceil(pad), ceil(pad))
+        if device_rect.isEmpty():
+            return
 
-    def _paint_shadow(self, painter, glyphs: QPainterPath, outline_pen):
-        """阴影是"描完边之后整块字"的影子，整体往右下挪一段画在最底下。
+        device = painter.device()
+        dpr = device.devicePixelRatioF() if device is not None else 1.0
+        px = QSize(
+            max(1, round(device_rect.width() * dpr)),
+            max(1, round(device_rect.height() * dpr)),
+        )
+        # 覆盖层像素相对图元单位的比例：描边粗细、阴影距离都按它换算
+        unit = scale * px.width() / max(1.0, float(device_rect.width()))
 
-        开了描边时，这块字由字形本身和字形外那一圈描边拼成。两部分直接各画一次
-        会在字形边缘内侧重叠，半透明的阴影在那里叠成两层，出现一道深色细线；所以
-        画描边那部分之前，先把字形从裁剪区里挖掉。
+        # 1) 字形覆盖层
+        mask = self._fx_layer("_fx_mask", px)
+        self._fx_clear(mask, px)
+        mask_painter = QPainter(mask)
+        try:
+            mask_painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            mask_painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            # 先"逻辑设备 → 覆盖层像素"，再叠加"图元 → 逻辑设备"，顺序见 setTransform 的 combine
+            mask_painter.scale(px.width() / device_rect.width(), px.height() / device_rect.height())
+            mask_painter.translate(-device_rect.left(), -device_rect.top())
+            mask_painter.setTransform(transform, True)
+            self.paint_text_coverage(
+                mask_painter,
+                exposed.adjusted(-pad, -pad, pad, pad),
+            )
+        finally:
+            mask_painter.end()
 
-        不用 QPainterPath.united() 先把两部分合成一块：一行字实测要 17~50ms，
-        拖手柄缩放时每一帧都得重算。也不靠非零环绕把两条路径拼成一次填充：CFF
-        字体（如 Noto Sans SC）的轮廓走向和 TrueType 相反，环绕数会互相抵消，
-        字形里面被挖出空洞。
-        """
-        distance = self.shadow_distance()
+        # 2) 描边外圈：把覆盖层按采样点各挪一份叠起来取并集（Lighten 就是逐像素取最大
+        #    透明度，正好等于"扩张"），得到外沿半径 = outline_extent 的加粗字形
+        used = QRect(0, 0, px.width(), px.height())
+        offsets = self.ring_offsets_px(outline_extent * unit)
+        dilation = self._fx_layer("_fx_dilation", px)
+        self._fx_clear(dilation, px)
+        dilation_painter = QPainter(dilation)
+        try:
+            if offsets:
+                dilation_painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_Lighten
+                )
+                for dx, dy in offsets:
+                    dilation_painter.drawImage(QPointF(dx, dy), mask, QRectF(used))
+            else:
+                dilation_painter.drawImage(QRectF(used), mask, QRectF(used))
+        finally:
+            dilation_painter.end()
+
+        source = QRectF(0, 0, px.width(), px.height())
+
+        # 3) 阴影：整块加粗字形（字形 + 描边带，与旧的画法一致）挪一段，整体涂阴影色
+        shadow_layer = None
+        if self.has_shadow and shadow_distance > 0:
+            shadow_layer = self._fx_layer("_fx_shadow", px)
+            self._fx_clear(shadow_layer, px)
+            layer_painter = QPainter(shadow_layer)
+            try:
+                layer_painter.drawImage(QRectF(used), dilation, source)
+                layer_painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_SourceIn
+                )
+                layer_painter.fillRect(used, self.shadow_color)
+            finally:
+                layer_painter.end()
+
+        # 4) 描边带：加粗字形挖掉字形本身，剩下的那圈涂描边色。挖掉字形是为了半透明的
+        #    字不被描边色垫底——字缝里透出来的应该是背景，而不是一层描边色。
+        ring_layer = None
+        if self.has_outline and offsets:
+            ring_layer = self._fx_layer("_fx_ring", px)
+            self._fx_clear(ring_layer, px)
+            layer_painter = QPainter(ring_layer)
+            try:
+                layer_painter.drawImage(QRectF(used), dilation, source)
+                layer_painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_DestinationOut
+                )
+                layer_painter.drawImage(QRectF(used), mask, source)
+                layer_painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_SourceIn
+                )
+                layer_painter.fillRect(used, self.outline_color)
+            finally:
+                layer_painter.end()
+
+        # 5) 贴回画布：覆盖层像素已经在设备坐标里，变换归零再按设备矩形落位
         painter.save()
-        painter.translate(distance, distance)
-        painter.fillPath(glyphs, self.shadow_color)
-        if outline_pen is not None:
-            # 默认的奇偶填充下，包围盒矩形叠上字形 = 矩形减去字形
-            outside_glyphs = QPainterPath()
-            outside_glyphs.addRect(self.boundingRect())
-            outside_glyphs.addPath(glyphs)
-            painter.setClipPath(outside_glyphs, Qt.ClipOperation.IntersectClip)
-            shadow_pen = QPen(outline_pen)
-            shadow_pen.setColor(self.shadow_color)
-            painter.strokePath(glyphs, shadow_pen)
-        painter.restore()
+        try:
+            painter.setTransform(QTransform())
+            if shadow_layer is not None:
+                offset = shadow_distance * unit / max(1e-6, dpr)
+                painter.drawImage(
+                    QRectF(device_rect).translated(offset, offset), shadow_layer, source
+                )
+            if ring_layer is not None:
+                painter.drawImage(QRectF(device_rect), ring_layer, source)
+        finally:
+            painter.restore()
 
     def paint(self, painter, option, widget):
         """由下往上：背景 → 阴影 → 描边 → 文字本身（含光标、选区）→ 交互框。"""
@@ -488,12 +614,7 @@ class TextItem(DrawingItemMixin, QGraphicsTextItem):
             painter.restore()
 
         if self.has_outline or self.has_shadow:
-            glyphs = self._glyph_path()
-            outline_pen = self._outline_pen() if self.has_outline else None
-            if self.has_shadow:
-                self._paint_shadow(painter, glyphs, outline_pen)
-            if outline_pen is not None:
-                painter.strokePath(glyphs, outline_pen)
+            self._paint_effects(painter, option)
 
         super().paint(painter, self._text_paint_option(option), widget)
         self._paint_interaction_frame(painter)

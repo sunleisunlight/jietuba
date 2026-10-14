@@ -8,6 +8,7 @@
 """
 import xml.etree.ElementTree as ET
 from math import ceil
+from time import perf_counter
 
 import sys
 import pytest
@@ -54,6 +55,37 @@ def _alphas(image: QImage):
 
 def _painted_count(image: QImage) -> int:
     return sum(1 for alpha in _alphas(image) if alpha > 10)
+
+
+def _coverage_image(item, margin=0) -> QImage:
+    """只画字形覆盖层——描边、阴影的原料，坐标与 _render 完全一致。"""
+    rect = item.boundingRect()
+    image = QImage(
+        ceil(rect.width()) + 2 * margin,
+        ceil(rect.height()) + 2 * margin,
+        QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    try:
+        painter.translate(margin - rect.left(), margin - rect.top())
+        item.paint_text_coverage(painter, item.document_rect())
+    finally:
+        painter.end()
+    return image
+
+
+def _ink_extent(image: QImage):
+    """墨迹范围：alpha 大于 64 的那一片的最小外接矩形。"""
+    points = [
+        (x, y)
+        for y in range(image.height())
+        for x in range(image.width())
+        if image.pixelColor(x, y).alpha() > 64
+    ]
+    assert points, "什么都没画出来，这个用例就失去了意义"
+    xs, ys = zip(*points)
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 @pytest.fixture
@@ -109,59 +141,40 @@ def test_shadow_actually_paints_pixels(qapp):
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="字形度量随平台字体渲染不同（Windows CI 覆盖）")
-def test_glyph_outline_lines_up_with_the_painted_text(qapp):
-    """描边、阴影都沿 _glyph_path 画，它必须和 QGraphicsTextItem 自己画出来的字重合。
+def test_coverage_layer_lines_up_with_the_painted_text(qapp):
+    """描边、阴影都建在字形覆盖层上，它必须和 QGraphicsTextItem 画出来的字重合。
 
-    自己用 addText 重排一遍就得猜边距，历史上那版描边就是卡死在对齐上。
+    覆盖层取自 document().drawContents()，位置直接由排版引擎给出，和真正画出来的字
+    是同一份排版：多行、中英混排、字体回退、粘贴进来的混合字号都不用自己猜边距。
+    历史上那版描边就是卡在"用 addText 自己重排一遍"上。
     """
     item = TextItem("Ag\n标注", QPointF(0, 0), QFont("Arial", 40), QColor("black"))
-    text_mask = _render(item)
 
-    glyph_mask = QImage(text_mask.size(), QImage.Format.Format_ARGB32_Premultiplied)
-    glyph_mask.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(glyph_mask)
-    try:
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        # 和 _render 用同一个平移：包围盒左上角未必就是文字起点（框要让开光标、
-        # 命中区还有旷量），不对齐的话量到的是这段固定偏移，而不是两者的差异。
-        painter.translate(-item.boundingRect().topLeft())
-        painter.fillPath(item._glyph_path(), QColor("black"))
-    finally:
-        painter.end()
+    text_edges = _ink_extent(_render(item))
+    coverage_edges = _ink_extent(_coverage_image(item))
 
-    # 比的是墨迹的范围而不是逐像素重合：测试跑在 offscreen 平台上，那里没有字体，
-    # 每个字都画成 1px 的空心方框，逐像素比较只是在比抗锯齿。而且这个替身字体画
-    # 出来的方框和它报告的轮廓整体差 2px（实测三行文字四条边都是 +2）；真实字体下
-    # 两者完全重合。所以要求"整体平移、且不超过 2px"：猜错 3px 文档边距、第二行
-    # 错位这类真正会出的问题都过不去。
-    def ink_extent(image):
-        points = [
-            (x, y)
-            for y in range(image.height())
-            for x in range(image.width())
-            if image.pixelColor(x, y).alpha() > 64
-        ]
-        assert points, "什么都没画出来，这个用例就失去了意义"
-        xs, ys = zip(*points)
-        return min(xs), min(ys), max(xs), max(ys)
-
-    shifts = {glyph_edge - text_edge for text_edge, glyph_edge in zip(ink_extent(text_mask), ink_extent(glyph_mask))}
-    assert len(shifts) == 1, f"字形轮廓和画出来的字不是整体平移关系：{shifts}"
-    assert abs(shifts.pop()) <= 2
+    shifts = [edge - cover for edge, cover in zip(text_edges, coverage_edges)]
+    assert all(abs(shift) <= 1 for shift in shifts), \
+        f"覆盖层和画出来的字不是一个位置：{shifts}"
 
 
 def test_underline_is_part_of_the_outline(qapp):
-    """下划线不在字形轮廓里，不补上的话开了描边的下划线是光秃秃的一条。"""
-    font = QFont("Arial", 40)
-    plain = TextItem("AB", QPointF(0, 0), font, QColor("black"))
-    font.setUnderline(True)
-    underlined = TextItem("AB", QPointF(0, 0), font, QColor("black"))
+    """下划线也在覆盖层里——覆盖层上的东西都会被描边、被阴影带上。
 
-    plain_path = plain._glyph_path()
-    underlined_path = underlined._glyph_path()
-    # 字形完全一样，多出来的只能是下划线那一条矩形
-    assert underlined_path.elementCount() == plain_path.elementCount() + 5
-    assert underlined_path.boundingRect().contains(plain_path.boundingRect())
+    下划线、删除线、上划线不在字形轮廓里（旧实现得手动补矩形），现在由
+    document().drawContents() 自己画出来，不补也不会漏。
+    """
+    font = QFont("Arial", 40)
+    underlined_font = QFont(font)
+    underlined_font.setUnderline(True)
+    plain = TextItem("AB", QPointF(0, 0), font, QColor("black"))
+    underlined = TextItem("AB", QPointF(0, 0), underlined_font, QColor("black"))
+
+    plain_image = _coverage_image(plain)
+    underlined_image = _coverage_image(underlined)
+    assert _painted_count(underlined_image) > _painted_count(plain_image), "下划线没进覆盖层"
+    assert _ink_extent(underlined_image)[3] > _ink_extent(plain_image)[3], \
+        "下划线在基线下方，墨迹该比无下划线时更低"
 
 
 def test_effects_scale_with_the_font_size(qapp):
@@ -238,6 +251,62 @@ def test_outline_width_snaps_to_a_level(qapp):
     item = _text_item()
     item.set_outline(True, width=0.1)
     assert item.outline_width in TextItem.OUTLINE_WIDTH_LEVELS
+
+
+# ======================================================================
+# 不变量：描边/阴影的代价跟曝光面积走，不跟字数走
+# ======================================================================
+
+LONG_CN = "团队设置这一块一直有一个比较大的问题，它是通过导出和导入配置的，这样很麻烦。" * 20
+
+
+def test_effects_only_render_the_exposed_slice_and_stay_fast(qapp):
+    """长文字开描边/阴影后打字不再"字一多就卡"。
+
+    旧实现沿整段字的字形轮廓描边（strokePath），代价随字数线性增长、常数还极大：
+    本机实测 200 字 0.64s、800 字 9.5s、2000 字 60s，而打字时每个按键都要整块重画，
+    所以"字一多就卡"。现在描边由"字形覆盖层 + 位图叠圈"叠出来，覆盖层只画曝光到的
+    那一块，代价跟着曝光面积走：窗口里只露出一截时，两千字的段落和两百字的一样快。
+    """
+    item = _text_item(text=LONG_CN, size=20)
+    item.set_paragraph_width(200)
+    item.set_outline(True, QColor("white"), THICK)
+    item.set_shadow(True)
+
+    covered = []
+    original = item.paint_text_coverage
+
+    def spy(painter, rect):
+        covered.append(QRectF(rect))
+        return original(painter, rect)
+
+    item.paint_text_coverage = spy
+
+    box = item.boundingRect()
+    exposed = QRectF(box.left(), box.top(), box.width(), 200.0)
+    image = QImage(ceil(box.width()) + 8, ceil(box.height()) + 8,
+                   QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.translate(4 - box.left(), 4 - box.top())
+    option = QStyleOptionGraphicsItem()
+    option.exposedRect = exposed
+    start = perf_counter()
+    item.paint(painter, option, None)
+    elapsed = (perf_counter() - start) * 1000
+    painter.end()
+
+    assert covered, "前置条件：开着描边就得画覆盖层"
+    # 覆盖层最多比曝光区大一圈描边 + 阴影
+    pad = item.outline_extent() + item.shadow_distance() + 3
+    for rect in covered:
+        assert rect.height() <= exposed.height() + 2 * pad, (
+            f"覆盖层画了 {rect.height():.0f}px 高，曝光到的那截只有 "
+            f"{exposed.height():.0f}px——按整段字的高度画了"
+        )
+    assert elapsed < 300, (
+        f"只露出一截的长段落，描边一次画了 {elapsed:.0f}ms——代价又跟字数走了"
+    )
 
 
 # ======================================================================

@@ -1103,6 +1103,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
     def _get_item_context_menu_handlers(self, item_id: int):
         return {
             "paste": lambda: self._paste_item_to_clipboard(item_id),
+            "copy_item": lambda: self._copy_item_to_clipboard(item_id),
             "pin_image": lambda: self._create_pin_window(item_id),
             "save_image_as": lambda: self._save_image_as(item_id),
             "toggle_pin": lambda: self._toggle_pin(item_id),
@@ -1214,6 +1215,14 @@ class ClipboardWindow(QWidget, FramelessMixin):
             item_id, on_close_callback=self._paste_close_callback(), explicit=True
         ):
             self.item_pasted.emit(item_id)
+
+    def _copy_item_to_clipboard(self, item_id: int):
+        """右键菜单的"复制"：只把内容放进系统剪贴板。
+
+        不往别的窗口粘、不关本窗口、也不改列表顺序——用户要的是手里拿到这份
+        内容，之后自己决定往哪粘（粘贴另有"粘贴"这一项）。
+        """
+        self.controller.copy_item(item_id)
 
     def _save_image_as(self, item_id: int):
         import os

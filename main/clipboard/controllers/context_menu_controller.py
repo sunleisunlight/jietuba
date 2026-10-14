@@ -173,6 +173,9 @@ def _is_text_item(state: _ItemContextMenuState) -> bool:
 
 _ITEM_CONTEXT_MENU_SPECS: Tuple[_ItemContextMenuSpec, ...] = (
     _ItemContextMenuSpec(key="paste", label="Paste"),
+    # 复制：只把这一条写回系统剪贴板，不往别的窗口粘、也不关本窗口。
+    # 排在"粘贴"正下方——用户习惯的"粘贴到别处"和"就想要这份内容"是两个动作。
+    _ItemContextMenuSpec(key="copy_item", label="Copy"),
     _ItemContextMenuSpec(
         key="special_paste_menu",
         label="Special Paste",

@@ -58,6 +58,7 @@ def test_build_context_menu_for_grouped_text_item_uses_rule_table(monkeypatch):
     assert ctx is not None
     assert [action.key for action in ctx.actions if not action.is_separator] == [
         "paste",
+        "copy_item",
         "special_paste_menu",
         "toggle_pin",
         "move_group_menu",
@@ -67,6 +68,9 @@ def test_build_context_menu_for_grouped_text_item_uses_rule_table(monkeypatch):
         "delete_item",
     ]
     _assert_separators_are_normalized(ctx.actions)
+
+    copy_action = next(action for action in ctx.actions if action.key == "copy_item")
+    assert copy_action.label == "Copy"
 
     toggle_action = next(action for action in ctx.actions if action.key == "toggle_pin")
     assert toggle_action.label == "Unpin"
@@ -108,6 +112,7 @@ def test_build_context_menu_for_file_item_includes_file_groups(monkeypatch):
     assert ctx is not None
     assert [action.key for action in ctx.actions if not action.is_separator] == [
         "paste",
+        "copy_item",
         "special_paste_menu",
         "toggle_pin",
         "open_file_location",
@@ -139,6 +144,7 @@ def test_build_context_menu_for_image_item_includes_save_as(monkeypatch):
     assert ctx is not None
     assert [action.key for action in ctx.actions if not action.is_separator] == [
         "paste",
+        "copy_item",
         "pin_image",
         "save_image_as",
         "delete_item",
