@@ -13,7 +13,9 @@ drawForeground 里，靠调用方手写一个外扩过的脏区（margin = 25）
    没通知到的变换会让它卡在旧矩形上，直接把手柄裁没。
 2. 失效区域必须盖住手柄的新位置和旧位置，否则旧位置的像素擦不掉 —— 残影。
 3. 失效区域必须远小于整个 viewport，否则半透明浮层会连带把内容层整块重绘，
-   比它要取代的整场景重绘还贵。
+   比它要取代的整场景重绘还贵。2026-10 起失效按**单个手柄小方块的并集（区域）**
+   算，不再用手柄的外接矩形：备注的目标框四角与文字手柄分处屏幕两头，外接矩形
+   会把中间那一大片空白圈进去，每敲一个字都重绘一遍。
 """
 import math
 
@@ -66,6 +68,17 @@ def _visible_handle_rects(view):
     return rects
 
 
+def _painted_region(overlay) -> QRegion:
+    """浮层上一次真正画过的区域。"""
+    return QRegion(overlay._painted)
+
+
+def _covers(cover: QRegion, target) -> bool:
+    """cover 是否把 target（区域或矩形）整个盖住。"""
+    region = target if isinstance(target, QRegion) else QRegion(target)
+    return region.subtracted(QRegion(cover)).isEmpty()
+
+
 def _assert_painted_covers_handles(view, qapp):
     """跑完一轮事件循环后，浮层实际画过的区域必须盖住每个可见手柄。"""
     qapp.processEvents()
@@ -75,7 +88,7 @@ def _assert_painted_covers_handles(view, qapp):
     rects = _visible_handle_rects(view)
     assert rects, "前置条件：至少要有一个手柄落在视口内"
 
-    painted = view._handle_overlay._painted
+    painted = _painted_region(view._handle_overlay)
     for handle_type, rect in rects:
         assert painted.contains(rect), (
             f"手柄 {handle_type} 的绘制区域 {rect} 不在浮层画过的区域 {painted} 内"
@@ -83,19 +96,21 @@ def _assert_painted_covers_handles(view, qapp):
 
 
 class _UpdateSpy:
-    """记录浮层被要求失效的所有矩形。"""
+    """记录浮层被要求失效的所有区域。"""
 
     def __init__(self, overlay):
         self.overlay = overlay
-        self.rects = []
+        self.region = QRegion()
         self._real = overlay.update
 
     def __enter__(self):
         def spy(*args):
-            if args and isinstance(args[0], QRect):
-                self.rects.append(QRect(args[0]))
+            if args and isinstance(args[0], QRegion):
+                self.region = self.region.united(args[0])
+            elif args and isinstance(args[0], QRect):
+                self.region = self.region.united(QRegion(args[0]))
             else:
-                self.rects.append(self.overlay.rect())
+                self.region = self.region.united(QRegion(self.overlay.rect()))
             return self._real(*args)
 
         self.overlay.update = spy
@@ -104,11 +119,8 @@ class _UpdateSpy:
     def __exit__(self, *exc):
         del self.overlay.update
 
-    def union(self):
-        total = QRect()
-        for r in self.rects:
-            total = total.united(r)
-        return total
+    def union(self) -> QRegion:
+        return self.region
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +204,7 @@ def test_move_invalidates_both_old_and_new_positions(view, qapp):
 
     item = _select(view, RectItem(QRectF(150, 120, 150, 100), QPen(QColor("red"), 3)))
     qapp.processEvents()
-    before = QRect(view._handle_overlay._painted)
+    before = _painted_region(view._handle_overlay)
     assert not before.isEmpty()
 
     item.moveBy(300, 260)
@@ -200,9 +212,9 @@ def test_move_invalidates_both_old_and_new_positions(view, qapp):
         view._update_edit_handles()
     dirty = spy.union()
 
-    assert dirty.contains(before), f"失效区域 {dirty} 没盖住旧位置 {before}"
+    assert _covers(dirty, before), f"失效区域 {dirty} 没盖住旧位置 {before}"
     _assert_painted_covers_handles(view, qapp)
-    assert dirty.contains(view._handle_overlay._painted), "失效区域没盖住新位置"
+    assert _covers(dirty, _painted_region(view._handle_overlay)), "失效区域没盖住新位置"
 
 
 def test_a_partial_repaint_keeps_the_old_handle_area_on_the_books(view, qapp):
@@ -220,19 +232,19 @@ def test_a_partial_repaint_keeps_the_old_handle_area_on_the_books(view, qapp):
     _select(view, item)
     qapp.processEvents()
     overlay = view._handle_overlay
-    before = QRect(overlay._painted)
+    before = _painted_region(overlay)
     assert not before.isEmpty(), "前置条件：应已画出手柄"
 
     item.set_font_point_size(14)          # 文字变窄，手柄跟着左移；先不通知浮层
     passive = QRegion(view.mapFromScene(item.sceneBoundingRect()).boundingRect())
-    assert not QRegion(before).subtracted(passive).isEmpty(), (
+    assert not before.subtracted(passive).isEmpty(), (
         "前置条件：图元自己的脏区盖不住旧手柄，否则这条用例测不到东西"
     )
-    overlay._painted = overlay._still_on_screen(passive, overlay._handles_viewport_rect())
+    overlay._painted = overlay._still_on_screen(passive, overlay._handles_viewport_region())
 
     with _UpdateSpy(overlay) as spy:
         view._update_edit_handles()
-    assert spy.union().contains(before), (
+    assert _covers(spy.union(), before), (
         f"失效区域 {spy.union()} 没盖住旧手柄 {before}，旧位置的像素没人擦"
     )
 
@@ -253,7 +265,7 @@ def test_rotated_text_move_invalidates_old_position(view, qapp, angle):
     view.request_handles_repaint()
     qapp.processEvents()
 
-    before = QRect(view._handle_overlay._painted)
+    before = _painted_region(view._handle_overlay)
     assert not before.isEmpty(), "前置条件：旋转后应已画出手柄"
 
     item.moveBy(180, 150)
@@ -261,7 +273,7 @@ def test_rotated_text_move_invalidates_old_position(view, qapp, angle):
         view._update_edit_handles()
     dirty = spy.union()
 
-    assert dirty.contains(before), f"失效区域 {dirty} 没盖住旧位置 {before}"
+    assert _covers(dirty, before), f"失效区域 {dirty} 没盖住旧位置 {before}"
     _assert_painted_covers_handles(view, qapp)
 
 
@@ -279,7 +291,7 @@ def test_rotated_text_move_frame_by_frame(view, qapp, angle):
     qapp.processEvents()
 
     for step in range(1, 9):
-        previous = QRect(view._handle_overlay._painted)
+        previous = _painted_region(view._handle_overlay)
         assert not previous.isEmpty(), f"第 {step} 帧前置条件：上一帧应画过手柄"
 
         item.moveBy(26, 21)
@@ -287,7 +299,7 @@ def test_rotated_text_move_frame_by_frame(view, qapp, angle):
             view._update_edit_handles()
         dirty = spy.union()
 
-        assert dirty.contains(previous), (
+        assert _covers(dirty, previous), (
             f"第 {step} 帧（角度 {angle}）失效区域 {dirty} 没盖住上一帧 {previous}"
         )
         qapp.processEvents()
@@ -395,7 +407,7 @@ def test_move_without_any_notification_still_invalidates(view, qapp, angle):
     view.request_handles_repaint()
     qapp.processEvents()
 
-    before = QRect(view._handle_overlay._painted)
+    before = _painted_region(view._handle_overlay)
     assert not before.isEmpty(), "前置条件：应已画出手柄"
 
     with _UpdateSpy(view._handle_overlay) as spy:
@@ -406,7 +418,7 @@ def test_move_without_any_notification_still_invalidates(view, qapp, angle):
     assert not dirty.isEmpty(), (
         "图元挪走后浮层完全没被失效——没人通知它，它也没订阅场景变化"
     )
-    assert dirty.contains(before), f"失效区域 {dirty} 没盖住旧位置 {before}"
+    assert _covers(dirty, before), f"失效区域 {dirty} 没盖住旧位置 {before}"
     _assert_painted_covers_handles(view, qapp)
 
 
@@ -453,13 +465,13 @@ def test_rotation_drag_invalidates_every_frame(view, qapp):
     view.smart_edit_controller.mode = SelectionMode.DRAGGING_HANDLE
 
     for step in range(1, 9):
-        previous = QRect(view._handle_overlay._painted)
+        previous = _painted_region(view._handle_overlay)
         with _UpdateSpy(view._handle_overlay) as spy:
             view.smart_edit_controller.handle_edit_move(
                 QPointF(360 + step * 28, 210 + step * 22)
             )
         dirty = spy.union()
-        assert dirty.contains(previous), (
+        assert _covers(dirty, previous), (
             f"第 {step} 帧的失效区域 {dirty} 没盖住上一帧画过的 {previous}，会留拖影"
         )
         _assert_painted_covers_handles(view, qapp)
@@ -470,12 +482,12 @@ def test_clearing_selection_erases_the_last_handles(view, qapp):
 
     _select(view, RectItem(QRectF(300, 250, 150, 100), QPen(QColor("red"), 3)))
     qapp.processEvents()
-    before = QRect(view._handle_overlay._painted)
+    before = _painted_region(view._handle_overlay)
     assert not before.isEmpty()
 
     with _UpdateSpy(view._handle_overlay) as spy:
         view.smart_edit_controller.clear_selection()
-    assert spy.union().contains(before), "取消选中必须失效掉最后画过的手柄区域"
+    assert _covers(spy.union(), before), "取消选中必须失效掉最后画过的手柄区域"
 
     qapp.processEvents()
     assert view._handle_overlay._painted.isEmpty()
@@ -520,7 +532,7 @@ def test_invalidated_area_is_far_smaller_than_the_viewport(view, qapp):
     item.moveBy(12, 9)
     with _UpdateSpy(view._handle_overlay) as spy:
         view._update_edit_handles()
-    dirty = spy.union()
+    dirty = spy.union().boundingRect()
 
     viewport = view.viewport().rect()
     assert dirty.width() * dirty.height() < viewport.width() * viewport.height() / 4

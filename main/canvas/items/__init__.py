@@ -9,12 +9,12 @@ from .mosaic_item import MosaicItem
 from .drawing_items import StrokeItem, RectItem, EllipseItem, NumberItem
 from .arrow_item import ArrowItem
 from .text_item import TextItem
-from .note_item import NoteItem, is_composite_child
+from .note_item import NoteItem, is_composite_child, composite_owner
 from .spotlight_item import SpotlightCurtain, SpotlightItem
 
 __all__ = [
     'BackgroundItem', 'SelectionItem',
     'StrokeItem', 'RectItem', 'EllipseItem', 'ArrowItem',
-    'TextItem', 'NoteItem', 'is_composite_child', 'NumberItem', 'MosaicItem',
+    'TextItem', 'NoteItem', 'is_composite_child', 'composite_owner', 'NumberItem', 'MosaicItem',
     'SpotlightCurtain', 'SpotlightItem'
 ]

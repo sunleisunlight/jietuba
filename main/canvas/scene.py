@@ -203,32 +203,48 @@ class CanvasScene(QGraphicsScene):
 
         判断用标志位而不是 item.parentItem()：后者会让绑定层放弃那些"只被
         场景持有"的顶层图元的所有权，图元随即被回收（详见 is_composite_child）。
+
+        **子图元命中时记的是它所属的那条备注**：备注的包围盒只包住自己画出来的
+        文字框（见 NoteItem.boundingRect），框和箭头那两块地方因此只有子图元跟
+        传入的矩形相交。按矩形粗筛的调用方（导出、历史）要靠这一点才不会漏掉
+        一条只把目标框伸进选区里的备注。
         """
         from PySide6.QtWidgets import QGraphicsEllipseItem
 
-        from canvas.items import is_composite_child
+        from canvas.items import is_composite_child, composite_owner
 
         drawing_items = []
+        seen = set()
         # SelectionItem 不画东西了，但仍在场景里接收鼠标事件，
         # 所以枚举标注图元时依然要排除它（否则会被当成标注克隆进钉图）
         excluded_items = {self.background, self.selection_item}
 
         for item in items:
-            if item in excluded_items:
+            candidate = item
+            if is_composite_child(item):
+                candidate = composite_owner(item)
+                if candidate is None:
+                    continue
+
+            if candidate in excluded_items:
                 continue
 
-            if is_composite_child(item):
+            if is_composite_child(candidate):
                 continue
 
             # 排除画笔指示器（Z值=10000的QGraphicsEllipseItem）
-            if isinstance(item, QGraphicsEllipseItem) and item.zValue() >= 10000:
+            if isinstance(candidate, QGraphicsEllipseItem) and candidate.zValue() >= 10000:
                 continue
 
             # 幕布是从聚光灯派生出来的，不是独立的标注：克隆聚光灯时新场景会自己长出幕布
-            if isinstance(item, SpotlightCurtain):
+            if isinstance(candidate, SpotlightCurtain):
                 continue
 
-            drawing_items.append(item)
+            # 子图元会把同一条备注带进来第二次（一条备注 → 根 + 框 + 箭头）
+            if id(candidate) in seen:
+                continue
+            seen.add(id(candidate))
+            drawing_items.append(candidate)
 
         # 反转列表，使其按绘制顺序（先绘制的在前）
         # scene.items() 返回的是Z-order排序（上层在前），但我们需要绘制顺序

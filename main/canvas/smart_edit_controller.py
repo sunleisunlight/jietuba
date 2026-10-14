@@ -17,7 +17,7 @@ from shiboken6 import isValid as _cpp_object_is_alive
 
 from canvas.items import (
     StrokeItem, RectItem, EllipseItem, ArrowItem, TextItem, NoteItem, NumberItem, MosaicItem, SpotlightItem,
-    is_composite_child,
+    is_composite_child, composite_owner,
 )
 from canvas.handle_editor import HandleType, LayerEditor
 from canvas.undo import EditItemCommand
@@ -103,15 +103,29 @@ class SmartEditController(QObject):
         它们只是父图元的一部分、鼠标事件也全被关掉了，留着会让悬停命中一个"半条
         备注"，选中对象和四角手柄跟着错位。
 
-        判断走 is_composite_child 而不是 ``item.parentItem() is None``：后者对
-        "只被场景持有"的顶层图元调用一次，就会让绑定层放弃它的所有权，等
-        ``scene.items()`` 的临时列表回收，图元就被销毁（幕布消失事件）。
+        但**不能简单地丢掉**：备注的包围盒只有文字框那么大（见
+        ``NoteItem.boundingRect``），框和箭头那两块地方只剩子图元能命中——点中的
+        子图元要还原成它所属的那条备注，否则"点在框上"等于什么都没点到。
+
+        判断走 is_composite_child / composite_owner 而不是 ``item.parentItem()``：
+        后者的所有权副作用见 ``is_composite_child``。
         """
-        return [
-            item for item in items
-            if isinstance(item, SmartEditController.DRAWABLE_TYPES)
-            and not is_composite_child(item)
-        ]
+        picked = []
+        for item in items:
+            candidate = item
+            if is_composite_child(item):
+                owner = composite_owner(item)
+                if owner is None:
+                    continue
+                candidate = owner
+            if not isinstance(candidate, SmartEditController.DRAWABLE_TYPES):
+                continue
+            if is_composite_child(candidate):
+                continue
+            if any(existing is candidate for existing in picked):
+                continue
+            picked.append(candidate)
+        return picked
 
     def __init__(self, scene: QGraphicsScene):
         """

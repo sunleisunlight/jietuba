@@ -1275,16 +1275,27 @@ class LayerEditor:
         和 render() 是一对：改了 render() 画什么，就必须同步改这里。放在它
         隔壁而不是让调用方去猜，是因为"猜 chrome 有多大"正是这套代码历史上
         最容易出错的地方（曾经写成外扩 25px 的魔数）。
+
+        只是外接矩形，不适合当失效区域用（见 handle_rects）：备注的目标框四角
+        手柄和文字手柄分处屏幕两头，它们的外接矩形会把中间那一大片空白也算进去，
+        半透明浮层失效在那里就要连带重绘内容层。
+        """
+        bounds = QRectF()
+        for handle_rect in self.handle_rects():
+            bounds = bounds.united(handle_rect)
+        return bounds
+
+    def handle_rects(self) -> List[QRectF]:
+        """每个手柄的绘制矩形（scene 坐标），按当前图元几何重算过。
+
+        浮层的失效区域按这个列表逐个取，而不是取它们的外接矩形：手柄画在哪，
+        就失效哪几小块，中间的空当一格都不碰。
         """
         if not self.is_editing():
-            return QRectF()
+            return []
 
         self.refresh_handles()
-        bounds = QRectF()
-        for handle in self.handles:
-            bounds = bounds.united(handle.get_rect())
-
-        return bounds
+        return [QRectF(handle.get_rect()) for handle in self.handles]
 
     def render(self, painter: QPainter):
         """
