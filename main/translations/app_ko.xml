@@ -1866,6 +1866,10 @@ Replace it?</source>
         <translation>붙여넣기</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>복사</translation>
+    </message>
+    <message>
         <source>Special Paste</source>
         <translation>특수 붙여넣기</translation>
     </message>

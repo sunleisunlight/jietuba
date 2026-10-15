@@ -1946,6 +1946,10 @@ Replace it?</source>
         <translation>粘贴</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
         <source>Special Paste</source>
         <translation>特殊粘贴</translation>
     </message>

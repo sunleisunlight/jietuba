@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QWidget, QDialogButtonBox,
     QFileDialog,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot
 from ui.dialogs import show_info_dialog, show_warning_dialog
 from PySide6.QtGui import QColor, QFont, QIcon
 
@@ -44,7 +44,6 @@ from .page_log import create_log_page, refresh_latest_log_label
 from .page_misc import create_misc_page
 from .page_appearance import create_appearance_page
 from .page_developer import create_developer_page
-from .page_about import create_about_page
 from .page_permissions import create_permissions_page, _status_text
 from .components import (
     theme_surface_color, theme_sidebar_color,
@@ -231,13 +230,14 @@ class SettingsDialog(FrostedFramelessDialog):
         self.content_stack.addWidget(create_misc_page(self))             # 6
         self.content_stack.addWidget(create_developer_page(self))        # 7
         self.content_stack.addWidget(self.create_account_page())         # 8
-        self.content_stack.addWidget(create_about_page(self))            # 9
+        # 「软件信息」页已移除：那一页只有版本号和检查更新按钮，而侧栏底部的
+        # 「检查更新」点一下就能直接查（见 _on_check_update_clicked），不需要中间站。
         # macOS：追加"系统权限"页（Windows 不创建，保持原 UI）
         self._permissions_stack_index = -1
         import sys as _sys
         if _sys.platform == "darwin":
-            self._permissions_stack_index = 10
-            self.content_stack.addWidget(create_permissions_page(self))   # 10
+            self._permissions_stack_index = 9
+            self.content_stack.addWidget(create_permissions_page(self))   # 9
 
         # 所有分页都是一次性建完、切换只换可见性（不是懒加载/动态重建），
         # 建完后统一扫一遍即可覆盖全部分页里的 fluent_lite 控件。
@@ -285,30 +285,86 @@ class SettingsDialog(FrostedFramelessDialog):
             ("log", FluentIcon.HISTORY, self.tr("Log Settings"), 5, NavigationItemPosition.TOP),
             ("other", FluentIcon.APPLICATION, self.tr("Other"), 6, NavigationItemPosition.TOP),
             ("account", FluentIcon.PEOPLE, self.tr("Account"), 8, NavigationItemPosition.TOP),
-            ("about", FluentIcon.INFO, self.tr("Check for Updates"), 9, NavigationItemPosition.BOTTOM),
+            # 底部「检查更新」不是分页：索引为 None 表示"直接动作"，点了就查更新（见下面分派）
+            ("about", FluentIcon.INFO, self.tr("Check for Updates"), None, NavigationItemPosition.BOTTOM),
         ]
         import sys as _sys2
         if _sys2.platform == "darwin":
-            # 权限页索引：__init__ 中 content_stack 构建时固定为 10
+            # 权限页索引：__init__ 中 content_stack 构建时固定为 9
             self._nav_items.append(
                 ("permissions", FluentIcon.SETTING, self.tr("System Permissions"),
-                 getattr(self, "_permissions_stack_index", 10), NavigationItemPosition.BOTTOM),
+                 getattr(self, "_permissions_stack_index", 9), NavigationItemPosition.BOTTOM),
             )
 
         for route_key, icon, text, stack_index, position in self._nav_items:
+            if stack_index is None:
+                callback = lambda checked=False, _rk=route_key: self._on_check_update_clicked(_rk)
+            else:
+                callback = lambda checked=False, idx=stack_index, rk=route_key: self._on_nav_changed(idx, rk)
             nav.addItem(
                 routeKey=route_key,
                 icon=icon,
                 text=text,
-                onClick=lambda checked=False, idx=stack_index, rk=route_key: self._on_nav_changed(idx, rk),
+                onClick=callback,
                 position=position,
             )
+
+        # 底部「检查更新」的忙碌态（"Checking..." / 禁用）跟随更新控制器
+        self._bind_update_entry(nav, nav.widget("about"))
 
         return nav
 
     def _set_current_nav(self, route_key: str):
         if hasattr(self, 'nav_list') and self.nav_list is not None:
             self.nav_list.setCurrentItem(route_key)
+
+    # ── 侧栏底部「检查更新」 ──────────────────────────────
+
+    def _on_check_update_clicked(self, route_key: str = "about"):
+        """点一下就直接查更新，不切页、也不再弹「软件信息」窗口。
+
+        以前这一项只是切到「软件信息」页、让用户再点一次页面里的按钮；那一页除了
+        版本号就只剩那个按钮，索性整页去掉，这里点了就地查。手动检查无论有没有新版
+        都会给反馈（见 ui/update_flow.py），所以不需要中间站。
+
+        导航项被点中会高亮成"当前项"，而查更新并不切页，所以要立刻把高亮还给右边
+        正在显示的那一页，免得侧栏停在「检查更新」上、内容和选中项对不上。
+        """
+        from ui.update_flow import check_for_update_interactive
+
+        self._restore_nav_highlight()
+        check_for_update_interactive()
+
+    def _restore_nav_highlight(self):
+        """把侧栏高亮还给当前显示的那一页；页面不挂导航项（开发者页）时清掉高亮。"""
+        index = self.content_stack.currentIndex()
+        shown = next(
+            (route_key for route_key, _icon, _text, stack_index, _pos in self._nav_items
+             if stack_index == index),
+            None,
+        )
+        if shown is not None:
+            self._set_current_nav(shown)
+        elif hasattr(self, 'nav_list') and self.nav_list is not None:
+            self.nav_list.clearCurrentItem()
+
+    def _bind_update_entry(self, nav, entry):
+        """底部「检查更新」的忙碌态跟随更新控制器：查询期间禁用并显示"Checking..."。"""
+        from ui.update_flow import get_update_controller
+
+        self._update_entry = entry
+        controller = get_update_controller()
+        # 控制器常驻，这里只挂一次回调；设置窗销毁时 Qt 自动断开
+        controller.checking_changed.connect(self._apply_update_entry_state)
+        self._apply_update_entry_state(controller.is_checking)
+
+    @Slot(bool)
+    def _apply_update_entry_state(self, busy: bool):
+        entry = getattr(self, "_update_entry", None)
+        if entry is None:
+            return
+        entry.setEnabled(not busy)
+        entry.setText(self.tr("Checking...") if busy else self.tr("Check for Updates"))
 
     # ── macOS 系统权限页 ──────────────────────────────
     def _refresh_mac_permissions(self):
@@ -447,7 +503,7 @@ class SettingsDialog(FrostedFramelessDialog):
             5: self.tr("Log Settings"),
             6: self.tr("Other Settings"),
             8: self.tr("Account Settings"),
-            9: self.tr("Software Information"),
+            9: self.tr("System Permissions"),   # 仅 macOS 有这一页（Windows 导航里没有该项）
         }
 
         if stack_index in title_map:
@@ -701,6 +757,7 @@ class SettingsDialog(FrostedFramelessDialog):
             # 账号页没有可重置的本地设置
             pass
         elif current_index == 9:
+            # macOS 系统权限页（Windows 上没有这一页）：也没有可重置的本地设置
             pass
 
     def _reset_hotkey_page(self):

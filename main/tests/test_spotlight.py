@@ -225,12 +225,15 @@ def test_selecting_a_spotlight_shows_only_darkness_and_keeps_the_curtain(
         toolbar.deleteLater()
 
 
-def test_default_toolbar_folds_the_spotlight_button(qapp):
+def test_default_toolbar_shows_the_spotlight_button(qapp):
+    """聚光灯默认直接摆在工具栏上（曾被收进「…」，用户要求功能不要藏起来）。"""
     from ui.toolbar import Toolbar
 
     toolbar = Toolbar()
     try:
-        assert "spotlight" in toolbar._folded_keys
+        assert "spotlight" not in toolbar._folded_keys
+        assert toolbar.spotlight_btn.parent() is toolbar
+        assert not toolbar.spotlight_btn.isHidden()
         toolbar.select_tool("spotlight")
         assert toolbar.current_tool == "spotlight"
         assert toolbar.spotlight_btn.isChecked()

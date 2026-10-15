@@ -60,7 +60,7 @@ class TestNormalizeLayout:
         assert sorted(key for key, _mode in layout) == sorted(DEFAULT_ORDER)
         assert dict(layout)["mosaic"] == HIDE       # 重复条目以第一次为准
         assert dict(layout)["save"] == SHOW         # 不认识的显示方式按这个按钮的默认显示方式
-        assert dict(layout)["scan_code"] == MORE
+        assert dict(layout)["scan_code"] == SHOW    # 默认显示方式现在是「始终显示」（见 DEFAULT_MORE）
 
     def test_locked_buttons_are_always_shown(self):
         assert {"confirm"} <= LOCKED
@@ -79,12 +79,12 @@ class TestNormalizeLayout:
         assert keys[keys.index("pin") + 1] == "mosaic"  # 2.4: 钉图 6 → 马赛克 7
 
     def test_button_missing_from_an_old_config_gets_its_default_mode(self):
-        """升级前存下的排布里没有扫码按钮：补回时按默认收进「…」，工具栏不会突然变宽"""
+        """升级前存下的排布里没有扫码按钮：补回时按默认显示方式摆上工具栏、顺序也在原位"""
         stored = [(key, SHOW) for key in DEFAULT_ORDER if key != "scan_code"]
         layout = normalize_layout(stored)
         keys = [key for key, _mode in layout]
         assert keys[keys.index("annotation_history") + 1] == "scan_code"
-        assert dict(layout)["scan_code"] == MORE
+        assert dict(layout)["scan_code"] == SHOW
 
     def test_a_layout_saved_before_note_existed_gains_the_note_button(self):
         """备注是后加的工具：老用户的排布里没有它，读出来必须自动补上、且不挤坏原排布。"""
@@ -112,10 +112,11 @@ class TestPersistence:
 
 class TestScreenshotToolbar:
 
-    def test_default_layout_folds_low_frequency_buttons_and_ends_with_more(self, qapp):
+    def test_default_layout_shows_every_button_and_ends_with_more(self, qapp):
         from ui.toolbar_layout import DEFAULT_MORE
 
         toolbar = Toolbar()
+        assert not DEFAULT_MORE, "默认不再把任何按钮收进「…」：功能要看得见"
         assert _toolbar_row(toolbar) == [
             key for key in DEFAULT_ORDER if key not in DEFAULT_MORE
         ] + ["more"]

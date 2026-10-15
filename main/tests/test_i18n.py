@@ -185,6 +185,38 @@ def test_clipboard_delete_confirmation_is_compiled_in_its_calling_context(
     "language",
     ["en", "ja", "ko", "zh"],
 )
+def test_clipboard_copy_item_is_compiled_in_clipboard_context(language):
+    """右键菜单新增的「复制」必须编进 ClipboardWindow 上下文。
+
+    回归：词条第一次只写进了 XML，运行时优先加载的是旧 .qm，而二进制 .qm 没有
+    XML 那条"跨上下文兜底"，菜单里就原样显示英文 "Copy"。
+    """
+    from core.i18n import I18nManager
+
+    translations_dir = I18nManager.get_translations_dir()
+    context = next(
+        context
+        for context in ET.parse(translations_dir / f"app_{language}.xml")
+        .getroot()
+        .findall("context")
+        if context.findtext("name") == "ClipboardWindow"
+    )
+    expected = next(
+        message.findtext("translation")
+        for message in context.findall("message")
+        if message.findtext("source") == "Copy"
+    )
+
+    translator = QTranslator()
+    qm_path = translations_dir / f"app_{language}.qm"
+    assert translator.load(str(qm_path))
+    assert translator.translate("ClipboardWindow", "Copy") == expected
+
+
+@pytest.mark.parametrize(
+    "language",
+    ["en", "ja", "ko", "zh"],
+)
 def test_hotkey_registration_error_is_compiled_in_main_app_context(language):
     """热键注册失败弹窗及备用热键名称必须随界面语言显示。"""
     from core.i18n import I18nManager

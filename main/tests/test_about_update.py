@@ -11,10 +11,10 @@ import threading
 
 import pytest
 from PySide6.QtCore import QThread
-from PySide6.QtWidgets import QDialog, QPushButton
+from PySide6.QtWidgets import QDialog
 
 import ui.update_flow as update_flow
-from ui.settings_ui import page_about
+from ui.update_flow import check_for_update_interactive
 
 
 def _reset_controller(monkeypatch):
@@ -166,7 +166,8 @@ class TestUpdateDialogIsNotModal:
 
 
 class TestSidebarUpdateEntry:
-    """侧栏底部入口改成「检查更新」，并在它正上方显示当前版本号。"""
+    """侧栏底部入口是「检查更新」，点一下**直接查**（不再先进「软件信息」页），
+    版本号显示在它正上方。"""
 
     def test_nav_entry_and_version_label(self, qapp, qtbot):
         from PySide6.QtCore import QPoint
@@ -180,7 +181,7 @@ class TestSidebarUpdateEntry:
         qtbot.waitExposed(dialog)
         try:
             entry = dialog.nav_list.widget("about")
-            assert entry is not None, "没有找到原来的「关于/检查更新」导航项"
+            assert entry is not None, "没有找到底部的「检查更新」导航项"
             assert entry.text() == "Check for Updates"
 
             labels = [
@@ -197,9 +198,58 @@ class TestSidebarUpdateEntry:
             dialog.close()
             dialog.deleteLater()
 
+    def test_software_information_page_is_gone(self, qapp):
+        """「软件信息」整页移除：设置窗里没有它那一页，标题也没有这个词条。"""
+        from ui.settings_ui.dialog import SettingsDialog
 
-class TestAboutPageCheckButton:
-    def test_button_busy_state_follows_controller(self, monkeypatch, qapp, qtbot):
+        dialog = SettingsDialog()
+        try:
+            assert not hasattr(dialog, "about_page"), "软件信息页不该再被创建"
+            # 9 个内容页（0~8）：快捷键、截图、剪贴板、外观、翻译、日志、其他、
+            # 隐藏的开发者页、账号页
+            assert dialog.content_stack.count() == 9
+            # 底部「检查更新」不对应任何一个内容页
+            assert all(
+                stack_index is not None
+                for _key, _icon, _text, stack_index, _pos in dialog._nav_items
+                if _key != "about"
+            )
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+
+    def test_clicking_check_update_runs_the_check_without_switching_page(
+        self, monkeypatch, qapp, qtbot
+    ):
+        """点底部入口：直接发起手动检查，右侧内容页不切换。"""
+        from ui.settings_ui.dialog import SettingsDialog
+
+        calls = []
+        monkeypatch.setattr(
+            update_flow, "check_for_update_interactive",
+            lambda: calls.append(True),
+        )
+
+        dialog = SettingsDialog()
+        dialog.show()
+        qtbot.waitExposed(dialog)
+        try:
+            entry = dialog.nav_list.widget("about")
+            # 先停在账号页（8），点完还该停在账号页
+            dialog._on_nav_changed(8, "account")
+            entry.click()
+
+            assert calls == [True], "点击应当直接触发检查更新"
+            assert dialog.content_stack.currentIndex() == 8, "检查更新不该切到任何页面"
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+
+
+class TestSidebarCheckBusyState:
+    """侧栏「检查更新」查询期间禁用并显示"Checking..."，查完恢复。"""
+
+    def test_entry_busy_state_follows_controller(self, monkeypatch, qapp, qtbot):
         gate = threading.Event()
 
         def _slow_check():
@@ -210,21 +260,23 @@ class TestAboutPageCheckButton:
         monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: None)
         controller = _reset_controller(monkeypatch)
 
-        dialog = QDialog()
-        page = page_about.create_about_page(dialog)
-        button = page.findChild(QPushButton, "checkUpdateButton")
-        assert button.text() == "Check for Updates"
+        from ui.settings_ui.dialog import SettingsDialog
 
-        button.click()
-        assert button.text() == "Checking..."
-        assert not button.isEnabled()
+        dialog = SettingsDialog()
+        try:
+            entry = dialog.nav_list.widget("about")
+            assert entry.text() == "Check for Updates"
 
-        gate.set()
-        qtbot.waitUntil(lambda: not controller.is_checking, timeout=5000)
-        assert button.isEnabled()
-        assert button.text() == "Check for Updates"
-        page.deleteLater()
-        dialog.deleteLater()
+            check_for_update_interactive()
+            qtbot.waitUntil(lambda: not entry.isEnabled(), timeout=5000)
+            assert entry.text() == "Checking..."
+
+            gate.set()
+            qtbot.waitUntil(lambda: entry.isEnabled(), timeout=5000)
+            assert entry.text() == "Check for Updates"
+        finally:
+            dialog.close()
+            dialog.deleteLater()
 
 
 class TestInstallAndRestart:

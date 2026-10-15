@@ -377,7 +377,7 @@ class TestResetCurrentPageDispatch:
             assert called == [expected], (index, called)
 
     def test_about_and_account_pages_have_nothing_to_reset(self):
-        # 8=账号页、9=关于页，都没有可重置的本地设置
+        # 8=账号页、9=macOS 系统权限页（原「软件信息」页已移除），都没有可重置的本地设置
         for index in (8, 9):
             fake = _dispatch_fake(index)
             SettingsDialog._reset_current_page(fake)
@@ -606,7 +606,7 @@ NAV_TITLES = {
     5: "Log Settings",
     6: "Other Settings",
     8: "Account Settings",
-    9: "Software Information",
+    9: "System Permissions",
 }
 
 

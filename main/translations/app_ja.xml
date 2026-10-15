@@ -1911,6 +1911,10 @@ Replace it?</source>
         <translation>貼り付け</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>コピー</translation>
+    </message>
+    <message>
         <source>Special Paste</source>
         <translation>変換して貼り付け</translation>
     </message>

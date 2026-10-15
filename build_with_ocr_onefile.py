@@ -13,6 +13,9 @@
 import PyInstaller.__main__
 from pathlib import Path
 import os
+import shutil
+import subprocess
+import sys
 
 # 路径配置
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -25,6 +28,49 @@ EXE_NAME = "积磊截图"
 
 # 翻译文件
 TRANSLATIONS_DIR = "main/translations"
+
+
+def _lrelease_path() -> str:
+    """找到 lrelease：优先本虚拟环境里的 PySide6 版，其次 PATH。"""
+    names = ("pyside6-lrelease.exe", "pyside6-lrelease") if os.name == "nt" \
+        else ("pyside6-lrelease", "lrelease")
+    for name in names:
+        candidate = Path(sys.executable).parent / name
+        if candidate.exists():
+            return str(candidate)
+    for name in names:
+        found = shutil.which(name)
+        if found:
+            return found
+    return ""
+
+
+def compile_translations() -> bool:
+    """把 translations/*.xml 重编译成 *.qm。
+
+    运行时**优先加载 .qm**（见 core/i18n.py）：.qm 一旦落后于 .xml，新加的界面词条
+    就会退回英文原文——「剪贴板右键的复制显示成 Copy」就是这么来的（旧 .qm 里
+    ClipboardWindow 上下文没有 Copy 词条，而二进制 .qm 没有跨上下文兜底）。
+    所以每次打包前都重编译一遍，保证包里带的和 XML 一致。
+    """
+    tool = _lrelease_path()
+    if not tool:
+        print("!! 找不到 lrelease，跳过 .qm 重编译：包里会带着可能过期的 .qm，"
+              "新加的界面词条会显示成英文")
+        return False
+
+    ok = True
+    for xml in sorted(Path(TRANSLATIONS_DIR).glob("app_*.xml")):
+        result = subprocess.run(
+            [tool, str(xml), "-qm", str(xml.with_suffix(".qm"))],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+        if result.returncode != 0:
+            ok = False
+            print(f"!! 翻译编译失败: {xml.name} (rc={result.returncode})")
+            print((result.stderr or result.stdout)[-400:])
+    print("翻译已重编译（.qm 与 XML 对齐）" if ok else "翻译编译有失败项，见上")
+    return ok
 
 # PP-OCR 模型目录
 MODELS_DIR = "models"
@@ -164,6 +210,9 @@ if __name__ == '__main__':
     print(f"输出目录: {DIST_DIR}")
     print(f"构建目录: {BUILD_DIR}")
     print("=" * 60)
+
+    # 先重编译翻译：运行时优先读 .qm，落后于 XML 就会把新词条显示成英文
+    compile_translations()
 
     datas_repr  = repr([(d.split(';')[0], d.split(';')[1]) for d in datas])
     hidden_repr = repr(hidden_imports)
