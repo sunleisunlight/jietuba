@@ -920,31 +920,10 @@ class CanvasView(QGraphicsView):
             if isinstance(item, TextItem):
                 # Text is updated by SmartEditController's existing signal slot.
                 applied = True
-            elif isinstance(item, (StrokeItem, RectItem, EllipseItem)):
-                pen = QPen(item.pen())
-                new_color = QColor(color)
-                new_color.setAlpha(pen.color().alpha())
-                pen.setColor(new_color)
-                item.setPen(pen)
-                if isinstance(item, RectItem) and getattr(item, "is_highlighter_rect", False):
-                    brush = QBrush(item.brush())
-                    brush_color = QColor(color)
-                    brush_color.setAlpha(brush.color().alpha())
-                    brush.setColor(brush_color)
-                    item.setBrush(brush)
-                item.update()
-                applied = True
-            elif isinstance(item, (ArrowItem, NumberItem)):
-                old_color = QColor(item.color)
-                new_color = QColor(color)
-                new_color.setAlpha(old_color.alpha())
-                item.color = new_color
-                if isinstance(item, ArrowItem) and hasattr(item, "update_geometry"):
-                    item.update_geometry()
-                item.update()
-                applied = True
             else:
-                return False
+                applied = self._apply_color_to_item(item, color)
+                if not applied:
+                    return False
 
         if applied:
             editor = getattr(controller, "layer_editor", None)
@@ -952,6 +931,60 @@ class CanvasView(QGraphicsView):
                 editor.start_edit(item)
             self.canvas_scene.update()
         return applied
+
+    def _apply_color_to_item(self, item, color) -> bool:
+        """把面板颜色刷到单个图元上，保留它原来的 alpha。
+
+        文字（含备注）不在此处理：它们走 SmartEditController.on_text_color_changed，
+        备注还要连带目标框和箭头一起变色。返回该图元是否支持改色。
+        """
+        if isinstance(item, TextItem):
+            return False
+        if isinstance(item, (StrokeItem, RectItem, EllipseItem)):
+            pen = QPen(item.pen())
+            new_color = QColor(color)
+            new_color.setAlpha(pen.color().alpha())
+            pen.setColor(new_color)
+            item.setPen(pen)
+            # 荧光笔矩形的填充色和描边是同一个颜色，得一起改
+            if isinstance(item, RectItem) and getattr(item, "is_highlighter_rect", False):
+                brush = QBrush(item.brush())
+                brush_color = QColor(color)
+                brush_color.setAlpha(brush.color().alpha())
+                brush.setColor(brush_color)
+                item.setBrush(brush)
+            item.update()
+            return True
+        if isinstance(item, (ArrowItem, NumberItem)):
+            old_color = QColor(item.color)
+            new_color = QColor(color)
+            new_color.setAlpha(old_color.alpha())
+            item.color = new_color
+            if isinstance(item, ArrowItem) and hasattr(item, "update_geometry"):
+                item.update_geometry()
+            item.update()
+            return True
+        return False
+
+    def _apply_color_change_to_selection(self, color):
+        """同工具选中时，把颜色面板的改动同步到当前选中图元。
+
+        和 _apply_size_change_to_selection / _apply_opacity_change_to_selection
+        同一条路：工具默认样式照常更新（之后新画的图元用新颜色），已经画好并
+        被选中的这一个也立刻变色。文字与备注由 color_changed →
+        on_text_color_changed 信号槽处理，这里跳过，避免重复赋值。
+        """
+        controller = getattr(self, "smart_edit_controller", None)
+        if not controller:
+            return
+        selected_item = getattr(controller, "selected_item", None)
+        if selected_item is None or isinstance(selected_item, TextItem):
+            return
+        if self._apply_color_to_item(selected_item, color):
+            editor = getattr(controller, "layer_editor", None)
+            if editor and editor.is_editing():
+                editor.start_edit(selected_item)
+            self.canvas_scene.update()
 
     @safe_event
     def mousePressEvent(self, event):

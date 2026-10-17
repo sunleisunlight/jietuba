@@ -582,7 +582,7 @@ class PinCanvas(QObject):
         toolbar.redo_clicked.connect(self.undo_stack.redo)
 
         # 样式改变
-        toolbar.color_changed.connect(self._on_color_changed)
+        toolbar.color_changed.connect(lambda c: self._on_color_changed(c, view))
         toolbar.stroke_width_changed.connect(lambda w: self._on_stroke_width_changed(w, view))
         toolbar.opacity_changed.connect(lambda o: self._on_opacity_changed(o, view))
 
@@ -674,9 +674,16 @@ class PinCanvas(QObject):
             if hasattr(self.parent_window, '_ocr_mgr'):
                 self.parent_window._ocr_mgr.set_drawing_mode(False)
 
-    def _on_color_changed(self, color):
+    def _on_color_changed(self, color, view=None):
         """颜色改变"""
+        if view is not None and hasattr(view, 'apply_cross_tool_selection_style'):
+            consumed = view.apply_cross_tool_selection_style(color=color)
+            if consumed is not None:
+                return
         self.set_color(color)
+        # 同工具选中：把已经画好并选中的图元也立刻改色（文字/备注由信号槽处理）
+        if view is not None and hasattr(view, '_apply_color_change_to_selection'):
+            view._apply_color_change_to_selection(color)
 
     def _on_stroke_width_changed(self, width, view):
         """线宽改变"""

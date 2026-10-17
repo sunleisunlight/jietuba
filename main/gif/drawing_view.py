@@ -263,8 +263,18 @@ class GifDrawingShortcutHandler(ShortcutHandler):
             if key == Qt.Key.Key_Y:
                 v._gif_scene.undo_stack.redo()
                 return True
-        # 删除选中图元
-        if self._match(event, "inapp_delete"):
+        # 删除选中图元：Delete/Backspace 为内置固定删除键，另有可自定义的
+        # inapp_delete 绑定；文字编辑时放行给文字框删字符。
+        is_text_editing = bool(
+            hasattr(v, '_is_text_editing') and v._is_text_editing()
+        )
+        if not is_text_editing and (
+            self._match(event, "inapp_delete")
+            or (
+                event.modifiers() == Qt.KeyboardModifier.NoModifier
+                and key in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+            )
+        ):
             if hasattr(v, 'smart_edit_controller'):
                 v.smart_edit_controller.delete_selected()
             return True

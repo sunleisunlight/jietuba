@@ -183,9 +183,21 @@ class PinEditShortcutHandler(_PinHandlerBase):
                 pin.toolbar.current_tool = None
             return True
 
-        # 删除选中图元
-        if self._match(event, "inapp_delete"):
-            view = getattr(pin, 'view', None)
+        # 删除选中图元：Delete/Backspace 为内置固定删除键，另有可自定义的
+        # inapp_delete 绑定；文字编辑时放行给文字框删字符。
+        view = getattr(pin, 'view', None)
+        is_text_editing = bool(
+            view is not None
+            and hasattr(view, '_is_text_editing')
+            and view._is_text_editing()
+        )
+        if not is_text_editing and (
+            self._match(event, "inapp_delete")
+            or (
+                event.modifiers() == Qt.KeyboardModifier.NoModifier
+                and key in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+            )
+        ):
             if view and hasattr(view, 'smart_edit_controller'):
                 view.smart_edit_controller.delete_selected()
             return True

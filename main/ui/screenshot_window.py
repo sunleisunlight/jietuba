@@ -185,15 +185,22 @@ class ScreenshotShortcutHandler(ShortcutHandler):
                 w.scene.undo_stack.redo()
             return True
 
-        # 删除选中图元。文字编辑时这个键（默认 Delete）要留给文字框删字符，
-        # 不能在这里连事件一起吞掉——之前 return True 写在 if 外面，编辑文字时
-        # 按 Delete 键选中图元没删（判断对了），但事件已经被吃掉，文字框根本
-        # 收不到这次按键，光标后面的字删不掉。
-        if self._match(event, "inapp_delete"):
-            if not is_text_editing:
-                if hasattr(w.view, 'smart_edit_controller'):
-                    w.view.smart_edit_controller.delete_selected()
-                return True
+        # 删除选中图元。Delete 与 Backspace 是内置固定删除键（任何工具下选中即
+        # 删，不依赖用户配置），同时保留可自定义的 inapp_delete 绑定。
+        # 文字编辑时这两个键要留给文字框删字符，不能在这里连事件一起吞掉——
+        # 之前 return True 写在 if 外面，编辑文字时按 Delete 键选中图元没删
+        # （判断对了），但事件已经被吃掉，文字框根本收不到这次按键，光标后面
+        # 的字删不掉。
+        if not is_text_editing and (
+            self._match(event, "inapp_delete")
+            or (
+                event.modifiers() == Qt.KeyboardModifier.NoModifier
+                and key in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+            )
+        ):
+            if hasattr(w.view, 'smart_edit_controller'):
+                w.view.smart_edit_controller.delete_selected()
+            return True
 
         # 截图翻译
         if self._match(event, "inapp_translate"):
@@ -1536,6 +1543,10 @@ class ScreenshotWindow(QWidget):
             if consumed is not None:
                 return
         self.scene.update_style(color=color)
+        # 同工具选中：工具默认色更新后，把已经画好并选中的图元也立刻改色
+        # （文字/备注由 on_text_color_changed 信号槽处理）
+        if view and hasattr(view, '_apply_color_change_to_selection'):
+            view._apply_color_change_to_selection(color)
         
     def on_stroke_width_changed(self, width):
         view = getattr(self, 'view', None)

@@ -782,13 +782,17 @@ class ClipboardController(QObject):
     def can_reorder_current_view(self) -> bool:
         """当前视图是否允许鼠标拖拽排序。
 
-        只有"全部历史"原视图可以：自建分组有自己的 ASC 排序（在管理窗口里拖），
-        内置类型分组 / 搜索 / 类型筛选 / 时间筛选都是数据库过滤出来的局部视图，
-        在里面算出的前后邻居不代表全局顺序，落库会把别的条目搞乱。
+        "全部历史"原视图与自建分组视图都可以：两种视图里视觉上方邻居都作为
+        before_id，底层 move_item_between 会按条目所在分组自动选 DESC（历史）
+        或 ASC（分组）方向。
+        内置类型分组（"text"/"image"）、搜索、类型筛选、时间筛选都是数据库或
+        客户端过滤出来的局部视图，在里面算出的前后邻居不代表全局顺序，落库会
+        把别的条目搞乱，因此禁用。
         """
+        if self.current_group_id in BUILTIN_GROUP_IDS:
+            return False
         return (
-            self.current_group_id is None
-            and not self._search_text
+            not self._search_text
             and not self._content_type
             and not self._time_range
         )
@@ -796,12 +800,25 @@ class ClipboardController(QObject):
     def reorder_history_item(self, item_id: int,
                              before_id: Optional[int],
                              after_id: Optional[int]) -> bool:
-        """默认历史视图内的拖拽排序（DESC：before 是视觉上方邻居）。
+        """当前视图内的拖拽排序落库。
 
+        历史视图为 DESC、自建分组视图为 ASC，视觉上都是"上邻 before、下邻
+        after"，由底层接口按 group_id 自选方向。
         成功后重载列表；失败（包括跨越置顶分区）返回 False，由界面回弹出的行。
         """
         if not self.can_reorder_current_view():
             return False
+        # 自建分组视图同样按 is_pinned DESC 分区置顶，但底层分组排序接口不校验
+        # 跨区拖拽，这里在落库前挡住，避免把非置顶条目塞进置顶区。
+        if isinstance(self.current_group_id, int):
+            moved = self.manager.get_item(item_id)
+            if moved is not None:
+                for neighbor_id in (before_id, after_id):
+                    if neighbor_id is None:
+                        continue
+                    neighbor = self.manager.get_item(neighbor_id)
+                    if neighbor is not None and neighbor.is_pinned != moved.is_pinned:
+                        return False
         if not self.manager.move_item_between(
             item_id, before_id=before_id, after_id=after_id
         ):

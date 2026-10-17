@@ -623,6 +623,72 @@ def test_cross_tool_style_helper_is_tristate_and_scales_logical_highlighter_widt
         scene.deleteLater()
 
 
+def test_same_tool_selection_color_change_recolors_item(qapp):
+    """同工具选中已画好的图元后点颜色条，图元立刻变色（保留 alpha）。"""
+    scene, view = _canvas(cross_tool_select=True)
+    try:
+        scene.activate_tool("rect")
+        color = QColor("red")
+        color.setAlpha(120)
+        rect = RectItem(QRectF(0, 0, 40, 20), QPen(color, 4))
+        scene.addItem(rect)
+        # 不用 Ctrl：当前工具就是 rect，属于同工具选中（不是 cross-tool）
+        view.smart_edit_controller.select_item(rect)
+        assert view.smart_edit_controller.is_cross_tool_selection() is False
+
+        view._apply_color_change_to_selection(QColor("blue"))
+        assert rect.pen().color().name() == QColor("blue").name()
+        assert rect.pen().color().alpha() == 120
+    finally:
+        view.close()
+        scene.deleteLater()
+
+
+def test_same_tool_selection_color_change_recolors_arrow(qapp):
+    scene, view = _canvas(cross_tool_select=True)
+    try:
+        scene.activate_tool("arrow")
+        arrow = ArrowItem(QPointF(0, 0), QPointF(40, 40), QPen(QColor("red"), 5))
+        scene.addItem(arrow)
+        view.smart_edit_controller.select_item(arrow)
+        assert view.smart_edit_controller.is_cross_tool_selection() is False
+
+        view._apply_color_change_to_selection(QColor("green"))
+        assert arrow.color.name() == QColor("green").name()
+    finally:
+        view.close()
+        scene.deleteLater()
+
+
+def test_same_tool_color_change_without_selection_is_noop(qapp):
+    scene, view = _canvas(cross_tool_select=True)
+    try:
+        scene.activate_tool("rect")
+        rect = RectItem(QRectF(0, 0, 40, 20), QPen(QColor("red"), 4))
+        scene.addItem(rect)
+        # 无选中元素：不报错、不改色
+        view._apply_color_change_to_selection(QColor("blue"))
+        assert rect.pen().color().name() == QColor("red").name()
+    finally:
+        view.close()
+        scene.deleteLater()
+
+
+def test_same_tool_color_change_skips_text_item(qapp):
+    """文字/备注的颜色由 on_text_color_changed 信号槽处理，这里不重复赋值。"""
+    scene, view = _canvas(cross_tool_select=True)
+    try:
+        scene.activate_tool("text")
+        text = _text_item()
+        scene.addItem(text)
+        view.smart_edit_controller.select_item(text)
+        view._apply_color_change_to_selection(QColor("blue"))
+        assert text.defaultTextColor().name() == QColor("black").name()
+    finally:
+        view.close()
+        scene.deleteLater()
+
+
 def test_cross_tool_color_preserves_target_alpha_and_opacity_is_direct(qapp):
     scene, view = _canvas(cross_tool_select=True)
     try:

@@ -252,6 +252,35 @@ class TestDelete:
         assert _make_handler(window).handle_key(_FakeKeyEvent(Qt.Key.Key_Delete)) is False
         window.view.smart_edit_controller.delete_selected.assert_not_called()
 
+    def test_backspace_also_removes_the_selected_item(self):
+        """Backspace 与 Delete 同为内置固定删除键，任何工具下选中即删。"""
+        window = _make_window()
+        assert _make_handler(window).handle_key(_FakeKeyEvent(Qt.Key.Key_Backspace)) is True
+        window.view.smart_edit_controller.delete_selected.assert_called_once()
+
+    def test_backspace_is_released_to_the_text_item_while_editing_text(self):
+        """文字编辑中按 Backspace 删字符，不能删掉整个图元。"""
+        window = _make_window(text_editing=True)
+        assert _make_handler(window).handle_key(_FakeKeyEvent(Qt.Key.Key_Backspace)) is False
+        window.view.smart_edit_controller.delete_selected.assert_not_called()
+
+    def test_builtin_delete_keys_work_even_when_binding_cleared(self):
+        """用户把 inapp_delete 绑定清空后，Delete/Backspace 仍能删除选中图元。"""
+        window = _make_window()
+        handler = _make_handler(window)
+        handler._bindings.pop("inapp_delete", None)
+        assert handler.handle_key(_FakeKeyEvent(Qt.Key.Key_Delete)) is True
+        assert handler.handle_key(_FakeKeyEvent(Qt.Key.Key_Backspace)) is True
+        assert window.view.smart_edit_controller.delete_selected.call_count == 2
+
+    def test_delete_keys_with_modifiers_do_not_delete(self):
+        """Ctrl+Backspace 等组合键不触发删除，避免吞掉文本编辑快捷键。"""
+        window = _make_window()
+        handler = _make_handler(window)
+        handler._bindings.pop("inapp_delete", None)
+        assert handler.handle_key(_FakeKeyEvent(Qt.Key.Key_Backspace, CTRL)) is False
+        window.view.smart_edit_controller.delete_selected.assert_not_called()
+
 
 class TestTranslate:
 
