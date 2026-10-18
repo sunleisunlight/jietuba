@@ -245,10 +245,10 @@ a = Analysis(
 _PYSIDE6_WHITELIST = {{
     # 核心 DLL
     'qt6core.dll', 'qt6gui.dll', 'qt6widgets.dll',
-    'qt6svg.dll', 'qt6svgwidgets.dll', 'qt6xml.dll',
+    'qt6svg.dll', 'qt6svgwidgets.dll', 'qt6xml.dll', 'qt6network.dll',
     # 核心 pyd
     'qtcore.pyd', 'qtgui.pyd', 'qtwidgets.pyd',
-    'qtsvg.pyd', 'qtsvgwidgets.pyd', 'qtxml.pyd',
+    'qtsvg.pyd', 'qtsvgwidgets.pyd', 'qtxml.pyd', 'qtnetwork.pyd',
     # shiboken / PySide6 绑定
     'pyside6.abi3.dll', 'shiboken6.abi3.dll', 'shiboken.pyd',
     # VC++ 运行时（从 shiboken6 目录带入）

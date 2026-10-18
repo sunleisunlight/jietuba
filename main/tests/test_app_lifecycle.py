@@ -232,3 +232,6 @@ def test_onefile_keeps_lifecycle_native_dependencies():
     assert "PySide6.QtNetwork" not in lists["excludes"]
     hidden = lists.get("hiddenimports", lists.get("hidden_imports", []))
     assert {"PySide6.QtNetwork", "comtypes.shelllink", "comtypes.persist"} <= set(hidden)
+    source = (root / "build_with_ocr_onefile.py").read_text(encoding="utf-8-sig")
+    assert "'qt6network.dll'" in source
+    assert "'qtnetwork.pyd'" in source
