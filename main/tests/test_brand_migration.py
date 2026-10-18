@@ -325,9 +325,13 @@ class TestWindowsIntegration:
         exe = tmp_path / "积磊截图.exe"
         exe.write_bytes(b"")
 
-        assert migrate_windows_desktop_shortcut(
+        migrated = migrate_windows_desktop_shortcut(
             desktop_dir=str(desktop), exe_path=str(exe),
-        ) is True, messages
+        )
+        if migrated is not True:
+            # pytest abbreviates container reprs, losing the middle of CLIXML.
+            pytest.fail("\n".join(message for _level, message in messages)
+                        or "Desktop shortcut migration failed without diagnostics")
 
         assert (desktop / "积磊截图.lnk").exists()
         assert not (desktop / "Jietuba.lnk").exists()
