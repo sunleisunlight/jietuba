@@ -1793,6 +1793,26 @@ Replace it?</source>
         <translation>▲ 上</translation>
     </message>
     <message>
+        <source>Preview Size</source>
+        <translation>プレビューサイズ</translation>
+    </message>
+    <message>
+        <source>Small</source>
+        <translation>小</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>中</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>大</translation>
+    </message>
+    <message>
+        <source>Extra Large</source>
+        <translation>特大</translation>
+    </message>
+    <message>
         <source>Max Display Lines</source>
         <translation>行の高さ</translation>
     </message>

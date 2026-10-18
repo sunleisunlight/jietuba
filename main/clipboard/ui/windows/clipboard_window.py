@@ -188,6 +188,14 @@ class ClipboardWindow(QWidget, FramelessMixin):
         PreviewPopup.instance().set_manager(self.manager)
         self._warmup_offscreen_once()
 
+        # 兜底启动图片 OCR 索引服务（与应用层启动互为幂等，失败不影响窗口）
+        try:
+            from ...services.ocr_index_service import OcrIndexService
+
+            OcrIndexService.instance(self.manager).start()
+        except Exception as e:
+            log_debug(T("启动 OCR 索引服务失败: {e}", e=e), "Clipboard")
+
     def _on_data_loaded(self, items: List[ClipboardItem], is_first_page: bool):
         if is_first_page:
             self._auto_fill_remaining = self._auto_fill_max_pages
@@ -321,6 +329,11 @@ class ClipboardWindow(QWidget, FramelessMixin):
 
         if hasattr(self, "list_widget"):
             self.list_widget.setStyleSheet(generator.generate_list_widget_style(self.window_opacity))
+
+        if hasattr(self, "top_search_bar"):
+            self.top_search_bar.setStyleSheet(
+                generator.generate_search_bar_style(self.window_opacity).replace("border-top:", "border-bottom:")
+            )
 
         if hasattr(self, "bottom_bar"):
             self.bottom_bar.setStyleSheet(generator.generate_search_bar_style(self.window_opacity))
@@ -476,6 +489,23 @@ class ClipboardWindow(QWidget, FramelessMixin):
         scrollbar.valueChanged.connect(self._on_scroll)
         scrollbar.rangeChanged.connect(self._on_scrollbar_range_changed)
 
+        # 顶部搜索栏：窗口最顶端常驻搜索框（用户可直接搜文本与截图里的文字）
+        self.top_search_bar = QWidget()
+        self.top_search_bar.setObjectName("clipboardTopSearchBar")
+        self.top_search_bar.setFixedHeight(40)
+        self.top_search_bar.setStyleSheet(
+            """
+            QWidget {
+                background: #FAFAFA;
+                border-bottom: 1px solid #E0E0E0;
+            }
+        """
+        )
+        self.top_search_layout = QHBoxLayout(self.top_search_bar)
+        self.top_search_layout.setContentsMargins(10, 5, 8, 5)
+        self.top_search_layout.setSpacing(6)
+        self.left_layout.addWidget(self.top_search_bar)
+
         self.left_layout.addWidget(self.list_widget, 1)
 
         self.time_filter_bar = QWidget()
@@ -570,23 +600,8 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.time_filter_toggle_btn.clicked.connect(self._toggle_time_filter_bar)
         bottom_layout.addWidget(self.time_filter_toggle_btn)
 
-        self.search_input = LineEdit(use_default_style=False)
-        self.search_input.setPlaceholderText("🔍 " + self.tr("Search"))
-        self._apply_search_input_style()
-        self.search_input.textChanged.connect(self._on_search_changed)
-        self.search_input.textChanged.connect(self._update_search_background)
-        bottom_layout.addWidget(self.search_input, 1)
-        self.selection_manager.set_search_input(self.search_input)
-
-        self.clear_search_btn = QPushButton("×")
-        self.clear_search_btn.setFixedSize(24, 24)
-        self.clear_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.clear_search_btn.setToolTip(self.tr("Clear search"))
-        self.clear_search_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._apply_clear_search_btn_style()
-        self.clear_search_btn.clicked.connect(self._clear_search)
-        self.clear_search_btn.hide()
-        bottom_layout.addWidget(self.clear_search_btn)
+        # 搜索框已上移到顶部搜索栏，底部栏只保留筛选与设置入口
+        bottom_layout.addStretch(1)
 
         self.menu_btn = QPushButton("⚙")
         self.menu_btn.setFixedSize(28, 28)
@@ -597,6 +612,26 @@ class ClipboardWindow(QWidget, FramelessMixin):
         bottom_layout.addWidget(self.menu_btn)
 
         self._apply_time_filter_styles()
+
+        # 顶部搜索框（占满顶部搜索栏）
+        self.search_input = LineEdit(use_default_style=False)
+        self.search_input.setPlaceholderText("🔍 " + self.tr("Search"))
+        self.search_input.setClearButtonEnabled(False)
+        self._apply_search_input_style()
+        self.search_input.textChanged.connect(self._on_search_changed)
+        self.search_input.textChanged.connect(self._update_search_background)
+        self.top_search_layout.addWidget(self.search_input, 1)
+        self.selection_manager.set_search_input(self.search_input)
+
+        self.clear_search_btn = QPushButton("×")
+        self.clear_search_btn.setFixedSize(24, 24)
+        self.clear_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_search_btn.setToolTip(self.tr("Clear search"))
+        self.clear_search_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._apply_clear_search_btn_style()
+        self.clear_search_btn.clicked.connect(self._clear_search)
+        self.clear_search_btn.hide()
+        self.top_search_layout.addWidget(self.clear_search_btn)
 
         self.left_layout.addWidget(self.bottom_bar)
         self.content_layout.addWidget(self.left_widget, 1)
@@ -647,6 +682,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
             current_font_size=self.config.get_clipboard_font_size(),
             current_theme_name=self.theme_manager.get_current_theme().name,
             current_group_bar_position=self.group_bar_position,
+            current_preview_size=self._read_preview_size(),
             opacity_options=self.config.get_clipboard_window_opacity_options(),
             font_size_options=self.config.get_clipboard_font_size_options(),
             on_toggle_paste_html=self._toggle_paste_with_html,
@@ -661,6 +697,7 @@ class ClipboardWindow(QWidget, FramelessMixin):
             on_set_theme=self._set_theme,
             on_add_item=self._on_add_item_clicked,
             on_set_group_bar_position=self._set_group_bar_position,
+            on_set_preview_size=self._set_preview_size,
             anchor_pos=self.menu_btn.mapToGlobal(QPoint(0, 0)),
         )
 
@@ -901,7 +938,8 @@ class ClipboardWindow(QWidget, FramelessMixin):
         if item_data:
             popup = PreviewPopup.instance()
             pos = QCursor.pos()
-            popup.show_preview(item_data, pos, delay_ms=5)
+            # 传入主窗口矩形：大尺寸预览会自动显示在窗口旁边而不是盖住/超出屏幕
+            popup.show_preview(item_data, pos, delay_ms=5, avoid_rect=self.geometry())
 
     def _set_highlighted_item(self, item_id: Optional[int]):
         if self._item_delegate._highlighted_id != item_id:
@@ -1043,6 +1081,22 @@ class ClipboardWindow(QWidget, FramelessMixin):
         self.group_bar.set_position(position)
         self.config.set_clipboard_group_bar_position(position)
         self._apply_opacity()
+
+    def _read_preview_size(self) -> str:
+        """读取悬停预览尺寸档位（small/medium/large/xlarge），默认 large。"""
+        try:
+            level = self.config.get_clipboard_preview_size()
+            return level if level in ("small", "medium", "large", "xlarge") else "large"
+        except Exception:
+            return "large"
+
+    def _set_preview_size(self, level: str):
+        """设置悬停预览尺寸档位，下次悬停即时生效。"""
+        if level not in ("small", "medium", "large", "xlarge"):
+            return
+        self.config.set_clipboard_preview_size(level)
+        if self.preview_popup.isVisible():
+            self.preview_popup.hide_preview()
 
     def _is_paste_picker_surface(self, hwnd: int) -> bool:
         """hwnd 是不是这个拾取窗口本身。

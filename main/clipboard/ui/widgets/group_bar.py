@@ -418,7 +418,14 @@ class GroupBar(QWidget):
             self._content_layout.insertWidget(0, self)
         elif is_top:
             self._content_layout.removeWidget(self._left_widget)
-            self._left_layout.insertWidget(0, self)
+            # 顶部搜索栏必须始终位于分组栏之上：插到它的后面
+            insert_index = 0
+            for i in range(self._left_layout.count()):
+                widget = self._left_layout.itemAt(i).widget()
+                if widget is not None and widget.objectName() == "clipboardTopSearchBar":
+                    insert_index = i + 1
+                    break
+            self._left_layout.insertWidget(insert_index, self)
             self._content_layout.addWidget(self._left_widget, 1)
         else:
             self._content_layout.addWidget(self)

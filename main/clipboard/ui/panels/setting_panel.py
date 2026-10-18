@@ -36,6 +36,7 @@ def show_setting_menu(
     current_font_size: int,
     current_theme_name: str,
     current_group_bar_position: str = "right",
+    current_preview_size: str = "large",
     opacity_options: list,
     font_size_options: list,
     # 回调
@@ -51,6 +52,7 @@ def show_setting_menu(
     on_set_theme: Callable,
     on_add_item: Callable,
     on_set_group_bar_position: Optional[Callable] = None,
+    on_set_preview_size: Optional[Callable] = None,
     # 弹出锚点（全局坐标 QPoint）
     anchor_pos,
 ):
@@ -161,6 +163,21 @@ def show_setting_menu(
             act.setCheckable(True)
             act.setChecked(current_group_bar_position == key)
             act.triggered.connect(lambda _c, k=key: on_set_group_bar_position(k))
+
+    # ── 预览大小子菜单 ──
+    if on_set_preview_size is not None:
+        preview_menu = menu.addMenu(tr("Preview Size"))
+        preview_menu.setStyleSheet(menu_style)
+        for key, label in [
+            ("small", tr("Small")),
+            ("medium", tr("Medium")),
+            ("large", tr("Large")),
+            ("xlarge", tr("Extra Large")),
+        ]:
+            act = preview_menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(current_preview_size == key)
+            act.triggered.connect(lambda _c, k=key: on_set_preview_size(k))
 
     menu.addSeparator()
 

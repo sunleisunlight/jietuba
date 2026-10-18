@@ -1232,7 +1232,36 @@ impl PyClipboardManager {
         db.update_item(id, title.as_deref(), &content)
             .map_err(|e| PyRuntimeError::new_err(e))
     }
-    
+
+    /// 写入图片 OCR 文本（按 image_id 更新该图的所有历史记录）
+    ///
+    /// Args:
+    ///     image_id: 图片 ID
+    ///     ocr_text: OCR 识别出的文本；空串表示图中没有文字
+    ///
+    /// Returns:
+    ///     int: 被更新的记录数
+    #[pyo3(signature = (image_id, ocr_text))]
+    fn update_ocr_text(&self, image_id: String, ocr_text: String) -> PyResult<usize> {
+        let db = self.db.lock();
+        db.update_ocr_text_by_image(&image_id, &ocr_text)
+            .map_err(|e| PyRuntimeError::new_err(e))
+    }
+
+    /// 取出尚未做 OCR 的图片 image_id（去重，最新在前）
+    ///
+    /// Args:
+    ///     limit: 最多返回数量
+    ///
+    /// Returns:
+    ///     List[str]: 待识别的 image_id 列表
+    #[pyo3(signature = (limit=100))]
+    fn get_pending_ocr_images(&self, limit: i64) -> PyResult<Vec<String>> {
+        let db = self.db.lock();
+        db.get_pending_ocr_image_ids(limit)
+            .map_err(|e| PyRuntimeError::new_err(e))
+    }
+
     /// 移动剪贴板内容到指定位置（拖拽排序）
     /// 
     /// Args:

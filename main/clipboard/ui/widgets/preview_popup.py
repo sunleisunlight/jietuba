@@ -22,6 +22,35 @@ if TYPE_CHECKING:
     from ...core import ClipboardManager, ClipboardItem
 
 
+# 悬停预览尺寸档位。
+# 图片：small 保持历史固定值；其余档位为占鼠标所在屏幕可用区域的比例。
+# 文本：(最大宽, 最大高) 像素上限，随档位放大。
+PREVIEW_SIZE_LEVELS = ("small", "medium", "large", "xlarge")
+IMAGE_SCREEN_RATIO = {
+    "small": (400, 300),          # 固定像素（旧版行为）
+    "medium": (0.30, 0.38),
+    "large": (0.45, 0.55),
+    "xlarge": (2.0 / 3.0, 2.0 / 3.0),  # 特大：尽量占满屏幕的约三分之二
+}
+TEXT_MAX_SIZE = {
+    "small": (500, 400),
+    "medium": (620, 520),
+    "large": (820, 680),
+    "xlarge": (1100, 900),
+}
+
+
+def read_preview_size_level() -> str:
+    """读取设置中的预览尺寸档位，非法值回退为 large（默认档）。"""
+    try:
+        from settings import get_tool_settings_manager
+
+        level = get_tool_settings_manager().get_clipboard_preview_size()
+        return level if level in PREVIEW_SIZE_LEVELS else "large"
+    except Exception:
+        return "large"
+
+
 class PreviewPopup(QWidget):
     """悬停预览弹窗 - 支持 HTML 富文本和图片预览"""
     
@@ -168,24 +197,34 @@ class PreviewPopup(QWidget):
             return
         
         self._current_item_id = item.id
-        
+
+        # 先确定显示在哪个屏幕，再按设置档位计算尺寸上限
+        screen = QApplication.screenAt(pos) or QApplication.primaryScreen()
+        screen_geo = screen.availableGeometry() if screen else QApplication.primaryScreen().availableGeometry()
+
+        level = read_preview_size_level()
+        image_conf = IMAGE_SCREEN_RATIO[level]
+        if isinstance(image_conf[0], float):
+            image_max_w = max(300, int(screen_geo.width() * image_conf[0]))
+            image_max_h = max(240, int(screen_geo.height() * image_conf[1]))
+        else:
+            image_max_w, image_max_h = image_conf
+        text_max_w, text_max_h = TEXT_MAX_SIZE[level]
+
         # 根据内容类型显示不同预览
         if item.content_type == "image":
-            self._show_image_preview(item)
+            self._show_image_preview(item, image_max_w, image_max_h)
         elif item.content_type == "file":
-            self._show_file_preview(item)
+            self._show_file_preview(item, text_max_w, text_max_h)
         elif item.content_type == "text":
             # 文本类型也显示预览
-            self._show_text_preview(item)
+            self._show_text_preview(item, text_max_w, text_max_h)
         else:
             # 其他类型不显示预览
             return
-        
+
         # 调整位置（在触发位置右侧显示）
         self.adjustSize()
-
-        screen = QApplication.screenAt(pos) or QApplication.primaryScreen()
-        screen_geo = screen.availableGeometry() if screen else QApplication.primaryScreen().availableGeometry()
 
         gap = 10
         x = pos.x() + 20
@@ -240,7 +279,7 @@ class PreviewPopup(QWidget):
         self.move(x, y)
         self.show()
     
-    def _show_text_preview(self, item: 'ClipboardItem'):
+    def _show_text_preview(self, item: 'ClipboardItem', max_w: int = 500, max_h: int = 400):
         """显示纯文本预览 - 上面显示时间，下面显示完整内容"""
         # 显示时间标题
         if item.created_at:
@@ -249,28 +288,28 @@ class PreviewPopup(QWidget):
         else:
             self.title_label.setText(_tr("📝 文本"))
         self.title_label.show()
-        
+
         # 显示完整内容（限制长度避免卡顿）
-        content = item.content[:2000] if len(item.content) > 2000 else item.content
-        
+        content = item.content[:5000] if len(item.content) > 5000 else item.content
+
         # 先重置尺寸约束
         self.content_widget.setMinimumSize(0, 0)
-        self.content_widget.setMaximumSize(500, 400)
-        
+        self.content_widget.setMaximumSize(max_w, max_h)
+
         self.content_widget.setPlainText(content)
-        
+
         # 根据内容调整大小
-        self._adjust_content_size()
-        
+        self._adjust_content_size(max_w, max_h)
+
         self.content_widget.show()
         self.image_label.hide()
     
-    def _show_file_preview(self, item: 'ClipboardItem'):
+    def _show_file_preview(self, item: 'ClipboardItem', max_w: int = 500, max_h: int = 400):
         """显示文件预览 - 文件名和完整路径"""
         import json
         import os
         from collections import defaultdict
-        
+
         self.title_label.hide()  # 不显示标题
         self.image_label.hide()
         
@@ -330,52 +369,51 @@ class PreviewPopup(QWidget):
                         lines.pop()
             
             text = "\n".join(lines)
-            
+
             # 先重置尺寸约束
             self.content_widget.setMinimumSize(0, 0)
-            self.content_widget.setMaximumSize(500, 400)
-            
+            self.content_widget.setMaximumSize(max_w, max_h)
+
             self.content_widget.setPlainText(text)
-            
+
             # 根据内容自适应大小
-            self._adjust_content_size()
+            self._adjust_content_size(max_w, max_h)
             self.content_widget.show()
-            
+
         except Exception as e:
             log_exception(e, T("加载文本预览"))
             self.content_widget.setMinimumSize(0, 0)
-            self.content_widget.setMaximumSize(500, 400)
+            self.content_widget.setMaximumSize(max_w, max_h)
             self.content_widget.setPlainText(item.content)
-            self._adjust_content_size()
+            self._adjust_content_size(max_w, max_h)
             self.content_widget.show()
-    
-    def _adjust_content_size(self):
+
+    def _adjust_content_size(self, max_width: int = 500, max_height: int = 400):
         """根据内容调整 content_widget 大小 - 智能自适应宽度和高度"""
         doc = self.content_widget.document()
-        
+
         # 获取字体度量
         font_metrics = self.content_widget.fontMetrics()
         line_height = font_metrics.height()
-        
+
         # 获取纯文本内容
         text = doc.toPlainText()
         lines = text.split('\n')
         line_count = len(lines)
-        
+
         # 计算最长行的宽度（不换行情况下的理想宽度）
         max_line_width = 0
         for line in lines:
             line_width = font_metrics.horizontalAdvance(line)
             max_line_width = max(max_line_width, line_width)
-        
+
         # padding 计算：CSS padding 4px 上下 + 8px 左右 + 边框 2px + 文档边距 2px
         h_padding = 8 * 2 + 2 * 2 + 4  # 左右 padding + 边框 + 余量
         v_padding = 4 * 2 + 2 * 2 + 4  # 上下 padding + 边框 + 文档边距
-        
+
         ideal_width = max_line_width + h_padding
-        
+
         # 限制最大宽度
-        max_width = 500
         min_width = 80
         
         if ideal_width <= max_width:
@@ -393,10 +431,9 @@ class PreviewPopup(QWidget):
             # 重新获取文档高度（换行后）
             actual_height = int(doc.size().height()) + v_padding
         
-        # 限制高度范围
-        max_height = 550
+        # 限制高度范围（max_height 由尺寸档位决定）
         min_height = line_height + v_padding  # 至少能显示一行
-        
+
         actual_height = min(actual_height, max_height)
         actual_height = max(actual_height, min_height)
         
@@ -418,28 +455,24 @@ class PreviewPopup(QWidget):
         self.content_widget.show()
         self.image_label.hide()
     
-    def _show_image_preview(self, item: 'ClipboardItem'):
-        """显示图片预览"""
+    def _show_image_preview(self, item: 'ClipboardItem', max_w: int = 400, max_h: int = 300):
+        """显示图片预览（按尺寸档位缩放，小图不放大以免模糊）"""
         self.title_label.hide()  # 图片预览不显示标题
         self.content_widget.hide()
-        
+
         # 尝试加载完整图片
         if self._manager and item.image_id:
             image_data = self._manager.get_image_data(item.image_id)
             if image_data:
                 pixmap = QPixmap()
                 pixmap.loadFromData(image_data)
-                # 缩放到合适大小
-                scaled = pixmap.scaled(
-                    400, 300,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                self.image_label.setPixmap(scaled)
-                self.image_label.setFixedSize(scaled.size())
-                self.image_label.show()
-                return
-        
+                if not pixmap.isNull():
+                    scaled = self._scale_preview_image(pixmap, max_w, max_h)
+                    self.image_label.setPixmap(scaled)
+                    self.image_label.setFixedSize(scaled.size())
+                    self.image_label.show()
+                    return
+
         # Fallback: 使用缩略图
         if item.thumbnail:
             import base64
@@ -449,16 +482,25 @@ class PreviewPopup(QWidget):
                     image_data = base64.b64decode(data)
                     pixmap = QPixmap()
                     pixmap.loadFromData(image_data)
-                    scaled = pixmap.scaled(
-                        400, 300,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    )
+                    scaled = self._scale_preview_image(pixmap, max_w, max_h)
                     self.image_label.setPixmap(scaled)
                     self.image_label.setFixedSize(scaled.size())
                     self.image_label.show()
             except Exception as e:
                 log_exception(e, T("加载图片预览"))
+
+    @staticmethod
+    def _scale_preview_image(pixmap: QPixmap, max_w: int, max_h: int) -> QPixmap:
+        """等比缩放预览图：大图收到档位上限内，小图保持原尺寸（不放大）。"""
+        if pixmap.isNull():
+            return pixmap
+        target_w = min(max_w, pixmap.width())
+        target_h = min(max_h, pixmap.height())
+        return pixmap.scaled(
+            target_w, target_h,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
     
     def hide_preview(self):
         """隐藏预览"""

@@ -204,7 +204,9 @@ class ClipboardItemWidget(QFrame):
         self.hover_entered.emit(self.item.id)
         popup = PreviewPopup.instance()
         pos = QCursor.pos()
-        popup.show_preview(self.item, pos, delay_ms=500)
+        host_window = self.window()
+        avoid_rect = host_window.geometry() if host_window is not None else None
+        popup.show_preview(self.item, pos, delay_ms=500, avoid_rect=avoid_rect)
 
     @safe_event
     def leaveEvent(self, event):

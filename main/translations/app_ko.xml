@@ -1747,6 +1747,26 @@ Replace it?</source>
         <translation>▲ 위쪽</translation>
     </message>
     <message>
+        <source>Preview Size</source>
+        <translation>미리보기 크기</translation>
+    </message>
+    <message>
+        <source>Small</source>
+        <translation>작게</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>보통</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>크게</translation>
+    </message>
+    <message>
+        <source>Extra Large</source>
+        <translation>아주 크게</translation>
+    </message>
+    <message>
         <source>Max Display Lines</source>
         <translation>최대 표시 줄 수</translation>
     </message>
