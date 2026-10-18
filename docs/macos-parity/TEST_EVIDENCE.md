@@ -53,3 +53,13 @@ Windows候选CI、源码Commit、Tag/远端引用在后续批次追加。Finder�
 - C批次 `macos-release-ujgi7u90` 保留作为失败调试证据，**不是最新候选**；不得继续签名/发布旧暂存文件。
 - 可选YAML本地解析检查未执行成功：项目venv无PyYAML（ModuleNotFoundError），未为此安装新依赖；以GitHub工作流实际解析结果为准。
 - 安全凭据检查仅查看`.tauri`文件名与已有签名脚本的入口，确认均要求环境口令；未读取私钥内容或搜寻秘密。
+
+## T1-20261019-E：候选追溯与包体复核
+
+- 候选源码Commit `c5ac3985a90a75d89a8faa2aabcebf6d4fe34372`，已push origin/fix/macos-native-parity；`git ls-remote`匹配。v2.8.2 tag尚不存在。
+- `gh workflow run ci.yml --ref fix/macos-native-parity -f parity_task1=true` 返回run `39166063824`。GitHub已解析新增输入；x64/arm64运行中。未取得exe，不记录为通过；不是完整Windows交互验收。
+- 最终archive SHA256：`941e039d4fd980ab5fd94077c6e618a3a3fa1e5b9ca0a5cfe4e0923e00aa739b`；最终DMG SHA256：`bc86d33a22a3e6f5be520f42395339e7be2f9e8a3c1b99a8c0a3acb81f1fabe8`。
+- 归档读取校验：Bundle ID、版本2.8.2、主程序hash与dist最终App一致，退出0。
+- DMG只读挂载到本轮mktemp目录，验证包签名/版本/主程序hash一致，随后只卸载该测试挂载，退出0。未安装/启动；不碰用户此前挂载的旧DMG。
+- 使用隔离Python导入最终App/Contents/Frameworks下四个.so均成功（gifrecorder/longstitch/pyclipboard/ppocr_rust）。这是原生加载检查，不是App权限身份或OCR/录制功能验证。
+- 旧App日志/采样是2.8.1证据，绝不计作候选2.8.2截图/权限成功。旧进程未强杀。

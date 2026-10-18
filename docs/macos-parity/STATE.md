@@ -8,7 +8,7 @@
 - 分支：`fix/macos-native-parity`。不合回 main。
 - Windows 源码基线：v2.7.0 / `a26380ea80f73af029e7fc5f0ada65584fa1ef92`，2026-10-17。
 - Windows 正式软件基线：**待核验**，未取得可追溯的正式 exe。见 BASELINE.md。
-- Mac 候选版本：2.8.2；基于 `c788d1925cd36dde6e55bd21a6af3ad51be97f81` 的本轮任务1改动，候选提交与CI结果待下次更新本记录。
+- Mac 候选版本：2.8.2；源码提交 `c5ac3985a90a75d89a8faa2aabcebf6d4fe34372`，已推送origin并用ls-remote核验。本记录后续纯文档提交不改变候选App代码。
 - 原有 README.md / README_zh-CN.md / README_JA.md 草稿和 graphify-out-main/ 保留，未纳入本任务提交。
 - 旧 worktree `/Users/sunlei/codex/jietuba-unified`、`/Users/sunlei/codex/jietuba-macos` 未改动；不可从旧分支覆盖本轮修复。
 
@@ -30,7 +30,8 @@
 - 签名使用已有私钥路径；当前会话未注入口令，单次空口令尝试返回 Wrong password。停止尝试，不读取密码/私钥、不猜测凭据。
 - 旧安装 `/Applications/积磊截图.app` 为2.8.1，PID59837。两次 Computer Use 获取该App超时，Dock获取也超时，Finder可用。`sample`显示主线程在正常事件循环等待，**不能据此断言进程挂死**。未终止、未替换旧App。
 - 自启开关、权限撤销/授权、真实首次配置和实际重新登录尚未测试；未改变用户真实TCC或LaunchAgent。
-- Windows候选CI尚待提交后触发并记录；主线旧运行x64在lint失败，不能算Windows门禁通过。
+- Windows候选CI：[39166063824](https://github.com/sunleisunlight/jietuba/actions/runs/39166063824)，精确SHA=c5ac3985a90a75d89a8faa2aabcebf6d4fe34372；已显式dispatch任务1定向门禁，当前运行中，不能算通过。完整套件默认流程未关闭。
+- 正式Tag `v2.8.2` 未创建，四件套/真实App验收未闭环，不冒称正式发布完成。没有生产发布、没有合回main。
 
 ## 接续顺序
 
@@ -41,3 +42,5 @@
 5. 若封版前修复运行代码，重新构建并核对候选哈希；不可覆盖任何已封版产物。若2.8.2已被别处封版则递增版本。
 
 最新报告：[task-1.md](task-1.md)，证据：[TEST_EVIDENCE.md](TEST_EVIDENCE.md)，700行矩阵：[FEATURE_MATRIX.md](FEATURE_MATRIX.md)。源码发现项含重复入口与条件候选，不代表700项Windows独立功能已全部核实。
+
+矩阵当前统计：未检查669，已实现待实测21，环境阻塞10，测试失败0，原生等效已验证0，对齐已实测0。无已验证状态不等于代码完全不可用；只表示本轮打包App证据尚未取得。
