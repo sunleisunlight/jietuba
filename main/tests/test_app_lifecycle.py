@@ -195,3 +195,40 @@ def test_windows_taskbar_icon(qapp):
     WindowsLifecycleBackend().apply_window_icon(window, QIcon(pixmap))
     assert window._native_icon_handle
     window.deleteLater()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native Unicode shell link")
+def test_windows_unicode_shortcut_roundtrip(tmp_path):
+    import comtypes
+    from comtypes.persist import IPersistFile
+    from comtypes.shelllink import IShellLinkW, ShellLink
+    from platforms.windows.lifecycle import WindowsLifecycleBackend
+
+    folder = tmp_path / "中文 & user's folder"
+    folder.mkdir()
+    target = folder / "积磊截图.exe"
+    target.write_bytes(b"test fixture; never executed")
+    shortcut = folder / "积磊截图.lnk"
+    arguments = '--sample "测试 & quote"'
+    WindowsLifecycleBackend().create_executable_shortcut(
+        shortcut, target, arguments=arguments, working_directory=folder)
+    # Read the actual saved link through Unicode COM, not merely file existence.
+    link = comtypes.CoCreateInstance(ShellLink._reg_clsid_, interface=IShellLinkW)
+    link.QueryInterface(IPersistFile).Load(str(shortcut), 0)
+    assert Path(link.GetPath(0)) == target
+    assert Path(link.GetWorkingDirectory()) == folder
+    assert link.GetArguments() == arguments
+    assert Path(link.GetIconLocation()[0]) == target
+
+
+def test_onefile_keeps_lifecycle_native_dependencies():
+    import ast
+    root = Path(__file__).resolve().parents[2]
+    tree = ast.parse((root / "build_with_ocr_onefile.py").read_text(encoding="utf-8-sig"))
+    lists = {target.id: ast.literal_eval(node.value)
+             for node in tree.body if isinstance(node, ast.Assign)
+             for target in node.targets if isinstance(target, ast.Name)
+             and target.id in ("hiddenimports", "hidden_imports", "excludes")}
+    assert "PySide6.QtNetwork" not in lists["excludes"]
+    hidden = lists.get("hiddenimports", lists.get("hidden_imports", []))
+    assert {"PySide6.QtNetwork", "comtypes.shelllink", "comtypes.persist"} <= set(hidden)

@@ -9,6 +9,45 @@ class WindowsLifecycleBackend(LifecycleBackend):
     key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
     name = "JileiScreenshot"
 
+    def create_executable_shortcut(self, destination, target, *, arguments="", working_directory=None):
+        """Use IShellLinkW, not WScript's ANSI-sensitive automation wrapper.
+
+        comtypes is already shipped for UI Automation; no win32com/pythoncom
+        dependency or PowerShell subprocess is introduced into the onefile.
+        """
+        import comtypes
+        from comtypes.persist import IPersistFile
+        from comtypes.shelllink import IShellLinkW, ShellLink
+
+        destination, target = Path(destination), Path(target)
+        if not target.is_file():
+            raise FileNotFoundError(target)
+        if not destination.parent.is_dir():
+            raise FileNotFoundError(destination.parent)
+        initialized = False
+        link = persistence = None
+        try:
+            try:
+                comtypes.CoInitializeEx(comtypes.COINIT_APARTMENTTHREADED)
+                initialized = True
+            except OSError as error:
+                # An existing MTA is usable too; do not uninitialize its owner.
+                if (getattr(error, "winerror", 0) or 0) & 0xFFFFFFFF != 0x80010106:
+                    raise
+            link = comtypes.CoCreateInstance(ShellLink._reg_clsid_, interface=IShellLinkW)
+            link.SetPath(str(target))
+            link.SetWorkingDirectory(str(working_directory or target.parent))
+            link.SetArguments(arguments)
+            link.SetIconLocation(str(target), 0)
+            persistence = link.QueryInterface(IPersistFile)
+            persistence.Save(str(destination), True)
+        finally:
+            persistence = link = None  # release interfaces before balancing COM
+            if initialized:
+                comtypes.CoUninitialize()
+        if not destination.is_file() or not destination.stat().st_size:
+            raise RuntimeError(f"快捷方式未生成: {destination}")
+
     def autostart_enabled(self):
         import winreg
         try:

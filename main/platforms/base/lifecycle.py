@@ -17,6 +17,10 @@ class LifecycleBackend(ABC):
     def apply_window_icon(self, widget, icon):
         widget.setWindowIcon(icon)
 
+    def create_executable_shortcut(self, destination, target, *, arguments="", working_directory=None):
+        """Create a native executable launcher; raise if unsupported or failed."""
+        raise NotImplementedError("This platform does not use executable shortcuts")
+
     @abstractmethod
     def autostart_enabled(self):
         """Read this application's login registration only."""

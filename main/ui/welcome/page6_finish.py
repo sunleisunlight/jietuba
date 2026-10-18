@@ -270,15 +270,14 @@ class FinishPage(BasePage):
     def _create_desktop_shortcut(cls):
         """在桌面创建指向当前程序的快捷方式。
 
-        Windows：PowerShell WScript.Shell .lnk；macOS：对 .app 建符号链接。
+        Windows：平台后端创建Unicode .lnk；macOS：对 .app 建符号链接。
         """
         import sys
         if sys.platform == "darwin":
             cls._create_desktop_symlink()
             return
-        import base64
         import os
-        import subprocess
+        from platforms.factory import get_lifecycle_backend
 
         desktop_lnk = cls._get_desktop_lnk_path()
         try:
@@ -294,42 +293,10 @@ class FinishPage(BasePage):
                 arguments = f'"{main_script}"'
                 working_directory = os.path.dirname(main_script)
 
-            def _ps_quote(value: str) -> str:
-                return "'" + value.replace("'", "''") + "'"
-
-            script = "\n".join([
-                f"$shortcutPath = {_ps_quote(desktop_lnk)}",
-                f"$targetPath = {_ps_quote(target_path)}",
-                f"$workingDirectory = {_ps_quote(working_directory)}",
-                f"$arguments = {_ps_quote(arguments)}",
-                "$shell = New-Object -ComObject WScript.Shell",
-                "$shortcut = $shell.CreateShortcut($shortcutPath)",
-                "$shortcut.TargetPath = $targetPath",
-                "$shortcut.WorkingDirectory = $workingDirectory",
-                "if ($arguments.Length -gt 0) { $shortcut.Arguments = $arguments }",
-                "$shortcut.IconLocation = $targetPath",
-                "$shortcut.Save()",
-            ])
-            encoded_script = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-            result = subprocess.run(
-                [
-                    "powershell.exe",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-EncodedCommand",
-                    encoded_script,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            get_lifecycle_backend().create_executable_shortcut(
+                desktop_lnk, target_path,
+                arguments=arguments, working_directory=working_directory,
             )
-            if result.returncode != 0:
-                error_text = (result.stderr or result.stdout or "").strip()
-                raise RuntimeError(error_text or f"PowerShell exited with code {result.returncode}")
 
             log_info(T("已创建桌面快捷方式: {desktop_lnk}", desktop_lnk=desktop_lnk), "page6")
         except Exception as e:

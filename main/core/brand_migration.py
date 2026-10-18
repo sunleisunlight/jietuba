@@ -324,7 +324,7 @@ def migrate_windows_desktop_shortcut(desktop_dir: str | None = None,
                                      exe_path: str | None = None,
                                      legacy_lnk: str = LEGACY_SHORTCUT_NAME,
                                      new_lnk: str = NEW_SHORTCUT_NAME) -> bool:
-    """把桌面上的旧品牌快捷方式改名并指向新 exe（WScript.Shell COM）。"""
+    """把桌面上的旧品牌快捷方式改名并指向新 exe（原生Unicode接口）。"""
     if sys.platform != "win32":
         return False
 
@@ -343,38 +343,8 @@ def migrate_windows_desktop_shortcut(desktop_dir: str | None = None,
     if not os.path.isfile(exe_path):
         return False
     try:
-        # 与欢迎向导（page6_finish）保持同一套 PowerShell WScript.Shell 方案：
-        # onefile 打包不收集 win32com，COM 直调在生产环境会 ImportError。
-        import base64
-        import subprocess
-
-        working_dir = os.path.dirname(exe_path)
-
-        def _ps_quote(value: str) -> str:
-            return "'" + value.replace("'", "''") + "'"
-
-        script = "\n".join([
-            f"$shortcutPath = {_ps_quote(new_lnk_path)}",
-            f"$targetPath = {_ps_quote(exe_path)}",
-            f"$workingDirectory = {_ps_quote(working_dir)}",
-            "$shell = New-Object -ComObject WScript.Shell",
-            "$shortcut = $shell.CreateShortcut($shortcutPath)",
-            "$shortcut.TargetPath = $targetPath",
-            "$shortcut.WorkingDirectory = $workingDirectory",
-            "$shortcut.IconLocation = $targetPath",
-            "$shortcut.Save()",
-        ])
-        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
-        result = subprocess.run(
-            [
-                "powershell.exe", "-NoProfile", "-NonInteractive",
-                "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
-            ],
-            capture_output=True, text=True, timeout=10, check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        if result.returncode != 0 or not os.path.isfile(new_lnk_path):
-            raise RuntimeError((result.stderr or result.stdout or "powershell failed").strip())
+        from platforms.factory import get_lifecycle_backend
+        get_lifecycle_backend().create_executable_shortcut(new_lnk_path, exe_path)
         try:
             os.remove(old_lnk_path)
         except OSError:
