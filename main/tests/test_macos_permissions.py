@@ -74,3 +74,33 @@ def test_open_system_settings_routes():
     for cmd in calls:
         assert cmd[0] == "open"
         assert "x-apple.systempreferences:" in cmd[1]
+
+
+def test_denial_and_api_failure_are_distinguished(monkeypatch):
+    from platforms.macos import permissions
+    from platforms.base.permissions import PermissionStatus
+    backend = permissions.MacOSPermissionBackend()
+    monkeypatch.setattr(permissions, "_cg_preflight", lambda: False)
+    monkeypatch.setattr(permissions, "_ax_is_trusted", lambda: False)
+    assert backend.screen_capture_status() == PermissionStatus.DENIED
+    assert backend.accessibility_status() == PermissionStatus.DENIED
+
+    def failed():
+        raise RuntimeError("synthetic native API failure")
+
+    monkeypatch.setattr(permissions, "_cg_preflight", failed)
+    monkeypatch.setattr(permissions, "_ax_is_trusted", failed)
+    assert backend.screen_capture_status() == PermissionStatus.UNKNOWN
+    assert backend.accessibility_status() == PermissionStatus.UNKNOWN
+
+
+def test_permission_request_can_recover(monkeypatch):
+    from platforms.macos import permissions
+    from platforms.base.permissions import PermissionStatus
+    state = {"allowed": False}
+    monkeypatch.setattr(permissions, "_cg_preflight", lambda: state["allowed"])
+    monkeypatch.setattr(permissions, "_cg_request", lambda: state.update(allowed=True))
+    backend = permissions.MacOSPermissionBackend()
+    assert backend.screen_capture_status() == PermissionStatus.DENIED
+    assert backend.request_screen_capture()
+    assert backend.screen_capture_status() == PermissionStatus.GRANTED

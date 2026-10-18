@@ -1004,6 +1004,14 @@ class SettingsDialog(FrostedFramelessDialog):
             return
 
         # 防止保存过程中（比如语言切换触发的窗口重建）触发未保存确认弹窗
+        if hasattr(self, 'autostart_toggle'):
+            from ..welcome.page6_finish import FinishPage as _FP
+            try:
+                _FP._set_autostart(self.autostart_toggle.isChecked())
+            except Exception as error:
+                log_exception(error, T("设置开机自启"))
+                show_warning_dialog(self, self.tr("开机自启设置失败"), str(error))
+                return
         self._skip_unsaved_close_prompt = True
 
         # 0. 快捷键
@@ -1146,9 +1154,6 @@ class SettingsDialog(FrostedFramelessDialog):
             self.config_manager.set_translation_preserve_formatting(self.preserve_formatting_toggle.isChecked())
 
         # 6. 杂项
-        if hasattr(self, 'autostart_toggle'):
-            from ..welcome.page6_finish import FinishPage as _FP
-            _FP._set_autostart(self.autostart_toggle.isChecked())
         if hasattr(self, 'show_main_window_toggle'):
             self.config_manager.set_show_main_window(self.show_main_window_toggle.isChecked())
         if hasattr(self, 'pin_auto_toolbar_toggle'):
@@ -1490,35 +1495,13 @@ class SettingsDialog(FrostedFramelessDialog):
             event.accept()
 
     def _apply_taskbar_icon(self):
+        from platforms.factory import get_lifecycle_backend
+        from core.resource_manager import ResourceManager
         try:
-            import ctypes, tempfile
-            from PySide6.QtGui import QPixmap, QIcon, QPainter
-            from core.resource_manager import ResourceManager
-
-            _icon_path = ResourceManager.get_resource_path("svg/托盘.svg")
-            if not os.path.exists(_icon_path):
-                return
-
-            pix = QPixmap(32, 32)
-            pix.fill(Qt.GlobalColor.transparent)
-            p = QPainter(pix)
-            QIcon(_icon_path).paint(p, 0, 0, 32, 32)
-            p.end()
-
-            tmp_ico = os.path.join(tempfile.gettempdir(), "jilei_screenshot_win_icon.ico")
-            pix.save(tmp_ico, "ICO")
-
-            IMAGE_ICON = 1
-            LR_LOADFROMFILE = 0x10
-            hicon = ctypes.windll.user32.LoadImageW(None, tmp_ico, IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
-            if hicon:
-                hwnd = int(self.winId())
-                WM_SETICON = 0x0080
-                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 1, hicon)
-                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, 0, hicon)
-        except Exception as e:
-            log_exception(e, T("设置任务栏图标"))
-
+            icon = QIcon(ResourceManager.get_resource_path("svg/托盘.svg"))
+            get_lifecycle_backend().apply_window_icon(self, icon)
+        except Exception as error:
+            log_exception(error, T("设置任务栏图标"))
     def refresh_settings(self):
         """从配置管理器重新读取所有设置并更新界面"""
         if hasattr(self, 'hotkey_input'):

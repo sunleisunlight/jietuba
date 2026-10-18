@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.8.1"
+APP_VERSION = "2.8.2"
 
 
 def create_fallback_app_icon():
@@ -89,6 +89,24 @@ class MainApp(QObject):
         super().__init__()
         self.app = QApplication(sys.argv)
         self.app.setQuitOnLastWindowClosed(False)
+        self.app.setApplicationName("JileiScreenshot")
+        self.app.setApplicationDisplayName("积磊截图")
+        from core.instance_broker import InstanceBroker, refuse_legacy_owner
+        from platforms.factory import get_lifecycle_backend
+        self.lifecycle = get_lifecycle_backend()
+        self._instance = InstanceBroker(self.app)
+        try:
+            primary = self._instance.acquire(activate="--autostart" not in sys.argv)
+            if primary:
+                refuse_legacy_owner()
+        except RuntimeError as error:
+            show_error_dialog(None, "积磊截图启动失败", str(error))
+            raise SystemExit(1) from error
+        if not primary:
+            raise SystemExit(0)
+        self.app.aboutToQuit.connect(self._instance.close)
+        self._instance.activate_requested.connect(self.activate_existing)
+        self.lifecycle.install_reopen_handler(self.activate_existing)
         
         # Config - 使用统一的设置管理器
         self.config_manager = get_tool_settings_manager()
@@ -97,8 +115,8 @@ class MainApp(QObject):
         try:
             from account import get_account
             get_account().startup()
-        except Exception:
-            pass
+        except Exception as error:
+            log_exception(error, T("恢复账号状态"))
 
         # 应用界面主题必须在创建任何窗口前初始化。截图强调色由
         # core.theme 单独管理，二者职责互不影响。
@@ -194,6 +212,21 @@ class MainApp(QObject):
         from core.bootstrap import PreloadManager
         self._preloader = PreloadManager(self)
         self._preloader.build_and_start()
+
+    def activate_existing(self):
+        """Reopen without interrupting an active capture, wizard or modal editor."""
+        self.lifecycle.activate()
+        modal = self.app.activeModalWidget()
+        active = modal or getattr(self, "screenshot_window", None)
+        if active is not None and active.isVisible():
+            active.raise_()
+            active.activateWindow()
+            return
+        if not hasattr(self, "_preloader"):
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, self.activate_existing)
+            return
+        self.open_settings()
 
     def _on_about_to_quit(self):
         """应用退出前收尾"""
@@ -631,19 +664,19 @@ class MainApp(QObject):
         # macOS：截图前主动检查/请求屏幕录制权限。
         # mss 在无权限时返回黑屏而不抛异常，所以必须先预检并主动请求——
         # CGRequestScreenCaptureAccess() 会弹系统授权框；用户未授予时给出引导。
-        if sys.platform == "darwin":
-            try:
-                from platforms import get_platform_backend
-                from platforms.base.permissions import PermissionStatus
-                perm = get_platform_backend().permissions
+        try:
+            from platforms import get_platform_backend
+            from platforms.base.permissions import PermissionStatus
+            perm = get_platform_backend().permissions
+            if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                perm.request_screen_capture()
                 if perm.screen_capture_status() != PermissionStatus.GRANTED:
-                    perm.request_screen_capture()
-                    # request 立即返回，不等待用户操作；此时仍未授权就弹引导框
-                    if perm.screen_capture_status() != PermissionStatus.GRANTED:
-                        self._on_capture_failed("屏幕录制")
-                        return
-            except Exception as e:
-                log_exception(e, T("检查屏幕录制权限"))
+                    self._on_capture_failed("屏幕录制")
+                    return
+        except Exception as e:
+            log_exception(e, T("检查屏幕录制权限"))
+            self._on_capture_failed(T("无法读取截图权限: {e}", e=e))
+            return
 
         # 后台截图线程正在运行时也忽略重复触发
         if getattr(self, '_capture_thread', None) and self._capture_thread.isRunning():
@@ -716,7 +749,7 @@ class MainApp(QObject):
             return
 
         from ui.dialogs import show_error_dialog
-        show_error_dialog(_tr("截图失败"), message)
+        show_error_dialog(None, _tr("截图失败"), message)
 
     def _open_screen_recording_settings(self):
         """打开 macOS 屏幕录制权限设置页。"""

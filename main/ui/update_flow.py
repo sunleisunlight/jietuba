@@ -24,7 +24,7 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QLabel, QProgressBar, QPushButton,
     QVBoxLayout,

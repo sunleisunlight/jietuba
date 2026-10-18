@@ -259,7 +259,7 @@ class TestSidebarCheckBusyState:
 
         monkeypatch.setattr(update_flow.updater, "check_for_update", _slow_check)
         monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: None)
-        controller = _reset_controller(monkeypatch)
+        _reset_controller(monkeypatch)
 
         from ui.settings_ui.dialog import SettingsDialog
 

@@ -246,6 +246,9 @@ def verify_app():
 
 
 def main():
+    # A bundled filename is not proof that dyld can load the extension.
+    # Fail before touching the prior local build when native symbols are missing.
+    run([PYTHON, "-c", "import gifrecorder, longstitch, pyclipboard, ppocr_rust; print('Native imports OK')"])
     ensure_icns()
     if APP.exists():
         shutil.rmtree(APP)

@@ -15,6 +15,8 @@ import tempfile
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--coverage", action="store_true")
+    parser.add_argument("--module", action="append", help="Exact test module basename; repeatable")
+    parser.add_argument("--timeout", type=int, default=180, help="Per-module timeout in seconds")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     report_root = root / "build" / "test-reports"
@@ -25,6 +27,14 @@ def main():
     env["COVERAGE_FILE"] = str(run_dir / ".coverage")
     failures = []
     modules = sorted((root / "main" / "tests").glob("test_*.py"))
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+    if args.module:
+        selected = set(args.module)
+        missing = selected - {module.name for module in modules}
+        if missing:
+            parser.error(f"Unknown modules: {sorted(missing)}")
+        modules = [module for module in modules if module.name in selected]
     print(f"Running {len(modules)} modules; reports: {run_dir}", flush=True)
     for module in modules:
         cmd = [sys.executable, "-m", "pytest", str(module),
@@ -34,7 +44,12 @@ def main():
             cmd += ["--cov", "--cov-append", "--cov-report=",
                     f"--cov-config={root / '.coveragerc'}"]
         print(f"\n=== {module.name} ===", flush=True)
-        result = subprocess.run(cmd, cwd=root, env=env, check=False)
+        try:
+            result = subprocess.run(cmd, cwd=root, env=env, check=False, timeout=args.timeout)
+        except subprocess.TimeoutExpired:
+            failures.append((module.name, "timeout"))
+            print(f"TIMEOUT {module.name}: {args.timeout}s; counted as failure", flush=True)
+            continue
         # pytest 5 means this file contains no collected tests (the repository
         # includes a manual translation comparison script named test_*.py).
         if result.returncode == 5:

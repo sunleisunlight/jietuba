@@ -7,6 +7,23 @@ accessibility/coordinates/permissions），业务代码通过
 """
 import sys
 
+_lifecycle = None
+
+
+def get_lifecycle_backend():
+    """Lifecycle is lazy and independent of capture/clipboard initialization."""
+    global _lifecycle
+    if _lifecycle is None:
+        if sys.platform == "darwin":
+            from .macos.lifecycle import MacOSLifecycleBackend
+            _lifecycle = MacOSLifecycleBackend()
+        elif sys.platform == "win32":
+            from .windows.lifecycle import WindowsLifecycleBackend
+            _lifecycle = WindowsLifecycleBackend()
+        else:
+            raise RuntimeError(f"不支持的平台: {sys.platform}")
+    return _lifecycle
+
 
 
 class PlatformBackend:

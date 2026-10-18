@@ -25,7 +25,7 @@
 """
 import pytest
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QColor, QFont, QImage, QRegion
+from PySide6.QtGui import QColor, QFont, QImage
 from PySide6.QtWidgets import QApplication
 
 from canvas.handle_editor import LayerEditor

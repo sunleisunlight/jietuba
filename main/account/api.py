@@ -14,8 +14,6 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from core.logger import log_warning, T
-
 from . import constants as C
 from .device import get_device_id
 

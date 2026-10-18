@@ -5,8 +5,8 @@
 克制的完成动画 + 最终设置
 """
 
-import io
 import math
+import sys
 
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from PySide6.QtCore import Qt, QTimer, QElapsedTimer, QEasingCurve, QPointF
@@ -236,124 +236,21 @@ class FinishPage(BasePage):
             )
         layout.addWidget(row_desktop)
 
-    # ── 开机自启辅助（注册表 HKCU\Run 方案）─────────────────
-
-    _AUTOSTART_REG_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-    _AUTOSTART_APP_NAME = "JileiScreenshot"
-
-    @classmethod
-    def _get_exe_path(cls) -> str:
-        """获取当前运行的可执行文件路径。
-        打包后（PyInstaller frozen）返回 .exe 路径；
-        开发模式下返回 python.exe + 主脚本路径。
-        """
-        import sys, os
-        if getattr(sys, 'frozen', False):
-            return sys.executable
-        # 开发模式：python.exe main/main_app.py
-        main_script = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "main_app.py")
-        )
-        return f'"{sys.executable}" "{main_script}"'
-
-    _AUTOSTART_LAUNCH_AGENT_LABEL = "cc.jilei.jileiscreenshot"
-
-    @classmethod
-    def _get_launch_agent_path(cls) -> str:
-        import os
-        return os.path.join(
-            os.path.expanduser("~"),
-            "Library", "LaunchAgents", f"{cls._AUTOSTART_LAUNCH_AGENT_LABEL}.plist",
-        )
-
+    # Lifecycle native operations live behind the platform factory.
     @classmethod
     def _get_autostart(cls) -> bool:
-        """检测开机自启项：Windows=注册表 HKCU\\Run；macOS=LaunchAgent plist"""
-        import os
-        import sys
-        if sys.platform == "win32":
-            import winreg
-            try:
-                key = winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER,
-                    cls._AUTOSTART_REG_KEY,
-                    0,
-                    winreg.KEY_READ,
-                )
-                try:
-                    winreg.QueryValueEx(key, cls._AUTOSTART_APP_NAME)
-                    return True
-                except FileNotFoundError:
-                    return False
-                finally:
-                    winreg.CloseKey(key)
-            except Exception:
-                return False
-        return os.path.exists(cls._get_launch_agent_path())
+        from platforms.factory import get_lifecycle_backend
+        try:
+            return get_lifecycle_backend().autostart_enabled()
+        except Exception as error:
+            log_exception(error, T("读取开机自启"))
+            return False
 
     @classmethod
     def _set_autostart(cls, enabled: bool):
-        """启用：Windows 写注册表 / macOS 写 LaunchAgent；禁用：删除对应项"""
-        import sys
-        if sys.platform == "win32":
-            import winreg
-            try:
-                key = winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER,
-                    cls._AUTOSTART_REG_KEY,
-                    0,
-                    winreg.KEY_SET_VALUE,
-                )
-                if enabled:
-                    exe_path = cls._get_exe_path()
-                    winreg.SetValueEx(key, cls._AUTOSTART_APP_NAME, 0, winreg.REG_SZ, exe_path)
-                    log_info(T("已写入开机自启注册表项: {exe_path}", exe_path=exe_path), "page6")
-                else:
-                    try:
-                        winreg.DeleteValue(key, cls._AUTOSTART_APP_NAME)
-                        log_info(T("已删除开机自启注册表项"), "page6")
-                    except FileNotFoundError:
-                        pass  # 不存在则忽略
-                winreg.CloseKey(key)
-            except Exception as e:
-                log_exception(e, T("设置开机自启"))
-            return
-
-        # macOS：LaunchAgent plist（RunAtLoad）
-        plist_path = cls._get_launch_agent_path()
-        try:
-            if enabled:
-                if getattr(sys, 'frozen', False):
-                    program = [sys.executable]
-                else:
-                    main_script = os.path.abspath(
-                        os.path.join(os.path.dirname(__file__), "..", "..", "main_app.py")
-                    )
-                    program = [sys.executable, main_script]
-                plist = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{cls._AUTOSTART_LAUNCH_AGENT_LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>{''.join(f"<string>{arg}</string>" for arg in program)}</array>
-    <key>RunAtLoad</key>
-    <true/>
-</dict>
-</plist>
-"""
-                os.makedirs(os.path.dirname(plist_path), exist_ok=True)
-                with io.open(plist_path, "w", encoding="utf-8") as f:
-                    f.write(plist)
-                log_info(T("已写入开机自启 LaunchAgent: {path}", path=plist_path), "page6")
-            else:
-                if os.path.exists(plist_path):
-                    os.remove(plist_path)
-                    log_info(T("已删除开机自启 LaunchAgent"), "page6")
-        except Exception as e:
-            log_exception(e, T("设置开机自启"))
-
+        from platforms.factory import get_lifecycle_backend
+        get_lifecycle_backend().set_autostart(enabled)
+        return True
     # ── 桌面快捷方式辅助 ─────────────────────────────────
 
     _DESKTOP_LNK_NAME = f"{PRODUCT_NAME}.lnk"
@@ -495,21 +392,24 @@ class FinishPage(BasePage):
     def save(self):
         """保存设置：标记向导完成 + 写入主界面偏好；
         文件操作（开机自启、桌面快捷方式）放到后台线程，避免阻塞主线程。"""
+        if hasattr(self, "_autostart_switch"):
+            try:
+                self._set_autostart(self._autostart_switch.isChecked())
+            except Exception as error:
+                from ui.dialogs import show_error_dialog
+                log_exception(error, T("设置开机自启"))
+                show_error_dialog(self, _tr("开机自启设置失败"), str(error))
+                raise
         if hasattr(self._config, "set_app_setting"):
             self._config.set_app_setting("welcome_wizard_done", "1")
         if hasattr(self, "_show_main_switch"):
             self._config.set_show_main_window(self._show_main_switch.isChecked())
 
         # 文件/网络路径操作放到后台线程，避免 UNC 路径探测阻塞主线程
-        autostart_on = hasattr(self, "_autostart_switch") and self._autostart_switch.isChecked()
         desktop_on   = hasattr(self, "_desktop_switch")   and self._desktop_switch.isChecked()
 
         import threading
         def _bg():
-            if autostart_on:
-                self._set_autostart(True)
-            elif hasattr(self, "_autostart_switch"):
-                self._set_autostart(False)
             if desktop_on:
                 self._create_desktop_shortcut()
 

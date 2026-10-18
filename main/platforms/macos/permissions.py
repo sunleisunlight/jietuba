@@ -24,7 +24,8 @@ def _cg_preflight() -> bool:
         from Quartz import CGPreflightScreenCaptureAccess
         return bool(CGPreflightScreenCaptureAccess())
     except Exception:
-        return False
+        _log.exception("读取屏幕录制权限失败")
+        raise
 
 
 def _cg_request() -> None:
@@ -42,7 +43,8 @@ def _ax_is_trusted() -> bool:
         from ApplicationServices import AXIsProcessTrusted
         return bool(AXIsProcessTrusted())
     except Exception:
-        return False
+        _log.exception("读取辅助功能权限失败")
+        raise
 
 
 def _ax_is_trusted_with_options() -> bool:
@@ -56,6 +58,7 @@ def _ax_is_trusted_with_options() -> bool:
             {kAXTrustedCheckOptionPrompt: True}
         ))
     except Exception:
+        _log.exception("请求辅助功能权限失败")
         return False
 
 
@@ -75,18 +78,20 @@ class MacOSPermissionBackend(PermissionBackend):
     """macOS 权限后端。"""
 
     def screen_capture_status(self) -> PermissionStatus:
-        if _cg_preflight():
-            return PermissionStatus.GRANTED
-        return PermissionStatus.NOT_REQUESTED
+        try:
+            return PermissionStatus.GRANTED if _cg_preflight() else PermissionStatus.DENIED
+        except Exception:
+            return PermissionStatus.UNKNOWN
 
     def request_screen_capture(self) -> bool:
         _cg_request()
         return _cg_preflight()
 
     def accessibility_status(self) -> PermissionStatus:
-        if _ax_is_trusted():
-            return PermissionStatus.GRANTED
-        return PermissionStatus.NOT_REQUESTED
+        try:
+            return PermissionStatus.GRANTED if _ax_is_trusted() else PermissionStatus.DENIED
+        except Exception:
+            return PermissionStatus.UNKNOWN
 
     def request_accessibility(self) -> bool:
         _ax_is_trusted_with_options()

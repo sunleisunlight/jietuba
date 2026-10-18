@@ -53,118 +53,8 @@ def ensure_module_path():
         sys.path.insert(0, current_dir)
 
 
-def _read_instance_record(pid_file: str):
-    """读取实例记录文件，返回 (pid, create_time)；解析失败返回 None。
-
-    create_time 为 None 表示这是旧版本写下的、只有 PID 的记录。
-    """
-    try:
-        with open(pid_file, 'r', encoding='utf-8') as f:
-            lines = [ln.strip() for ln in f.read().splitlines() if ln.strip()]
-        if not lines:
-            return None
-        pid = int(lines[0])
-        create_time = int(lines[1]) if len(lines) > 1 else None
-        return pid, create_time
-    except Exception:
-        # 文件损坏或格式不认识：当作没有记录处理，交由调用方覆盖重写
-        return None
-
-
-def _is_our_old_instance(record, my_pid: int, my_image_name: str, frozen: bool) -> bool:
-    """判断记录指向的进程是否确实是本程序的旧实例。
-
-    这个校验是必需的：PID 文件很容易变成陈旧文件——它的清理挂在 atexit 上，
-    而被 TerminateProcess 杀死（本模块终止旧实例正是这么做的）或崩溃退出时
-    atexit 都不会执行。Windows 又会激进地回收 PID，若只凭 PID 就终止，
-    很可能误杀一个恰好复用了该 PID 的无关进程。
-    """
-    from core.platform_utils import get_process_identity
-
-    pid, create_time = record
-    if pid == my_pid:
-        return False
-
-    live = get_process_identity(pid)
-    if live is None:
-        return False  # 进程已不存在或无权访问 —— 陈旧记录，忽略
-    live_create_time, live_image_name = live
-
-    if create_time is not None:
-        # (PID, 创建时间) 唯一确定一个进程，这是最可靠的判据
-        return live_create_time == create_time
-
-    # 旧版本写的记录没有创建时间，退化到核对映像名：目标必须和自己是同一个可执行文件。
-    # 开发环境下映像名是 python.exe，这个判据太弱（会命中任何无关的 python 进程），
-    # 因此只在打包后启用；开发环境宁可放过旧实例，也不冒误杀的风险。
-    if not frozen or not my_image_name:
-        return False
-    return live_image_name.lower() == my_image_name.lower()
-
-
-def ensure_single_instance():
-    """
-    确保单实例运行：确认有本程序的旧实例在运行时，终止它再继续启动。
-
-    实例记录文件（系统临时目录下）除 PID 外还记录进程创建时间，
-    因为 PID 在 Windows 上会被回收复用，单凭 PID 无法判断目标是不是
-    当初写入记录的那个进程。校验之后，陈旧的记录文件就只是无害的垃圾。
-    """
-    import tempfile
-    from core.platform_utils import terminate_process_by_pid, get_process_identity
-    from core.logger import log_debug, log_exception, log_info, log_warning, T
-
-    frozen = getattr(sys, 'frozen', False)
-    exe_name = os.path.basename(sys.executable if frozen else sys.argv[0])
-    # 打包后用 exe 名，开发时固定用 jileiscreenshot_app，避免与其他 python 进程冲突
-    pid_name = exe_name if frozen else "jileiscreenshot_app"
-    pid_file = os.path.join(tempfile.gettempdir(), f"{pid_name}.pid")
-
-    my_pid = os.getpid()
-    my_identity = get_process_identity(my_pid)
-    my_create_time = my_identity[0] if my_identity else None
-    my_image_name = my_identity[1] if my_identity else os.path.basename(sys.executable)
-
-    # 确认旧实例身份后再终止
-    record = _read_instance_record(pid_file) if os.path.exists(pid_file) else None
-    if record:
-        try:
-            if _is_our_old_instance(record, my_pid, my_image_name, frozen):
-                if terminate_process_by_pid(record[0]):
-                    log_info(T("已终止旧实例 (PID {old_pid})", old_pid=record[0]), "SingleInstance")
-                else:
-                    log_warning(T("旧实例 (PID {old_pid}) 终止失败", old_pid=record[0]), "SingleInstance")
-            else:
-                log_debug(
-                    T("实例记录 (PID {old_pid}) 未通过身份校验，不终止", old_pid=record[0]),
-                    "SingleInstance",
-                )
-        except Exception as e:
-            log_exception(e, T("终止旧实例"))
-
-    # 写入当前实例记录：PID + 创建时间
-    try:
-        with open(pid_file, 'w', encoding='utf-8') as f:
-            print(my_pid, file=f)
-            if my_create_time is not None:
-                print(my_create_time, file=f)
-    except Exception as e:
-        log_exception(e, T("写入实例记录"))
-
-    # 程序正常退出时删除记录文件（被强杀或崩溃时不会执行，此时留下的陈旧记录由上面的校验兜住）
-    import atexit
-
-    def _cleanup():
-        try:
-            current = _read_instance_record(pid_file)
-            if current and current[0] == my_pid:
-                os.remove(pid_file)
-        except Exception as e:
-            log_exception(e, T("清理实例记录"))
-
-    atexit.register(_cleanup)
-
-
+# Single-instance ownership is established after QApplication construction by
+# core.instance_broker; never terminate another process during startup.
 # 持有 onefile 资源文件的 fd。必须是模块级变量：一旦被回收，
 # 文件就重新可删，保护随之失效。
 _pinned_resource_fds = []
@@ -451,6 +341,7 @@ class PreloadManager:
     def _show_main_window_on_start(self):
         """根据配置决定启动时是否显示主界面（设置窗口或欢迎向导）"""
         from core.logger import log_exception, T
+        completed = False
         try:
             # 首次运行：显示欢迎向导
             if self.config.is_first_run():
@@ -461,6 +352,7 @@ class PreloadManager:
                 self.app.update_hotkey()
                 self.app.setup_tray()
                 self.app._setup_pin_tray_updates()
+                completed = True
                 return
 
             # 非首次运行：预加载完成后再注册热键，避免启动预加载期间触发卡顿。
@@ -470,14 +362,21 @@ class PreloadManager:
 
             # 根据用户设置决定是否显示设置窗口
             # 显式启动入口不修改用户的常驻托盘偏好，便于 Dock/终端打开设置。
-            if "--settings" in sys.argv or self.config.should_show_main_window_on_start():
+            from platforms.factory import get_lifecycle_backend
+            manual = get_lifecycle_backend().show_on_manual_launch() and "--autostart" not in sys.argv
+            if "--settings" in sys.argv or manual or (
+                "--autostart" not in sys.argv and self.config.should_show_main_window_on_start()
+            ):
                 self.app.open_settings()
             else:
                 self._preload_clipboard_window()
+            completed = True
         except Exception as e:
             log_exception(e, T("启动时显示主界面"))
+            from ui.dialogs import show_error_dialog
+            show_error_dialog(None, "积磊截图启动失败", str(e))
         finally:
-            if hasattr(self.config, "mark_as_run"):
+            if completed and hasattr(self.config, "mark_as_run"):
                 self.config.mark_as_run()
 
     def _preload_clipboard_window(self):
@@ -522,9 +421,6 @@ def run():
 
     # 4. Windows 任务栏图标（必须在 QApplication 创建之前）
     set_app_user_model_id("cc.jilei.jileiscreenshot")
-
-    # 5. 单实例检查
-    ensure_single_instance()
 
     # 6. 启动主应用
     from main_app import MainApp
