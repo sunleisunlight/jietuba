@@ -8,8 +8,8 @@
 Qt 应用的主线程运行 Cocoa run loop，Carbon 事件处理器由该 run loop 派发，
 回调落在主线程，可以直接安全调用 Python 回调。
 
-键位约定：Windows 风格字符串 ctrl/alt/shift/win 在 macOS 映射为
-control/option/shift/command；"win" 键映射为 Command。
+键位约定：Windows 风格 ctrl 在 macOS 映射为 Command；lctrl/control
+显式表示 Control；alt/shift/win 映射为 option/shift/command。
 """
 from __future__ import annotations
 
@@ -89,6 +89,27 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
         self._framework = None
         self._app_target = None
         self._handler_callback = None  # 防 GC
+
+    def create_mouse_listener(self, on_trigger, suppressed_tokens):
+        """pynput Mac Button 枚举不含 x1/x2，须读取原始 Quartz buttonNumber。"""
+        from .permissions import _ax_is_trusted
+        if not _ax_is_trusted():
+            raise PermissionError("鼠标侧键需要辅助功能权限；授权后重新启用侧键或重启应用")
+        import Quartz
+        from pynput import mouse
+
+        def intercept(event_type, event):
+            if event_type not in (Quartz.kCGEventOtherMouseDown, Quartz.kCGEventOtherMouseUp):
+                return event
+            button = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGMouseEventButtonNumber)
+            token = {3: "mouseback", 4: "mouseforward"}.get(button)
+            if token is None:
+                return event
+            if event_type == Quartz.kCGEventOtherMouseDown:
+                on_trigger(token)
+            return None if token in suppressed_tokens() else event
+
+        return mouse.Listener(darwin_intercept=intercept)
 
     # ── 内部：解析 ──
 

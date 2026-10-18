@@ -6,7 +6,9 @@
 # 能 `pip install -r requirements.txt` 直接通过。
 
 # ===== 核心依赖（跨平台）=====
-PySide6==6.11.0
+PySide6==6.11.0 ; sys_platform != "darwin"
+# Qt 6.8 支持 macOS 12；6.11 的二进制最低要求 macOS 13。
+PySide6==6.8.3 ; sys_platform == "darwin"
 PySideSix-Frameless-Window==0.8.1
 pillow==12.1.1
 mss==10.1.0

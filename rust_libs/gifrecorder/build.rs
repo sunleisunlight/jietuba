@@ -5,6 +5,7 @@ fn main() {
         cc::Build::new()
             .file("native/sck_capture.m")
             .flag("-fobjc-arc")
+            .flag("-mmacosx-version-min=12.3")
             .compile("sck_capture");
         println!("cargo:rustc-link-lib=framework=ScreenCaptureKit");
         println!("cargo:rustc-link-lib=framework=CoreVideo");

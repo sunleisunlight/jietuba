@@ -391,7 +391,16 @@ class SettingsDialog(FrostedFramelessDialog):
     def _open_system_permission(self, kind: str):
         try:
             from platforms import get_platform_backend
-            get_platform_backend().permissions.open_system_settings(kind)
+            perm = get_platform_backend().permissions
+            # 显式点击才请求，让应用出现在系统授权列表中；刷新只读状态。
+            request = {
+                "screen_capture": perm.request_screen_capture,
+                "accessibility": perm.request_accessibility,
+                "input_monitoring": perm.request_input_monitoring,
+            }.get(kind)
+            if request is not None and not request():
+                perm.open_system_settings(kind)
+            self._refresh_mac_permissions()
         except Exception as e:
             log_exception(e, T("打开系统权限设置"))
 
@@ -540,6 +549,8 @@ class SettingsDialog(FrostedFramelessDialog):
 
     def _refresh_after_page_change(self):
         """Clear the translucent backing store before painting a new page."""
+        if getattr(self, "_permissions_stack_index", -1) == self.content_stack.currentIndex():
+            self._refresh_mac_permissions()
         self.update()
         self.right_area.update()
         self.content_stack.update()

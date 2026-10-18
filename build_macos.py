@@ -4,9 +4,9 @@
 
 流程：
   1. 准备 .icns（从 托盘.ico / assets 生成，若缺失）
-  2. PyInstaller onedir 构建 dist/JileiScreenshot.app
+  2. PyInstaller onedir 构建 dist/积磊截图.app（用户可见名称与 Windows 一致）
   3. 补齐 models/（Contents/Resources + Contents/MacOS 双位置，兼容旧查找路径）
-  4. ad-hoc 签名（无 Developer ID 时用 "-"；有则自动使用）
+  4. 本机可用证书签名（优先 Developer ID，其次 Apple Development，最后 ad-hoc）
   5. codesign 验证 + 关键资源存在性检查
 
 用法：
@@ -21,7 +21,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent
 VENV_PY = REPO / ".venv" / "bin" / "python"
 DIST = REPO / "dist"
-APP = DIST / "JileiScreenshot.app"
+APP = DIST / "积磊截图.app"
 SPEC = REPO / "jileiscreenshot_macos.spec"
 ASSETS = REPO / "assets"
 ICNS = ASSETS / "JileiScreenshot.icns"
@@ -56,9 +56,12 @@ def run(cmd, **kw):
 
 
 def ensure_icns():
-    """从 托盘.ico 内嵌 PNG 生成 .icns（已存在则跳过）。"""
-    if ICNS.exists():
-        return
+    """从 Windows 正式图标 ``托盘.ico`` 生成高清 macOS 图标。
+
+    ICO 内含多个尺寸；不能取文件中的第一段 PNG（通常只有 16x16），否则
+    macOS Finder/Dock 会把低分辨率图标放大成模糊的旧品牌图。每次构建都从
+    Windows 资源的最大尺寸重新生成，确保两端始终使用同一份品牌图标。
+    """
     ASSETS.mkdir(exist_ok=True)
     icon_png = REPO / "托盘.ico"
     tmp_png = "/tmp/jilei_screenshot_icon.png"
@@ -68,10 +71,9 @@ def ensure_icns():
 
     code = f"""
 from PIL import Image
-import io
-data = open(r"{icon_png}", "rb").read()
-start = data.find(b"\\x89PNG")
-img = Image.open(io.BytesIO(data[start:])).convert("RGBA")
+ico = Image.open(r"{icon_png}")
+largest = max(ico.ico.sizes(), key=lambda s: s[0] * s[1])
+img = ico.ico.getimage(largest).convert("RGBA")
 img.save(r"{tmp_png}")
 for s in (16, 32, 64, 128, 256, 512, 1024):
     im = img.resize((s, s), Image.LANCZOS)
@@ -105,7 +107,7 @@ def sign_app():
                 break
     if ident is None:
         ident = "-"
-        print("未找到可用签名证书，使用 ad-hoc (-)")
+        print("未找到可用签名证书，使用 ad-hoc (-；仅限本机运行)")
     print("使用签名身份:", ident)
     # 先清掉 PyInstaller 自带签名，再按顺序签：内部二进制 → 主可执行 → bundle
     run(["codesign", "--force", "--deep", "--sign", ident,
@@ -120,7 +122,12 @@ def sign_app():
     )
     if sp.returncode != 0:
         print("spctl:", sp.stdout.strip() or sp.stderr.strip())
-        print("（ad-hoc 签名：本地可运行；正式分发需 Developer ID + 公证）")
+        if ident == "-":
+            print("（ad-hoc 签名：本地可运行；正式分发需 Developer ID + 公证）")
+        elif "Developer ID Application" in ident:
+            print("（Developer ID 已签名；正式分发仍需完成公证并装订）")
+        else:
+            print("（Apple Development 签名：适合本机调试；正式分发需 Developer ID + 公证）")
     else:
         print("spctl 通过")
     print("codesign done:", ident)

@@ -5,14 +5,17 @@
   屏幕录制  CGPreflightScreenCaptureAccess / CGRequestScreenCaptureAccess
              （Quartz，macOS 10.15+；两者均在主线程调用）
   辅助功能  AXIsProcessTrusted / AXIsProcessTrustedWithOptions
-  输入监控  无公开查询 API，用临时 CGEventTap 探测代替
-            （tap 创建失败/被拒绝 ≈ 未授权）
+  输入监控  CGPreflightListenEventAccess / CGRequestListenEventAccess
+            查询不创建监听、不弹框，也不改变系统权限。
 """
 from __future__ import annotations
 
 import subprocess
+import logging
 
 from ..base.permissions import PermissionBackend, PermissionStatus
+
+_log = logging.getLogger(__name__)
 
 
 def _cg_preflight() -> bool:
@@ -30,7 +33,7 @@ def _cg_request() -> None:
         from Quartz import CGRequestScreenCaptureAccess
         CGRequestScreenCaptureAccess()
     except Exception:
-        pass
+        _log.exception("请求屏幕录制权限失败")
 
 
 def _ax_is_trusted() -> bool:
@@ -57,31 +60,14 @@ def _ax_is_trusted_with_options() -> bool:
 
 
 def _input_monitoring_status() -> PermissionStatus:
-    """输入监控状态探测：用 CGEventTap 是否能正常创建监听。
-
-    macOS 10.15+ 对键盘事件 tap 要求"输入监控"，鼠标事件 tap 要求"辅助功能"。
-    无公开权限查询 API，只能通过 tap 创建结果反推。
-    """
+    """只读权限查询，不创建 EventTap，不手动释放 PyObjC 管理的对象。"""
     try:
-        import Quartz
-        from Quartz import (
-            CGEventMaskBit,
-            CGEventTapCreate,
-            kCGHeadInsertEventTap,
-            kCGEventTapOptionListenOnly,
-            kCGSessionEventTap,
-        )
-
-        mask = CGEventMaskBit(Quartz.kCGEventKeyDown) | CGEventMaskBit(Quartz.kCGEventKeyUp)
-        tap = CGEventTapCreate(
-            kCGSessionEventTap, kCGHeadInsertEventTap,
-            kCGEventTapOptionListenOnly, mask, None, None,
-        )
-        if tap is not None:
-            Quartz.CFRelease(tap)
+        from Quartz import CGPreflightListenEventAccess
+        if CGPreflightListenEventAccess():
             return PermissionStatus.GRANTED
         return PermissionStatus.DENIED
     except Exception:
+        _log.exception("读取输入监控权限失败")
         return PermissionStatus.UNKNOWN
 
 
@@ -108,6 +94,14 @@ class MacOSPermissionBackend(PermissionBackend):
 
     def input_monitoring_status(self) -> PermissionStatus:
         return _input_monitoring_status()
+
+    def request_input_monitoring(self) -> bool:
+        try:
+            from Quartz import CGRequestListenEventAccess
+            return bool(CGRequestListenEventAccess())
+        except Exception:
+            _log.exception("请求输入监控权限失败")
+            return False
 
     def open_system_settings(self, permission: str) -> None:
         pane = "com.apple.preference.security?Privacy_ScreenCapture"

@@ -70,3 +70,19 @@ class PlatformFactory:
                 permissions=MacOSPermissionBackend(),
             )
         raise RuntimeError(f"不支持的平台: {sys.platform}")
+
+
+def get_native_updater():
+    """Windows onefile 更新保留现有实现；Mac 使用 .app 后端。"""
+    if sys.platform == "darwin":
+        from .macos import updater
+        return updater
+    return None
+
+
+def update_target_arch():
+    import platform
+    machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        return "darwin", "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
+    return "windows", "arm64" if machine in ("arm64", "aarch64") else "x86_64"

@@ -5,7 +5,7 @@
     python build_macos.py            # 或
     pyinstaller jileiscreenshot_macos.spec --noconfirm
 
-产物：dist/JileiScreenshot.app（windowed，Apple Silicon arm64）
+产物：dist/积磊截图.app（windowed，Apple Silicon arm64）
 """
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_dynamic_libs
 import glob
@@ -248,12 +248,14 @@ coll = COLLECT(
 
 app = BUNDLE(
     coll,
-    name="JileiScreenshot.app",
+    name="积磊截图.app",
     icon="assets/JileiScreenshot.icns",
     bundle_identifier="cc.jilei.jileiscreenshot",
     info_plist={
         "CFBundleIdentifier": "cc.jilei.jileiscreenshot",
-        "CFBundleName": "JileiScreenshot",
+        # 用户可见名称必须与 Windows 正式版一致；内部可执行文件名保持稳定，
+        # 供旧版本迁移、更新和原生扩展加载使用。
+        "CFBundleName": "积磊截图",
         "CFBundleDisplayName": "积磊截图",
         "CFBundleExecutable": "JileiScreenshot",
         "CFBundleIconFile": "JileiScreenshot.icns",

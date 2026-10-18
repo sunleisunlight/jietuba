@@ -13,12 +13,12 @@ echo "==> 架构检测"
 ARCH="$(uname -m)"
 echo "uname -m: $ARCH"
 if [ "$ARCH" != "arm64" ]; then
-  echo "!! 当前架构为 $ARCH，本项目 macOS 正式目标只有 Apple Silicon (arm64)。"
+  echo "!! 当前架构为 ${ARCH}，本项目 macOS 正式目标只有 Apple Silicon (arm64)。"
   echo "   请在 Apple Silicon 机器上执行本脚本。"
   exit 1
 fi
 
-echo "==> Python 检测（必须 $REQUIRED_PY）"
+echo "==> Python 检测（必须 ${REQUIRED_PY}）"
 PY_BIN="${PYTHON:-}"
 if [ -z "$PY_BIN" ]; then
   if command -v python3.11 >/dev/null 2>&1; then
@@ -26,14 +26,14 @@ if [ -z "$PY_BIN" ]; then
   elif command -v python3 >/dev/null 2>&1; then
     PY_BIN="python3"
   else
-    echo "!! 未找到 python3（需要 Python $REQUIRED_PY）"
+    echo "!! 未找到 python3（需要 Python ${REQUIRED_PY}）"
     exit 1
   fi
 fi
 PY_VER="$("$PY_BIN" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 echo "$PY_BIN -> Python $PY_VER"
 if [ "$PY_VER" != "$REQUIRED_PY" ]; then
-  echo "!! 需要 Python $REQUIRED_PY，当前为 $PY_VER（$PY_BIN）"
+  echo "!! 需要 Python ${REQUIRED_PY}，当前为 ${PY_VER}（${PY_BIN}）"
   echo "   安装示例: brew install python@3.11"
   echo "   或指定解释器: PYTHON=/path/to/python3.11 ./scripts/setup_macos.sh"
   exit 1
@@ -48,7 +48,7 @@ rustc --version
 cargo --version
 
 if [ ! -d .venv ]; then
-  echo "==> 创建 .venv (Python $REQUIRED_PY)"
+  echo "==> 创建 .venv (Python ${REQUIRED_PY})"
   "$PY_BIN" -m venv .venv
 fi
 # shellcheck disable=SC1091
@@ -57,7 +57,7 @@ source .venv/bin/activate
 # 已有 .venv 可能由别的 Python 创建，继续用会产出错误的包
 VENV_VER="$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 if [ "$VENV_VER" != "$REQUIRED_PY" ]; then
-  echo "!! .venv 使用 Python $VENV_VER，必须为 $REQUIRED_PY。"
+  echo "!! .venv 使用 Python ${VENV_VER}，必须为 ${REQUIRED_PY}。"
   echo "   请删除后重试: rm -rf .venv"
   exit 1
 fi

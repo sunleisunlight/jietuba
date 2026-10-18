@@ -16,6 +16,7 @@ from PySide6.QtCore import QMimeData, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QImage
 
 from ..base.clipboard import ClipboardBackend
+from .permissions import _ax_is_trusted
 
 _CMD_V_DOWN = 9  # kVK_ANSI_V
 _CMD_C_DOWN = 8  # kVK_ANSI_C
@@ -49,6 +50,10 @@ def send_copy_shortcut() -> bool:
 
 
 def _send_command_shortcut(keycode: int) -> bool:
+    if not _ax_is_trusted():
+        from core.logger import log_warning
+        log_warning("自动复制/粘贴需要辅助功能权限；内容仍保留在剪贴板，可手动粘贴", "Clipboard")
+        return False
     try:
         try:
             _post_key_event(_CMD_KEY, True, command=True)
@@ -130,11 +135,8 @@ def _activate_then_paste(pid: int, attempt: int):
         return
 
     if attempt >= _ACTIVATE_MAX_ATTEMPTS:
-        if _foreground_is_own_process():
-            from core.logger import log_debug, T
-            log_debug(T("目标应用 {pid} 未切到前台，放弃本次补按键", pid=pid), "Clipboard")
-            return
-        _send_paste()
+        from core.logger import log_debug, T
+        log_debug(T("目标应用 {pid} 未切到前台，放弃本次补按键", pid=pid), "Clipboard")
         return
 
     backend.windows.set_foreground(pid)

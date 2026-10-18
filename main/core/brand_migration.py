@@ -48,7 +48,7 @@ NEW_SHORTCUT_NAME = "积磊截图.lnk"
 LEGACY_LAUNCH_AGENT_LABEL = "cc.jilei.jietuba"
 NEW_LAUNCH_AGENT_LABEL = "cc.jilei.jileiscreenshot"
 LEGACY_APP_BUNDLE = "Jietuba.app"
-NEW_APP_BUNDLE = "JileiScreenshot.app"
+NEW_APP_BUNDLE = "积磊截图.app"
 
 
 def _log(level: str, message: str) -> None:

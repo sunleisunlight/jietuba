@@ -662,7 +662,11 @@ class ShortcutManager(QObject):
 
         hid = self._next_hotkey_id
         # 平台后端注册：Windows=RegisterHotKey，macOS=Carbon RegisterEventHotKey
-        if self._hotkey_backend.register(hid, hotkey_str, callback):
+        # Carbon 直接回调；Win32 仍由 nativeEventFilter 派发。
+        # 后端不可绕过共享的临时禁用与优先级 handler 链。
+        if self._hotkey_backend.register(
+            hid, hotkey_str, lambda: self._on_backend_hotkey(hid)
+        ):
             self._id_to_callback[hid] = callback
             try:
                 self._id_to_metadata[hid] = self._parse_hotkey(hotkey_str)
@@ -671,6 +675,16 @@ class ShortcutManager(QObject):
             self._next_hotkey_id += 1
             return True
         return False
+
+    def _on_backend_hotkey(self, hotkey_id: int):
+        callback = self._id_to_callback.get(hotkey_id)
+        if callback is None or self.global_hotkeys_suppressed:
+            return
+        if not self._dispatch_hotkey(hotkey_id, callback):
+            try:
+                callback()
+            except Exception as exc:
+                log_exception(exc, f"热键回调 id={hotkey_id}")
 
     def _register_mouse_hotkey(self, token: str, callback: Callable) -> bool:
         """登记一个鼠标侧键 token（同进程内去重，语义对齐 RegisterHotKey 不允许重复注册）。"""
@@ -770,14 +784,9 @@ class ShortcutManager(QObject):
                     win32_event_filter=self._mouse_event_filter
                 )
             else:
-                # macOS：CGEventTap 回调，pynput 的 darwin 后端不支持
-                # win32_event_filter/suppress_event，只能监听、不能独占抑制。
-                # 侧键权限受 Input Monitoring 限制；失败会在这里被捕获，
-                # 优雅降级为「侧键不可用」，不影响启动。
-                listener = mouse.Listener(
-                    on_click=lambda x, y, button, pressed: (
-                        self._on_mac_mouse_click(button, pressed)
-                    )
+                listener = self._hotkey_backend.create_mouse_listener(
+                    self._mouse_button_triggered.emit,
+                    lambda: self._suppressed_mouse_tokens,
                 )
             # filter 在 start() 之后随时可能被钩子线程调用，先赋值再启动。
             self._mouse_listener = listener

@@ -44,6 +44,12 @@ class PermissionBackend(ABC):
         """输入监控权限状态。默认不适用。"""
         return PermissionStatus.NOT_APPLICABLE
 
+    def request_input_monitoring(self) -> bool:
+        """请求输入监控；不适用的平台无需授权。"""
+        return self.input_monitoring_status() in (
+            PermissionStatus.GRANTED, PermissionStatus.NOT_APPLICABLE,
+        )
+
     # ── 系统设置引导 ──
     @abstractmethod
     def open_system_settings(self, permission: str) -> None:

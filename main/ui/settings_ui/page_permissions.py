@@ -97,6 +97,14 @@ def create_permissions_page(dialog) -> QWidget:
     hint.setStyleSheet("font-size: 12px; color: #909399; background: transparent;")
     layout.addWidget(hint)
 
+    restart_hint = QLabel(dialog.tr(
+        "After changing permissions, quit and reopen the app if capture or input listeners remain unavailable. "
+        "Grant permissions to the installed app, not just Python used during development."
+    ), view)
+    restart_hint.setWordWrap(True)
+    restart_hint.setStyleSheet("font-size: 12px; color: #909399;")
+    layout.addWidget(restart_hint)
+
     # 刷新按钮
     refresh_btn = QPushButton(dialog.tr("Refresh Status"), view)
     refresh_btn.setFixedWidth(dialog_scaled(140))
@@ -110,4 +118,9 @@ def create_permissions_page(dialog) -> QWidget:
 
     # 页面首次显示时刷新一次（延迟到事件循环就绪）
     QTimer.singleShot(100, lambda: getattr(dialog, "_refresh_mac_permissions", lambda: None)())
+    # 从系统设置返回后自动刷新。定时器随页面销毁，不反复弹授权提示。
+    timer = QTimer(scroll)
+    timer.setInterval(2000)
+    timer.timeout.connect(lambda: dialog._refresh_mac_permissions() if scroll.isVisible() else None)
+    timer.start()
     return scroll

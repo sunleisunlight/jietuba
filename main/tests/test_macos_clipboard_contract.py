@@ -6,6 +6,11 @@ import pytest
 from platforms.macos import clipboard
 
 
+@pytest.fixture(autouse=True)
+def trusted_input(monkeypatch):
+    monkeypatch.setattr(clipboard, "_ax_is_trusted", lambda: True)
+
+
 @pytest.mark.parametrize("action,key", [(clipboard.send_cmd_v, 9), (clipboard.send_copy_shortcut, 8)])
 def test_command_shortcut_emits_correct_key_and_releases(monkeypatch, action, key):
     events = []
@@ -44,6 +49,21 @@ def test_backend_exposes_controller_entrypoints(monkeypatch):
     assert backend.activate_target(42)
     assert calls == [42]
     assert backend.send_cmd_v()
+
+
+def test_untrusted_input_does_not_inject(monkeypatch):
+    monkeypatch.setattr(clipboard, "_ax_is_trusted", lambda: False)
+    monkeypatch.setattr(clipboard, "_post_key_event", lambda *a, **kw: pytest.fail("no permission"))
+    assert not clipboard.send_cmd_v()
+
+
+def test_activation_timeout_never_pastes_into_another_app(monkeypatch):
+    import platforms
+    monkeypatch.setattr(platforms, "get_platform_backend", lambda: SimpleNamespace(
+        windows=SimpleNamespace(get_foreground_handle=lambda: 99),
+    ))
+    monkeypatch.setattr(clipboard, "_send_paste", lambda: pytest.fail("wrong app"))
+    clipboard._activate_then_paste(42, clipboard._ACTIVATE_MAX_ATTEMPTS)
 
 
 def test_macos_display_matches_registered_modifier(monkeypatch):

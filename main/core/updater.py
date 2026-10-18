@@ -42,12 +42,8 @@ class UpdateInfo:
 
 
 def _target_arch() -> tuple[str, str]:
-    if sys.platform == "darwin":
-        return "darwin", "universal"
-    import platform
-    machine = (platform.machine() or "").lower()
-    arch = "arm64" if machine in ("arm64", "aarch64") else "x86_64"
-    return "windows", arch
+    from platforms.factory import update_target_arch
+    return update_target_arch()
 
 
 def is_newer(latest: str, current: str = APP_VERSION) -> bool:
@@ -109,6 +105,10 @@ def check_for_update(timeout: float = 8.0) -> Optional[UpdateInfo]:
 def download_update(info: UpdateInfo, progress: Optional[Callable[[int, int], None]] = None,
                     cancel_check: Optional[Callable[[], bool]] = None) -> Optional[str]:
     """下载更新到临时文件，校验 SHA-256，返回新 exe 路径；失败/取消返回 None。"""
+    from platforms.factory import get_native_updater
+    native = get_native_updater()
+    if native is not None:
+        return native.download_update(info, progress, cancel_check)
     if sys.platform != "win32":
         log_warning(T("当前平台暂不支持应用内自动替换，请下载新版安装包"), "Updater")
         return None
@@ -167,6 +167,10 @@ def install_and_restart(new_exe: str) -> bool:
     整个替换在进程内直接完成：旧 exe 改名 → 新 exe 就位 → 启动新版 → 退出本进程。
     改名后的旧文件此刻仍被占用删不掉，留到下次启动由 cleanup_previous_install() 清理。
     """
+    from platforms.factory import get_native_updater
+    native = get_native_updater()
+    if native is not None:
+        return native.install_and_restart(new_exe)
     if sys.platform != "win32":
         return False
     exe_path = sys.executable

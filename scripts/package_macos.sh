@@ -14,15 +14,16 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-echo "==> 构建 .app（版本 $VERSION）"
+echo "==> 构建 .app（版本 ${VERSION}）"
 "$PY" build_macos.py
 
 echo "==> 制作 DMG"
-DMG="dist/JileiScreenshot-${VERSION}-arm64.dmg"
-rm -f "$DMG"
-hdiutil create -volname "积磊截图" -srcfolder dist/JileiScreenshot.app \
-  -ov -format UDZO "$DMG"
-hdiutil verify "$DMG"
+DMG="dist/积磊截图-${VERSION}-arm64.dmg"
+if [ -e "$DMG" ]; then
+  echo "!! 已存在 ${DMG}，拒绝覆盖历史产物。"
+  exit 1
+fi
+"$PY" -c 'import sys; from pathlib import Path; sys.path.insert(0, "scripts"); from macos_release import make_dmg; make_dmg(Path("dist/积磊截图.app"), Path(sys.argv[1]))' "$DMG"
 
 echo "==> 完成: $DMG"
 ls -lh "$DMG"

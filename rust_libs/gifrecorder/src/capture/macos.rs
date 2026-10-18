@@ -3,8 +3,8 @@
 //! shim（native/sck_capture.m）只负责 SCK → 紧凑 BGRA 帧回调；
 //! 所有 GIF 编码 / 帧存储 / 时间轴逻辑仍在 Rust / Python 侧。
 //!
-//! 注意：帧坐标使用 CG 全局显示坐标（物理像素）；区域必须落在单个
-//! 显示器内（跨屏区域会被 clamp 到所在显示器）。
+//! 注意：区域使用 CG 全局逻辑点；输出固定为 width*height BGRA 像素。
+//! 区域必须落在单个显示器内，跨屏拒绝，不能静默返回长度不匹配的帧。
 
 use std::ffi::c_void;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError};
@@ -19,12 +19,13 @@ extern "C" {
         fps: f64,
         cb: extern "C" fn(*mut c_void, *const u8, usize),
         ctx: *mut c_void,
+        release_ctx: extern "C" fn(*mut c_void),
     ) -> *mut c_void;
     fn JTKStopCapture(handle: *mut c_void);
 }
 
 /// 帧回调（在 shim 的 dispatch queue 线程执行）。
-/// ctx = Box::into_raw(Box::new(SyncSender<Vec<u8>>))（泄漏，会话级）。
+/// ctx 由原生 delegate 持有，到最后一个异步回调结束后释放。
 extern "C" fn on_frame(ctx: *mut c_void, data: *const u8, len: usize) {
     let sender: &SyncSender<Vec<u8>> = unsafe { &*(ctx as *const SyncSender<Vec<u8>>) };
     if len == 0 || data.is_null() {
@@ -37,6 +38,12 @@ extern "C" fn on_frame(ctx: *mut c_void, data: *const u8, len: usize) {
     }
     // 只保留最新一帧；满了说明消费慢，丢弃本次
     let _ = sender.try_send(frame);
+}
+
+extern "C" fn release_context(ctx: *mut c_void) {
+    if !ctx.is_null() {
+        unsafe { drop(Box::from_raw(ctx as *mut SyncSender<Vec<u8>>)); }
+    }
 }
 
 pub(crate) struct ScreenCapture {
@@ -59,15 +66,12 @@ impl ScreenCapture {
         let ctx = Box::into_raw(Box::new(tx));
         let handle = unsafe {
             JTKStartCapture(
-                left, top, width, height, 15.0, on_frame, ctx as *mut c_void,
+                left, top, width, height, 15.0, on_frame, ctx as *mut c_void, release_context,
             )
         };
         if handle.is_null() {
-            unsafe {
-                drop(Box::from_raw(ctx));
-            }
             return Err(
-                "ScreenCaptureKit start failed (screen recording permission not granted?)".into(),
+                "ScreenCaptureKit start failed: check screen recording permission and keep the region within one display".into(),
             );
         }
         Ok(Self {

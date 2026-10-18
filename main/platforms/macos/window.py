@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import Qt
@@ -19,6 +20,14 @@ _SHELL_OWNERS = frozenset({"Window Server", "Dock"})
 _SHELL_LAYERS = {0, 25}  # 常规窗口层 0；菜单栏 24 / 桌面 1 由 layer 过滤
 _MIN_WINDOW_SIZE = 30
 _MAX_WINDOW_SIZE = 20000
+_log = logging.getLogger(__name__)
+
+
+def _native_window(widget):
+    """Qt Cocoa 的 winId 是 NSView 指针，而非 NSWindow。"""
+    import objc
+    view = objc.objc_object(c_void_p=int(widget.winId()))
+    return view.window()
 
 
 def _window_list(on_screen_only: bool = True) -> list:
@@ -94,11 +103,11 @@ class MacOSWindowBackend(WindowBackend):
     def find_monitor_rect_at_point(self, x: int, y: int) -> List[int]:
         try:
             import Quartz
-            screens = Quartz.CGGetActiveDisplayList(16, None, None)
-            displays = screens[0]
-            count = screens[1]
-            for i in range(count):
-                bounds = Quartz.CGDisplayBounds(displays[i])
+            error, displays, count = Quartz.CGGetActiveDisplayList(32, None, None)
+            if error != Quartz.kCGErrorSuccess:
+                raise RuntimeError(f"CGGetActiveDisplayList: {error}")
+            for display in displays[:count]:
+                bounds = Quartz.CGDisplayBounds(display)
                 left = int(bounds.origin.x)
                 top = int(bounds.origin.y)
                 w = int(bounds.size.width)
@@ -106,7 +115,7 @@ class MacOSWindowBackend(WindowBackend):
                 if left <= x < left + w and top <= y < top + h:
                     return [left, top, left + w, top + h]
         except Exception:
-            pass
+            _log.exception("查询显示器边界失败")
         return [0, 0, 0, 0]
 
     # ── 前台跟踪（按应用 PID 粒度）──
@@ -128,10 +137,10 @@ class MacOSWindowBackend(WindowBackend):
             return False
         try:
             return os.kill(handle, 0) is None
-        except (OSError, ProcessLookupError):
-            return False
         except PermissionError:
             return True
+        except OSError:
+            return False
 
     def foreground_pid(self, handle: Optional[int]) -> Optional[int]:
         # macOS 前台句柄即 PID
@@ -197,8 +206,11 @@ class MacOSWindowBackend(WindowBackend):
     def set_window_click_through(self, widget, enable: bool) -> None:
         try:
             widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable)
+            window = _native_window(widget)
+            if window is not None:
+                window.setIgnoresMouseEvents_(bool(enable))
         except Exception:
-            pass
+            _log.exception("设置 macOS 原生窗口鼠标穿透失败")
 
     def set_window_topmost(self, widget, enable: bool) -> None:
         try:
@@ -213,8 +225,9 @@ class MacOSWindowBackend(WindowBackend):
             pass
 
     def set_window_exclude_from_capture(self, widget, exclude: bool) -> None:
-        """macOS 无 WDA_EXCLUDEFROMCAPTURE 等价物；mss 截图发生在浮层
-        显示之前，GIF 录制由 ScreenCaptureKit 内容过滤器排除自身窗口，
-        这里仅记录日志（保留调用点语义）。"""
+        """静态截图在浮层显示前捕获；录屏的 SCK filter 排除本应用窗口。
+
+        此处不是系统级隐私保护，无法保证其它录屏软件不捕获本窗口。
+        """
         from core.logger import log_debug
-        log_debug("macOS: set_window_exclude_from_capture 为兼容占位（无需排除）", "Platform")
+        log_debug("macOS: 本应用录屏通过 ScreenCaptureKit 排除自身窗口", "Platform")

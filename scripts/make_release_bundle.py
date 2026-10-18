@@ -103,6 +103,10 @@ def resolve_tauri_cli() -> Path:
     found = shutil.which("tauri")
     if found:
         return Path(found)
+    if sys.platform == "darwin":
+        candidate = REPO.parent / "dizhi-tool/node_modules/.bin/tauri"
+        if candidate.exists():
+            return candidate
     if FALLBACK_TAURI_CLI.exists():
         return FALLBACK_TAURI_CLI
     raise RuntimeError(
@@ -119,9 +123,9 @@ def decrypt_key_password() -> str:
     不经 PowerShell——从 PowerShell 7 里启动 powershell.exe 时 PSModulePath 会被
     继承污染，`ConvertTo-SecureString` 会加载失败。
     """
-    direct = os.environ.get("JILEI_TAURI_KEY_PASSWORD", "").strip()
-    if direct:
-        return direct
+    for name in ("JILEI_TAURI_KEY_PASSWORD", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"):
+        if name in os.environ:
+            return os.environ[name]  # 口令不做 strip；显式空口令也保持原值。
     if os.name != "nt":
         raise RuntimeError("只有 Windows 支持 DPAPI 解私钥口令，请用 JILEI_TAURI_KEY_PASSWORD 传入口令。")
     if not PASSWORD_PATH.exists():
@@ -335,6 +339,10 @@ def main() -> int:
     ap.add_argument("--notes-file", default="", help="从文件读取更新说明（Markdown 也行）")
     ap.add_argument("--arch", default="x64", choices=["x64", "arm64"])
     args = ap.parse_args()
+
+    if sys.platform == "darwin":
+        from macos_release import make_macos_bundle
+        return make_macos_bundle(args)
 
     version = read_app_version()
     date = datetime.now().strftime("%y%m%d")

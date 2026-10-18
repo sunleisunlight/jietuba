@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PROFILE="${1:-jileiscreenshot}"
-APP="dist/JileiScreenshot.app"
+APP="dist/积磊截图.app"
 
 # 版本唯一源：main/main_app.py 的 APP_VERSION（经 scripts/version_utils.py 读取）。
 # 禁止在此写死版本号——必须与 package_macos.sh 产出的 DMG 名一致。
@@ -23,10 +23,10 @@ if [ -z "$VERSION" ]; then
   echo "!! 无法从 main/main_app.py 读取 APP_VERSION"
   exit 1
 fi
-DMG="dist/JileiScreenshot-${VERSION}-arm64.dmg"
+DMG="dist/积磊截图-${VERSION}-arm64.dmg"
 
 if [ ! -f "$DMG" ]; then
-  echo "!! 找不到 DMG: $DMG（请先运行 scripts/package_macos.sh）"
+  echo "!! 找不到 DMG: ${DMG}（请先运行 scripts/package_macos.sh）"
   exit 1
 fi
 

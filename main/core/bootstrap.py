@@ -324,8 +324,12 @@ class PreloadManager:
 
                     # 1. 预加载并预热 mss（屏幕截图库）
                     import mss
-                    with mss.mss() as sct:
-                        sct.grab({"left": 0, "top": 0, "width": 1, "height": 1})
+                    from platforms import get_platform_backend
+                    # 未授权时只加载模块；权限请求必须来自用户操作，不能在
+                    # 后台预加载线程里提前触发 macOS 系统授权框。
+                    if get_platform_backend().capture.is_available():
+                        with mss.mss() as sct:
+                            sct.grab({"left": 0, "top": 0, "width": 1, "height": 1})
                     log_debug(T("mss 模块已加载并预热"), "Preload")
 
                     # 2/3/5. 预加载 canvas、tools、工具栏等 UI 组件。这条 import 链会
@@ -465,7 +469,8 @@ class PreloadManager:
             self.app._setup_pin_tray_updates()
 
             # 根据用户设置决定是否显示设置窗口
-            if self.config.should_show_main_window_on_start():
+            # 显式启动入口不修改用户的常驻托盘偏好，便于 Dock/终端打开设置。
+            if "--settings" in sys.argv or self.config.should_show_main_window_on_start():
                 self.app.open_settings()
             else:
                 self._preload_clipboard_window()
