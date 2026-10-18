@@ -108,6 +108,16 @@ def test_mac_spec_and_scripts_derive_dmg_and_plist_from_app_version(app_version)
 
 # ── 3/4. ppocr_rust 与 OCR 模型必须是 Mac 正式构建的一部分 ─────────────────
 
+def test_mac_spec_keeps_single_instance_network_dependency():
+    tree = ast.parse(_read("jileiscreenshot_macos.spec"))
+    lists = {target.id: ast.literal_eval(node.value)
+             for node in tree.body if isinstance(node, ast.Assign)
+             for target in node.targets if isinstance(target, ast.Name)
+             and target.id in ("hiddenimports", "excludes")}
+    assert "PySide6.QtNetwork" in lists["hiddenimports"]
+    assert "PySide6.QtNetwork" not in lists["excludes"]
+
+
 def test_mac_spec_does_not_exclude_ppocr_rust():
     spec = _read("jileiscreenshot_macos.spec")
     excludes_block = spec.split("excludes = [", 1)[1].split("]", 1)[0]

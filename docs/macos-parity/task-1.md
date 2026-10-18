@@ -15,26 +15,33 @@
 
 ## 功能盘点与验证
 
-矩阵700行：33条任务1验收操作 + 667条源码候选入口/操作绑定/设置。状态没有任何「对齐已实测」或「原生等效已验证」。候选项不能当作全部独立用户功能已穷尽；Windows可见性和动态入口独立复核仍未完成。
+矩阵744行：33条任务1验收操作 + 667条源码候选入口/操作绑定/设置 + 29条controller动态菜单 + 7条Qt编辑菜单 + 8条Windows2.8.0新增/变更操作。状态没有任何「对齐已实测」或「原生等效已验证」。候选项不能当作全部独立用户功能已穷尽；Windows可见性独立复核仍未完成。
 
-统计：未检查669、已实现待实测21、环境阻塞10、测试失败0、原生等效已验证0、对齐已实测0。
+统计以STATE.md为准，旧统计669项未检查已被新增清单覆盖。
 
-相关Python回归去重187通过/5 Windows专属跳过；Rust19通过；全main lint通过。详见TEST_EVIDENCE.md，单元/Mock/原生delegate调用不等于真实App操作。
+最新相关Python回归188通过/6 Windows专属跳过；本轮 QtNetwork 契约修复后针对性 macOS 测试42通过/2跳过；此前Rust19通过（Rust源码未再改变）；全main lint通过。Windows x64/ARM64 CI39168681792各144项定向结果为137通过/7平台跳过/0失败，并完成真实 exe；随后发现 Windows whitelist 仍漏 QtNetwork DLL/pyd，已在 c7e78a3 修复并触发 CI39169825988复核。详见TEST_EVIDENCE.md，单元/Mock/原生delegate调用不等于真实App操作。
 
 ## 实际安装与数据保护
 
-旧安装仍为 `/Applications/积磊截图.app` v2.8.1，PID59837。Computer Use读取旧App两次超时；只读sample显示正常事件循环等待，不能断言挂死。没有强杀、没有替换安装；新App仅在dist。没有清空真实配置、历史、剪贴板，自启和TCC均未修改。未创建安装备份，因为尚未替换。
+旧PID59837已退出并备份。当前 `/Applications/积磊截图.app` 已替换为本轮2.8.2候选，旧版及上一轮候选保存在 `dist/task1-install-backup-4BgqPj/`；没有强杀、没有清空真实配置、历史、剪贴板，自启和TCC均未修改。修复后通过终端启动的候选进程可持续运行并打开设置页；Finder三轮双击、重复打开、退出重开和Dock/菜单栏回归仍待 action-time 确认后执行。Computer Use读取旧App超时是此前记录，不作为最新候选证据。
 
 ## 构建/交付
 
 新App构建及Apple Development签名成功，DMG校验成功。更新签名因缺少可用口令失败；暂存三文件见STATE.md，不是完整四件套。现有release旧包原地保留。未公证、未生产发布、未合回main。
 
-源码Commit c5ac3985a90a75d89a8faa2aabcebf6d4fe34372已推送并核对远端；正式Tag未创建。Windows定向CI run39166063824已启动，未完成时不能称Windows门禁通过。最终App及archive/DMG同源哈希见证据E。
+最新源码Commit `c7e78a3`（完整 SHA 见 Git）已推送并核对远端；正式Tag未创建。Windows定向CI39168681792已完成但其 exe 被 QtNetwork whitelist 复核否定；修复后 CI39169825988运行中。最新App主程序 hash 与 QtNetwork 修复见证据I；旧包不能代表当前候选。
+
+## 本轮继续执行新增结果
+
+- Windows正式软件基线已更正为2.8.0：下载exe并核对清单hash、字节数、包内版本。Tag源码7c0d289；main仍为2.7.0，精确构建SHA证明仍缺。
+- 新增剪贴板搜索/OCR索引/预览尺寸归任务3安全吸收；本轮没有盲目合并，也没有提前执行任务3。
+- Windows原生失败根因：WScript快捷方式链路在英文区域设置下损坏中文路径。复用既有comtypes的IShellLinkW，经生命周期factory供品牌迁移和欢迎向导共用；原生测试回读实际目标、工作目录、参数、图标。
+- 修复Windows打包排除QtNetwork会使新增单实例模块无法导入的问题，并补打包契约断言。Mac重新构建，不以旧包代表新代码。
 
 ## 最小解除条件
 
 1. 安全签名入口注入 `JILEI_TAURI_KEY_PASSWORD` 或 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；不把口令贴到聊天、日志或仓库。
-2. 用户保存旧App的未完成工作并正常退出（若正常退出也不可用，先由用户决定如何结束，Agent不强杀）。
+2. 旧App已退出并备份，此项已解除，无需用户重复退出。
 3. Windows定向测试与真实exe构建取得精确候选SHA证据后，继续本轮Mac安装/正式入口验证。
 4. 真实权限变更与可恢复自启开关测试需用户确认；登录测试、最低系统、额外显示器缺环境必须继续单列。
 

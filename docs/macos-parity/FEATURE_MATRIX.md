@@ -1,6 +1,6 @@
 # 全功能对齐矩阵
 
-基线：Windows 源码 v2.7.0 / `a26380ea80f73af029e7fc5f0ada65584fa1ef92`；正式 exe 来源尚待核验。
+最新Windows正式源码Tag：v2.8.0 / `7c0d289475ee630a4102f2b7e36b9aa8e49bb54c`；公开更新清单已确认2.8.0，exe与源码精确构建关联待核。原667条候选保留v2.7.0/a26380e行号追溯，新增/变更操作见WIN280-1～8；Mac尚未吸收v2.8.0共享代码，任务3负责，不冒称已对齐。
 
 下方「源码发现清单」由 AST 提取，包含操作绑定与数据驱动设置，不等于 Windows 实机可见性已核验。相同用户操作可能在不同入口分别列出；不得将源码存在计为实测通过。任务5必须复核动态菜单、条件入口与遗漏。权限页为 Mac 等效入口，不是 Windows 自带权限页。用户接受差异：尚无。
 
@@ -8,39 +8,91 @@
 
 | ID | Windows入口/行为或Mac等效要求 | 源码 | Mac实现 | 任务 | 场景与预期 | 实际/证据 | 验证版本/SHA | 状态 | 阻塞原因 |
 |---|---|---|---|---|---|---|---|---|---|
-| LIFE-01 | 普通打开应用显示可操作入口 | main/core/bootstrap.py | 普通Mac打开显示设置 | 1 | Finder双击3次，均显示欢迎/设置 | 单元策略通过；正式App未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 旧实例无响应；Windows候选门禁待验 |
-| LIFE-02 | 退出后重新启动 | main/main_app.py | quit_app/共享实例锁 | 1 | 菜单退出→Finder双击，3轮 | 实例锁释放测试通过；UI未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 旧实例未安全退出 |
-| LIFE-03 | 已有实例再次打开 | main/core/instance_broker.py | QLockFile + QLocalServer确认唤起 | 1 | 3轮重复打开，PID不变且未保存内容保留 | 跨进程测试通过；UI未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 旧实例未安全退出 |
-| LIFE-04 | Dock reopen | main/platforms/macos/lifecycle.py | 保留Qt delegate，安装reopen回调 | 1 | 关闭设置后点击Dock，原实例恢复入口 | Cocoa delegate调用测试通过；真实Dock未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 旧实例未安全退出 |
-| LIFE-05 | 菜单栏设置入口 | main/ui/tray_menu.py | 共享托盘菜单 | 1 | 关闭设置→菜单栏设置 | 源码有入口；已安装旧版AX两次超时 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 旧App界面无响应 |
-| LIFE-06 | 关闭设置仍常驻 | main/main_app.py | setQuitOnLastWindowClosed(False) | 1 | 关闭设置，菜单栏/热键仍可用 | 源码审查；UI未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 等待正式安装测试 |
-| LIFE-07 | 隔离首次欢迎 | main/core/bootstrap.py | 共享WelcomeWizard | 1 | 隔离配置首次欢迎→完成→重启不再欢迎 | Mock首次策略/隔离QSettings测试通过；完整首次App未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 不得重置用户真实配置 |
-| LIFE-08 | 登录后安静常驻 | main/platforms/macos/lifecycle.py | LaunchAgent --autostart | 1 | 注册→实际登录，窗口不打扰 | 隔离plist契约通过；真实登录未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 需要确认真实自启开关测试及登录 |
-| LIFE-09 | 开启自启 | main/platforms/macos/lifecycle.py | 原子plistlib登记 | 1 | 含中文/&路径登记可解析 | 隔离临时路径成功 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 真实LaunchAgent需用户确认 |
-| LIFE-10 | 关闭自启 | main/platforms/macos/lifecycle.py | 仅移除本应用plist | 1 | 关闭→下次登录不启动 | 隔离临时路径删除/重复关闭成功 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 真实LaunchAgent需用户确认 |
-| LIFE-11 | 自启失败反馈 | main/ui/settings_ui/dialog.py | 保存失败弹提示且保留窗口 | 1 | 不可写路径，不报成功 | 后端失败回归通过；真实UI未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 等待正式App测试 |
-| LIFE-12 | 旧版实例保护 | main/core/instance_broker.py | 验证旧PID映像名并提示退出 | 1 | 旧版活动时不kill、不启动第二个工作实例 | 单元测试通过；旧PID59837保留 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 用户安全退出旧版后继续 |
-| LIFE-13 | 重复打开保留截图 | main/main_app.py | 优先活动截图/模态窗口 | 1 | 编辑中重复打开不创建替代窗口 | 窗口路由Mock通过；App编辑未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 等待正式App测试 |
-| LIFE-14 | 退出清理与再次监听 | main/main_app.py | 现有工作线程/热键/剪贴板收尾 | 1 | 退出无残留、再开可截图 | 未执行真实流程 / TEST_EVIDENCE.md | v2.8.2工作区 | 未检查 | 等待正式App测试 |
-| BRAND-01 | 应用名称 | build_macos.py | 积磊截图.app；内部名不变 | 1 | Finder/Dock/设置/欢迎同品牌 | 源码审查；候选包待核 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 正式UI未测 |
-| BRAND-02 | 同源图标 | build_macos.py | Windows ICO最大图层→icns | 1 | 图标源哈希一致；逐处核对 | 见BASELINE.md品牌哈希 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | Dock/Finder候选视觉未测 |
-| BRAND-03 | 保留数据/更新身份 | main/core/brand_migration.py | Bundle ID与QSettings域保留 | 1 | 升级前后设置历史不丢失 | 15迁移测试通过；真实升级未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 留待任务5隔离升级 |
-| PERM-01 | 屏幕录制状态 | main/platforms/macos/permissions.py | GRANTED/DENIED/UNKNOWN区分 | 1 | 状态读取不触发授权框 | 原生查询及错误契约测试通过 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 真实候选权限未核 |
-| PERM-02 | 主动请求屏幕录制 | main/ui/settings_ui/dialog.py | 用户点击才请求 | 1 | 请求/拒绝/返回/刷新 | 契约通过，未改真实TCC / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 系统授权需用户确认 |
-| PERM-03 | 屏幕录制拒绝 | main/main_app.py | 停止截图并给引导 | 1 | 无权限不得继续抓屏假成功 | 源码及权限Mock；真实拒绝未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 不能撤销真实权限而不确认 |
-| PERM-04 | 授权后恢复截图 | main/main_app.py | 再次查询，支持重新操作 | 1 | 允许→返回→区域截图 | 状态转换Mock通过；真实截图未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 待候选App授权 |
-| PERM-05 | 辅助功能状态/授权 | main/platforms/macos/permissions.py | AX用户主动请求 | 1 | 状态/拒绝/允许/返回刷新 | 8权限回归测试中覆盖；真实未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 授权需确认 |
-| PERM-06 | 输入监控按需请求 | main/platforms/macos/permissions.py | 只读preflight与主动按钮 | 1 | 刷新不创建EventTap/不弹框 | 只读查询契约通过 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 真实监听恢复属任务3 |
-| PERM-07 | 打开正确权限系统页 | main/platforms/macos/permissions.py | 三种Privacy pane | 1 | 屏幕录制/辅助功能/输入监控各自路由 | 路由Mock通过；系统UI未测 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 需候选App实测 |
-| PERM-08 | 返回权限页面刷新 | main/ui/settings_ui/page_permissions.py | 可见页2秒只读刷新+刷新按钮 | 1 | 返回页面及时更新且不重复提示 | 源码审查 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 待真实系统授权操作 |
-| BASE-01 | 任务栏/窗口图标 | main/platforms/windows/lifecycle.py | Windows原生/Mac Qt分层 | 1 | Mac设置不再调用windll；Windows保留图标 | Mac设置29测试通过；Windows原生待CI / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | Windows CI候选待运行 |
-| BASE-02 | 原生扩展可加载 | rust_libs/gifrecorder/build.rs | 链接Clang availability runtime | 1 | 四个扩展import成功 | 本机重建wheel并import成功 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 包内运行和最低系统未测 |
-| BASE-03 | 基础区域截图入口 | main/main_app.py | 共享权限检查/捕获线程 | 1 | 从菜单启动区域截图并检查结果 | 未实际执行 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 旧实例/候选Windows门禁 |
-| BASE-04 | 本轮日志/崩溃复核 | main/core/logger.py | 保留明确失败日志 | 1 | 对应本轮App路径/版本/哈希 | 单元进程正常；App运行未执行 / TEST_EVIDENCE.md | v2.8.2工作区 | 未检查 | 候选安装尚未进行 |
-| DIST-01 | Windows受影响入口原生测试/构建 | .github/workflows/ci.yml | 既有CI定向任务1门禁 | 1 | 精确SHA测试成功且取得exe | 基线x64 lint失败；候选待触发 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 基线未出exe |
-| DIST-02 | Mac四件套 | scripts/macos_release.py | 同版本archive/sig/DMG/notes | 1 | 新文件齐全、旧文件保留 | 构建进行中 / TEST_EVIDENCE.md | v2.8.2工作区 | 已实现待实测 | 待构建签名结果 |
-| DIST-03 | 安装路径测试 | build_macos.py | /Applications/积磊截图.app | 1 | 备份旧安装→新包→Finder双击 | 未替换用户旧应用 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 旧实例仍运行且UI超时 |
-| DIST-04 | 公开分发 | scripts/notarize_macos.sh | 需Developer ID+notary | 1 | 签名/公证/staple/Gatekeeper | 现有包Apple Development；本轮待构建 / TEST_EVIDENCE.md | v2.8.2工作区 | 环境阻塞 | 缺Developer ID公证条件 |
+| LIFE-01 | 普通打开应用显示可操作入口 | main/core/bootstrap.py | 普通Mac打开显示设置 | 1 | Finder双击3次，均显示欢迎/设置 | 单元策略通过；正式App未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Windows候选门禁与安装实测待完成 |
+| LIFE-02 | 退出后重新启动 | main/main_app.py | quit_app/共享实例锁 | 1 | 菜单退出→Finder双击，3轮 | 实例锁释放测试通过；UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Windows候选门禁与安装实测待完成 |
+| LIFE-03 | 已有实例再次打开 | main/core/instance_broker.py | QLockFile + QLocalServer确认唤起 | 1 | 3轮重复打开，PID不变且未保存内容保留 | 跨进程测试通过；UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Windows候选门禁与安装实测待完成 |
+| LIFE-04 | Dock reopen | main/platforms/macos/lifecycle.py | 保留Qt delegate，安装reopen回调 | 1 | 关闭设置后点击Dock，原实例恢复入口 | Cocoa delegate调用测试通过；真实Dock未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Windows候选门禁与安装实测待完成 |
+| LIFE-05 | 菜单栏设置入口 | main/ui/tray_menu.py | 共享托盘菜单 | 1 | 关闭设置→菜单栏设置 | 共享托盘入口已实现；最新候选UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Windows候选门禁与安装实测待完成 |
+| LIFE-06 | 关闭设置仍常驻 | main/main_app.py | setQuitOnLastWindowClosed(False) | 1 | 关闭设置，菜单栏/热键仍可用 | 源码审查；UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 等待正式安装测试 |
+| LIFE-07 | 隔离首次欢迎 | main/core/bootstrap.py | 共享WelcomeWizard | 1 | 隔离配置首次欢迎→完成→重启不再欢迎 | Mock首次策略/隔离QSettings测试通过；完整首次App未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 不得重置用户真实配置 |
+| LIFE-08 | 登录后安静常驻 | main/platforms/macos/lifecycle.py | LaunchAgent --autostart | 1 | 注册→实际登录，窗口不打扰 | 隔离plist契约通过；真实登录未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 需要确认真实自启开关测试及登录 |
+| LIFE-09 | 开启自启 | main/platforms/macos/lifecycle.py | 原子plistlib登记 | 1 | 含中文/&路径登记可解析 | 隔离临时路径成功 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 真实LaunchAgent需用户确认 |
+| LIFE-10 | 关闭自启 | main/platforms/macos/lifecycle.py | 仅移除本应用plist | 1 | 关闭→下次登录不启动 | 隔离临时路径删除/重复关闭成功 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 真实LaunchAgent需用户确认 |
+| LIFE-11 | 自启失败反馈 | main/ui/settings_ui/dialog.py | 保存失败弹提示且保留窗口 | 1 | 不可写路径，不报成功 | 后端失败回归通过；真实UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 等待正式App测试 |
+| LIFE-12 | 旧版实例保护 | main/core/instance_broker.py | 验证旧PID映像名并提示退出 | 1 | 旧版活动时不kill、不启动第二个工作实例 | 保护回归通过；旧PID59837已退出，未强杀 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 候选App旧版保护UI未测 |
+| LIFE-13 | 重复打开保留截图 | main/main_app.py | 优先活动截图/模态窗口 | 1 | 编辑中重复打开不创建替代窗口 | 窗口路由Mock通过；App编辑未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 等待正式App测试 |
+| LIFE-14 | 退出清理与再次监听 | main/main_app.py | 现有工作线程/热键/剪贴板收尾 | 1 | 退出无残留、再开可截图 | 未执行真实流程 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 未检查 | 等待正式App测试 |
+| BRAND-01 | 应用名称 | build_macos.py | 积磊截图.app；内部名不变 | 1 | Finder/Dock/设置/欢迎同品牌 | 包体版本/名称/资源已核；候选UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 正式UI未测 |
+| BRAND-02 | 同源图标 | build_macos.py | Windows ICO最大图层→icns | 1 | 图标源哈希一致；逐处核对 | 见BASELINE.md品牌哈希 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | Dock/Finder候选视觉未测 |
+| BRAND-03 | 保留数据/更新身份 | main/core/brand_migration.py | Bundle ID与QSettings域保留 | 1 | 升级前后设置历史不丢失 | 15迁移测试通过；真实升级未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 留待任务5隔离升级 |
+| PERM-01 | 屏幕录制状态 | main/platforms/macos/permissions.py | GRANTED/DENIED/UNKNOWN区分 | 1 | 状态读取不触发授权框 | 原生查询及错误契约测试通过 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 真实候选权限未核 |
+| PERM-02 | 主动请求屏幕录制 | main/ui/settings_ui/dialog.py | 用户点击才请求 | 1 | 请求/拒绝/返回/刷新 | 契约通过，未改真实TCC / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 系统授权需用户确认 |
+| PERM-03 | 屏幕录制拒绝 | main/main_app.py | 停止截图并给引导 | 1 | 无权限不得继续抓屏假成功 | 源码及权限Mock；真实拒绝未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 不能撤销真实权限而不确认 |
+| PERM-04 | 授权后恢复截图 | main/main_app.py | 再次查询，支持重新操作 | 1 | 允许→返回→区域截图 | 状态转换Mock通过；真实截图未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 待候选App授权 |
+| PERM-05 | 辅助功能状态/授权 | main/platforms/macos/permissions.py | AX用户主动请求 | 1 | 状态/拒绝/允许/返回刷新 | 8权限回归测试中覆盖；真实未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 授权需确认 |
+| PERM-06 | 输入监控按需请求 | main/platforms/macos/permissions.py | 只读preflight与主动按钮 | 1 | 刷新不创建EventTap/不弹框 | 只读查询契约通过 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 真实监听恢复属任务3 |
+| PERM-07 | 打开正确权限系统页 | main/platforms/macos/permissions.py | 三种Privacy pane | 1 | 屏幕录制/辅助功能/输入监控各自路由 | 路由Mock通过；系统UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 需候选App实测 |
+| PERM-08 | 返回权限页面刷新 | main/ui/settings_ui/page_permissions.py | 可见页2秒只读刷新+刷新按钮 | 1 | 返回页面及时更新且不重复提示 | 源码审查 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 待真实系统授权操作 |
+| BASE-01 | 任务栏/窗口图标 | main/platforms/windows/lifecycle.py | Windows原生/Mac Qt分层 | 1 | Mac设置不再调用windll；Windows保留图标 | Mac设置测试通过；Windows旧候选图标原生测试通过，新候选待CI / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 最新Windows CI待完成 |
+| BASE-02 | 原生扩展可加载 | rust_libs/gifrecorder/build.rs | 链接Clang availability runtime | 1 | 四个扩展import成功 | 最新App构建原生库/资源校验通过；UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 最低系统及App功能未测 |
+| BASE-03 | 基础区域截图入口 | main/main_app.py | 共享权限检查/捕获线程 | 1 | 从菜单启动区域截图并检查结果 | 未实际执行 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | Windows门禁待完成，候选尚未安装 |
+| BASE-04 | 本轮日志/崩溃复核 | main/core/logger.py | 保留明确失败日志 | 1 | 对应本轮App路径/版本/哈希 | 单元进程正常；App运行未执行 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 未检查 | 候选安装尚未进行 |
+| DIST-01 | Windows受影响入口原生测试/构建 | .github/workflows/ci.yml | 既有CI定向任务1门禁 | 1 | 精确SHA测试成功且取得exe | 旧候选中文快捷方式失败已定位；修复后CI39168681792运行中 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 最新候选原生测试和exe构建待验 |
+| DIST-02 | Mac四件套 | scripts/macos_release.py | 同版本archive/sig/DMG/notes | 1 | 新文件齐全、旧文件保留 | 最新App/归档/DMG已生成，暂存u4oz6qdm；缺.sig / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 未提供签名口令 |
+| DIST-03 | 安装路径测试 | build_macos.py | /Applications/积磊截图.app | 1 | 备份旧安装→新包→Finder双击 | 旧App已退出并完成可恢复备份；未替换安装 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | Windows候选门禁待完成 |
+| DIST-04 | 公开分发 | scripts/notarize_macos.sh | 需Developer ID+notary | 1 | 签名/公证/staple/Gatekeeper | 最新包Apple Development签名校验通过，未公证 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 缺Developer ID公证条件 |
+
+## 动态菜单人工源码补充（不作为实测通过）
+
+AST提取器未扫描clipboard/controllers，无法从通用菜单渲染器恢复其规则。以下逐操作补充数据驱动菜单，按key绑定而非重复计算分隔符或菜单标题。当前controller与固定Windows基线无差异；条件来自predicate/children_builder，不冒充Windows UI实测。
+
+| ID | Windows入口/行为或Mac等效要求 | 源码 | Mac实现 | 任务 | 场景与预期 | 实际/证据 | 验证版本/SHA | 状态 | 阻塞原因 |
+|---|---|---|---|---|---|---|---|---|---|
+| DYN-CB-01 | 条目右键→粘贴；所有内容类型 | main/clipboard/controllers/context_menu_controller.py（paste） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-02 | 条目右键→复制；只回写剪贴板；不关闭窗口、不向目标粘贴 | main/clipboard/controllers/context_menu_controller.py（copy_item） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-03 | 特殊粘贴→纯文本；文本条目 | main/clipboard/controllers/context_menu_controller.py（special_paste_plain_text） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-04 | 特殊粘贴→全部大写；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_uppercase） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-05 | 特殊粘贴→全部小写；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_lowercase） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-06 | 特殊粘贴→单词首字母大写；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_capitalize_words） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-07 | 特殊粘贴→句首大写；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_capitalize_sentences） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-08 | 特殊粘贴→大小写反转；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_toggle_case） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-09 | 特殊粘贴→SQL IN句；文本条目；只验证生成文本、不执行SQL | main/clipboard/controllers/context_menu_controller.py（transform_sql_in） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-10 | 特殊粘贴→移除换行；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_remove_linebreaks） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-11 | 特殊粘贴→添加当前时间；文本条目 | main/clipboard/controllers/context_menu_controller.py（transform_append_time） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-12 | 特殊粘贴→保持顺序粘贴；文本条目；粘贴不移到历史最前 | main/clipboard/controllers/context_menu_controller.py（special_paste_in_order） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-13 | 特殊粘贴→文件名；文件条目 | main/clipboard/controllers/context_menu_controller.py（file_paste_names） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-14 | 特殊粘贴→文件链接；文件条目 | main/clipboard/controllers/context_menu_controller.py（file_paste_links） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-15 | 条目右键→钉图；仅图片条目 | main/clipboard/controllers/context_menu_controller.py（pin_image） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-16 | 条目右键→另存为；仅图片条目 | main/clipboard/controllers/context_menu_controller.py（save_image_as） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-17 | 条目右键→置顶；非图片且未置顶条目 | main/clipboard/controllers/context_menu_controller.py（toggle_pin） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-18 | 条目右键→取消置顶；非图片且已置顶条目 | main/clipboard/controllers/context_menu_controller.py（toggle_pin） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-19 | 条目右键→打开文件位置；仅文件条目 | main/clipboard/controllers/context_menu_controller.py（open_file_location） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-20 | 移动到分组→指定分组；动态子项；排除隐藏分组；文件可进入快速启动分组 | main/clipboard/controllers/context_menu_controller.py（move_to_group_<id>） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-21 | 移动到分组→从分组移除；当前为用户分组，且存在可见分组 | main/clipboard/controllers/context_menu_controller.py（remove_from_group） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-22 | 条目右键→编辑；仅用户分组视图 | main/clipboard/controllers/context_menu_controller.py（edit_item） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-23 | 条目右键→上移；仅用户分组视图；首项禁用 | main/clipboard/controllers/context_menu_controller.py（move_item_up） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-24 | 条目右键→下移；仅用户分组视图；末项禁用 | main/clipboard/controllers/context_menu_controller.py（move_item_down） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-25 | 条目右键→删除；合成条目；保留取消/确认路径 | main/clipboard/controllers/context_menu_controller.py（delete_item） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-26 | 分组右键→编辑；用户分组 | main/clipboard/controllers/context_menu_controller.py（edit_group） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-27 | 分组右键→上移；首组禁用 | main/clipboard/controllers/context_menu_controller.py（move_group_up） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-28 | 分组右键→下移；末组禁用 | main/clipboard/controllers/context_menu_controller.py（move_group_down） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+| DYN-CB-29 | 分组右键→删除分组；仅合成分组；保留取消/确认路径 | main/clipboard/controllers/context_menu_controller.py（delete_group） | 共享controller→ui/menus/action_menu.py | 3 | 用合成数据覆盖上述条件、取消与重开，核对目标/结果 | 仅源码规则已核；BASELINE.md动态菜单复核 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行；Windows交互待核 |
+
+| DYN-EDIT-1 | 通用文本输入框右键→撤销 | main/ui/fluent_lite/text_context_menu.py（edit-undo） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-2 | 通用文本输入框右键→重做 | main/ui/fluent_lite/text_context_menu.py（edit-redo） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-3 | 通用文本输入框右键→剪切 | main/ui/fluent_lite/text_context_menu.py（edit-cut） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-4 | 通用文本输入框右键→复制 | main/ui/fluent_lite/text_context_menu.py（edit-copy） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-5 | 通用文本输入框右键→粘贴 | main/ui/fluent_lite/text_context_menu.py（edit-paste） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-6 | 通用文本输入框右键→删除选中文字 | main/ui/fluent_lite/text_context_menu.py（edit-delete） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| DYN-EDIT-7 | 通用文本输入框右键→全选 | main/ui/fluent_lite/text_context_menu.py（select-all） | 共享Qt标准编辑菜单；主题/翻译映射 | 3 | 合成文本；覆盖只读、无选区、空内容与可撤销状态；核对结果 | 仅源码核对；与a26380e无差异 | 源码v2.7.0/a26380e；未实测 | 未检查 | 任务3实际操作待执行 |
+| WIN280-1 | 顶部搜索文字 | main/clipboard/ui/windows/clipboard_window.py | 共享窗口上移搜索框；Mac尚未吸收此提交 | 3 | 已知文本命中，输入不阻塞 | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-2 | 顶部搜索新截图中的文字 | main/clipboard/services/ocr_index_service.py | 新增OcrIndexService→Rust OCR索引；Mac尚未吸收 | 3 | 合成截图入库后文字可搜，检查实际OCR内容 | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-3 | 顶部搜索历史图片中的文字 | main/clipboard/services/ocr_index_service.py | 分批后台补录历史图片；Mac尚未吸收 | 3 | 隔离历史图片索引完成后可搜；不得改真实历史 | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-4 | 顶部搜索清除 | main/clipboard/ui/windows/clipboard_window.py | 清除按钮随搜索框上移；Mac尚未吸收 | 3 | 清空后恢复未过滤列表 | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-5 | 设置菜单→预览大小→small | main/clipboard/ui/panels/setting_panel.py | 四档尺寸配置→PreviewPopup；Mac尚未吸收 | 3 | 选择small后预览实际尺寸正确，重开保留；默认large | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-6 | 设置菜单→预览大小→medium | main/clipboard/ui/panels/setting_panel.py | 四档尺寸配置→PreviewPopup；Mac尚未吸收 | 3 | 选择medium后预览实际尺寸正确，重开保留；默认large | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-7 | 设置菜单→预览大小→large | main/clipboard/ui/panels/setting_panel.py | 四档尺寸配置→PreviewPopup；Mac尚未吸收 | 3 | 选择large后预览实际尺寸正确，重开保留；默认large | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
+| WIN280-8 | 设置菜单→预览大小→xlarge | main/clipboard/ui/panels/setting_panel.py | 四档尺寸配置→PreviewPopup；Mac尚未吸收 | 3 | 选择xlarge后预览实际尺寸正确，重开保留；默认large | 发布清单及Tag源码已核；App未测 | Windows v2.8.0/7c0d289；未实测 | 未检查 | 任务3需安全吸收v2.8.0共享代码，保留Mac修复 |
 
 ## 源码发现清单（逐条归属；不作为实测通过）
 

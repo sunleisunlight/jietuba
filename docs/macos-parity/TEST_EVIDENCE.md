@@ -63,3 +63,47 @@ Windows候选CI、源码Commit、Tag/远端引用在后续批次追加。Finder�
 - DMG只读挂载到本轮mktemp目录，验证包签名/版本/主程序hash一致，随后只卸载该测试挂载，退出0。未安装/启动；不碰用户此前挂载的旧DMG。
 - 使用隔离Python导入最终App/Contents/Frameworks下四个.so均成功（gifrecorder/longstitch/pyclipboard/ppocr_rust）。这是原生加载检查，不是App权限身份或OCR/录制功能验证。
 - 旧App日志/采样是2.8.1证据，绝不计作候选2.8.2截图/权限成功。旧进程未强杀。
+
+## T1-20261019-F：继续执行，Windows失败诊断
+
+- 再次fetch成功；origin/main仍为a26380ea80f73af029e7fc5f0ada65584fa1ef92，没有更新基线。保留三个README草稿、graphify-out-main和旧worktree。
+- 原PID59837已退出；按可执行路径复核未见运行的JileiScreenshot。未由Agent终止进程。
+- 旧安装2.8.1主程序SHA256为53f83d98ac604a75f0fb74a79a3163b1b9d30015c6dbd42eaffac875a3787ea7。
+- 已创建可恢复安装备份 `dist/task1-install-backup-4BgqPj/积磊截图-v2.8.1-installed.zip`；SHA256为8538dea2f09c4bbe7fba61037dc3d129812f206d677c6025c0fbd1d2eabb6fae；ditto/unzip完整性检查退出0。尚未替换安装；没有读取或清空用户配置/历史。
+- 两个签名口令环境入口仍未设置；只检查布尔存在性，没有尝试口令、读取私钥或输出秘密。
+- CI39166063824完成失败：x64/arm64各142项收集，134通过、7平台跳过、1失败、0错误；唯一失败均为 `TestWindowsIntegration.test_desktop_shortcut_migrated`。新生命周期17项中14通过/3 Mac专属跳过；Rust步骤成功。Windows exe构建被跳过，macOS依赖job也跳过。
+- 原始JUnit分别在 `build/task1-ci-39166063824-x64/`、`build/task1-ci-39166063824-arm64/`；迁移测试原先只断言False，业务日志未初始化，缺少原生失败原因。未删测试或改断言，增加捕获诊断（纯测试提交f86561af313ab6ec6b426d69af1d9ae3d3fb9e06），已push并核对远端。
+- 诊断CI39167158457指向上述精确提交，仍使用同一任务1门禁。App运行代码未变化，dist中候选主程序SHA仍与E批一致。Mac该模块15通过/3 Windows专属跳过，ruff退出0；不能替代Windows失败复测。
+- 诊断CI39167158457同样失败；已明确PowerShell/COM返回System.IO.FileNotFoundException，但pytest截断了CLIXML中间正文。再将诊断改为pytest.fail完整文本（纯测试提交e889cf7，已推送），CI39167821484取完整原因；未放宽断言、未跳过迁移。
+
+## T1-20261019-G：正式Windows 2.8.0文件证据与清单补漏
+
+- cc.jilei.cc公开更新接口恢复HTTP200，清单存于 `build/task1-windows-v2.8.0-manifest.json`。version=2.8.0，发布时间2026-10-18T18:54:09.114961+00:00；Tag与新增功能详情见BASELINE.md。此发现更正仅凭origin/main=2.7.0推断最新正式版本的旧记录。
+- 正式exe下载到 `build/task1-windows-v2.8.0.exe`。首次curl因120秒上限退出28，保留47,775,744字节部分文件；随后对同一HTTPS地址Range续传退出0，不把部分文件计作成功。
+- 完整文件70,483,525字节，SHA256=867e7a10492b03af2c13ec0d6c902b66ea0ef3f1046da89d940bac25db68908f，与公开清单一致；file报告PE32+ GUI x86-64。
+- 只读PyInstaller归档检查：含python311.dll；反汇编打包main_app（不执行）得到LOAD_CONST '2.8.0' → STORE_NAME APP_VERSION。一次额外读取归档私有属性的检查以AttributeError退出1，改用实际TOC检查后退出0；不属于软件运行失败。
+- 没有在Mac执行exe；未证明全部打包字节与Tag精确SHA的构建对应，未代替候选Windows测试/真实exe门禁。没有访问管理接口或修改线上清单。
+- 菜单源码复核补充29条controller动态菜单、7条Qt通用编辑菜单；另登记v2.8.0的8条新增/变更操作，共744行。Graphify仅帮助定位，动态规则由直接源码审查发现；未重建图谱或执行任务2/3。
+
+## T1-20261019-H：Windows前置修复与最新Mac候选（替代E批产物）
+
+- CI39167821484完整错误：设置WScript的TargetPath时报ArgumentException，Save目标变为`Desktop/????.lnk`并报FileNotFoundException。两个Windows架构都失败，真实exe步骤跳过。
+- 修复提交98a1cbc75681d537e4ff57c621b6f27344165f9e：经factory调用WindowsLifecycleBackend，复用既有comtypes.shelllink.IShellLinkW及IPersistFile；原生代码不再位于业务/UI。微软Unicode接口说明：https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinkw-setpath 。没有新增/升级依赖，不使用win32com/pythoncom或PowerShell执行策略绕行。
+- Windows onefile原排除了PySide6.QtNetwork，而InstanceBroker依赖它；已移除排除并显式收集QtNetwork/comtypes.shelllink/comtypes.persist，增加静态契约与原生Unicode路径回读测试。
+- 局部5模块52通过/6平台跳过；随后完整任务1的11模块188通过/6 Windows专属跳过，0失败/错误，runner退出0。JUnit `build/test-reports/run-l0zqrhdt/`；日志 `build/task1-resumed-final-tests.log`。ruff main+Windows构建脚本退出0。
+- `.venv/bin/python build_macos.py`退出0，日志 `build/task1-shortcut-fix-build.log`。版本仍2.8.2未封版；Apple Development签名，未公证。主程序SHA256：ca7ea9337fcf25a9722793c3f3da4354afca9c7aa785bc105a5cc7c6870bae36。
+- 对此真实App运行 `scripts/make_release_bundle.py --notes-file docs/releases/v2.8.2-macos.md`：归档/DMG成功，DMG CRC32=680DEEA8；签名入口检查因缺少环境口令退出1（没有再尝试空口令）。日志 `build/task1-resumed-final-bundle.log`，暂存 `dist/macos-release-u4oz6qdm/`，无有效.sig，不是四件套。此前调试目录全部保留。
+- 最新archive SHA256=df762df684afdf7aca607085b1bd2b3fe9ad8dbfc96fa6aa3b4e51d1014c2b34；DMG SHA256=53a616ca96da56e50e6e708c0cd24093b8a0d028b7adb3e88c62737d0ca828b1；notes SHA256=d3a51f396f6ebfac79a4265558b664334bc03dd54bbf0cb8c6d9b224a235e7d6。
+- DMG只读挂载到本轮临时目录，codesign deep strict、版本2.8.2、主程序hash与dist一致，随后卸载本轮挂载，退出0。用户旧挂载未动。
+- 提交已push且ls-remote匹配；修复后Windows CI39168681792精确指向98a1cbc，等待原生测试/真实exe结果。无Tag、无main合并、无生产发布。
+
+## T1-20261019-I：Windows 门禁闭环与 macOS QtNetwork 修复
+
+- CI39168681792 的 x64/arm64 均完成成功；每架构任务1定向 JUnit 144 项，137 通过、7 个 Windows/macOS 平台跳过、0 失败/错误；两架构均完成真实 onefile 构建并上传。x64 manifest 位于 `build/task1-windows-98a1cbc-x64/build-manifest.json`，源码 `98a1cbc75681d537e4ff57c621b6f27344165f9e`，版本2.8.2，exe 74,547,495 bytes，SHA256 `0abba07c7c7142200a5dc264659da2c67642c1fe50cdae2d48faaf324e525272`。
+- 对 x64 归档只读检查发现原 Windows whitelist 漏掉实际 QtNetwork DLL/pyd；因此不能把该 exe 当作可运行候选。修复提交 `c7e78a3` 将 `qt6network.dll`/`qtnetwork.pyd` 纳入 whitelist，并将 macOS spec 的 QtNetwork 从 excludes 移到 hiddenimports；新增静态契约断言。该提交已 push，CI39169825988 正在重新验证，旧 run 不冒充修复后产物。
+- 旧 macOS 候选首次 Finder 双击日志明确报 `No module named 'PySide6.QtNetwork'`，退出码256；不是权限拒绝。修复后重新 `build_macos.py` 成功，安装 `/Applications/积磊截图.app` 的候选为2.8.2，主程序 SHA256 `cb6e449aeb5d0b6535b7ea419a9dcd15cc2ee3370d0a258e250e4b74bff21879`。通过终端启动后进程 `78203` 持续运行，Settings 窗口 AX 树可读，日志无未处理 Python 异常；Finder 双击/重复打开/退出重开仍待用户确认后执行。
+- 安装替换前旧2.8.1与上一轮候选均已移入 `dist/task1-install-backup-4BgqPj/`，用户配置、历史、TCC、LaunchAgent未改动。签名/公证和 `.sig` 仍未完成。
+- 补充26项macOS打包契约测试全部通过（含QtNetwork hiddenimports/excludes检查）。Windows PYZ只读检查确认comtypes.shelllink与comtypes.persist存在；缺失的是被binary whitelist过滤的QtNetwork.pyd/Qt6Network.dll。
+- CI39168681792整体失败，失败在macOS Rust录制的record_session_basic（frame_count=0）及record_session_pause_resume（恢复后应有新帧），17通过/2失败，退出101；不改为跳过、不以本机19通过替代该runner结果。CI39169825988触发时未传parity_task1，因此是完整流程；另触发39170509042明确parity_task1=true，两者均指向c7e78a38fa304a6d38e6ac88c7d0d7d64e56e0b9。
+- 真实设置页导航：AX click首次只改变选中态，按截图坐标点击后页面实际切换，显示屏幕录制已授权、辅助功能/输入监控未授权；刷新未改变状态，没有点击系统授权按钮。关闭设置后AX返回noWindowsAvailable，PID78203仍存活。Dock接口timeoutReached，不能计Dock reopen通过。Finder曾返回已移动备份的旧URL，未双击该条目。
+- 最新归档/DMG通过现有脚本重新生成，暂存`dist/macos-release-sz88t8x3/`；DMG CRC32 F7DFC405。archive SHA256=b2ee26248961949c6e6679e989774663dd9f02e5d504800ebb790a82fe0fbec9；DMG SHA256=733dc54e8020a324fbd6acd1471439b5328f39b50f0cbc99f98711173830c43e；notes SHA256=d3a51f396f6ebfac79a4265558b664334bc03dd54bbf0cb8c6d9b224a235e7d6。签名在缺少环境口令处退出1，没有尝试空口令。日志build/task1-qt-network-bundle.log；旧release全部保留。
