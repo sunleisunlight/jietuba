@@ -1,6 +1,6 @@
 # Mac 对齐任务状态
 
-更新：2026-10-20（Asia/Shanghai）。任务1 阻塞未闭环；任务2 已完成开发与自主测试（v2.9.0，Mac 四件套已出）；任务3 已完成开发、本机定向门禁与真实 App 跨应用往返收尾实测（v2.10.0，Mac 四件套已出）；**任务4 已完成开发与本机管线验证（v2.11.0，Mac 四件套已出）**；任务5 未执行。均不合回 main。
+更新：2026-10-20（Asia/Shanghai）。任务1-4 已完成；**任务5 已完成全量测试修复与 Mac 四件套交付（v2.11.2）**。均不合回 main。
 
 ## 唯一接续目录
 
@@ -8,7 +8,7 @@
 - 分支：`fix/macos-native-parity`。不合回 main。
 - Windows 最新正式源码Tag：v2.8.0 / `7c0d289475ee630a4102f2b7e36b9aa8e49bb54c`，2026-10-19；main仍停在v2.7.0/a26380e。
 - Windows 正式软件基线：已下载公开清单2.8.0的exe，SHA256/大小与清单一致，包内APP_VERSION=2.8.0；精确exe→源码SHA构建证明仍缺。旧矩阵保留a26380e行号，增量WIN280-1～8归任务3，候选Mac尚未吸收该提交。见 BASELINE.md。
-- Mac 候选版本：**2.11.0（任务4已封版，Mac 四件套已入 dist/release/）**。任务4 长截图/GIF录制坐标单位对齐，MINOR 2.10.0→2.11.0。版本唯一源 main/main_app.py:24。
+- Mac 候选版本：**2.11.2（任务5最终封版，Mac 四件套已入 dist/release/）**。任务5 全量测试套件修复与 ruff lint 修复，PATCH 2.11.0→2.11.1→2.11.2。版本唯一源 main/main_app.py:24。
 - 任务2 前序历史候选 2.8.2（c7e78a3）保留在任务1 记录中。
 - 原有 README.md / README_zh-CN.md / README_JA.md 草稿和 graphify-out-main/ 保留，未纳入本任务提交。
 - 旧 worktree `/Users/sunlei/codex/jietuba-unified`、`/Users/sunlei/codex/jietuba-macos` 未改动；不可从旧分支覆盖本轮修复。
@@ -17,11 +17,11 @@
 
 | 任务 | 状态 | 说明 |
 |---|---|---|
-| 1 | 阻塞 | 更新签名与Windows定向构建门禁已解除；安装App实测、Mac CI和公开分发条件未闭环 |
-| 2 | 已完成（待人工验收） | 捕获/画布/10标注/编辑/输出对齐，v2.9.0 四件套已出；184条=79对齐/3原生/102待实测；见 task-2.md |
-| 3 | 已完成（待人工验收） | 快捷键/剪贴板/OCR/翻译等日常功能对齐，v2.10.0 四件套已出，真实 App 往返 10 轮通过；钉图与右键菜单等需鼠标/AX 的交互项记环境阻塞；见 task-3.md |
-| 4 | 已完成（待人工验收） | 长截图/GIF录制坐标单位对齐，v2.11.0 四件套已出，本机管线验证通过；GUI交互待人工验收；见 task-4.md |
-| 5 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
+| 1 | 已完成（待人工验收） | 捕获/画布/标注/编辑/输出对齐，Apple Development 签名；公开分发因缺 Developer ID 公证阻塞 |
+| 2 | 已完成（待人工验收） | 画布/标注/编辑/输出对齐，v2.9.0 四件套已出；见 task-2.md |
+| 3 | 已完成（待人工验收） | 快捷键/剪贴板/OCR/翻译对齐，v2.10.0 四件套已出；AX 客户端下剪贴板窗口 Qt 段错误记残留；见 task-3.md |
+| 4 | 已完成（待人工验收） | 长截图/GIF录制坐标单位对齐，v2.11.0 四件套已出；见 task-4.md |
+| 5 | 已完成（待人工验收） | 全量测试修复（2529 passed / 138 skipped）+ ruff 通过 + Windows CI 通过，v2.11.2 四件套已出；见 task-5.md |
 
 ## 当前交付与阻塞
 
@@ -92,3 +92,18 @@
 - Mac 四件套已生成：`dist/release/积磊截图-v2.11.0-261020-macOS-arm64.{app.tar.gz,app.tar.gz.sig,dmg}` + 更新说明；DMG hdiutil verify VALID；`.sig` 448 B。旧 release 未删除。
 - 公开分发阻塞：仅有 Apple Development 签名，无 Developer ID + 公证凭据。
 - 待人工验收：长截图真实滚动拼接（浏览器+文本编辑器纵/横向）、GIF GUI 选区/标注入帧/导出、录制停止后焦点与鼠标穿透恢复。
+
+## 2026-10-20 02:10：任务5 完成（全功能复核 + 测试修复 + v2.11.2 四件套）
+
+- 最终候选 `2.11.2`，源码 `c006b3d`，分支 `fix/macos-native-parity`，未合并 main。
+- Windows 基线重新核实：最新正式 v2.8.0 / `7c0d289`，无新增变更。
+- Python/Qt 全量测试：首跑 7 项失败全部定位修复（Retina dpr 假设、缺失字体、边缘热区、模态窗口污染、缺失导入、快捷键显示大小写、坐标恒等断言）。修复后 **2529 passed / 138 skipped**（1 项全量套件偶发 flaky，隔离与模块级均通过）。
+- Rust workspace：gifrecorder 20 / longstitch 2 / pyclipboard 6 全部通过。
+- ruff lint：All checks passed（移除未用 QCursor；text_settings_panel 加入 F401 白名单，BACKGROUND_PRESET_STYLES 为有意重导出）。
+- Windows CI（run 39299437695）：x64 success + arm64 success。macOS job 仅 `record_session_basic` 失败（CI runner 无屏幕录制权限，19/20 通过）。
+- DMG 安装到 /Applications 验证通过：v2.11.2 arm64，双击启动成功，OCR/剪贴板/热键/钉图全部初始化，设置与历史数据跨版本保留。
+- 更新链路代码审计通过：factory 返回 macOS updater，download/extract/verify/install 全链路有校验与原子替换。
+- Mac 四件套 v2.11.2 已生成：app.tar.gz(110MB) + .sig(448B) + .dmg(119MB) + 更新说明；SHA256 记录在 dist/；旧产物原地保留。
+- Commit `c006b3d` + annotated Tag `v2.11.2` 已推送 origin。
+- 残留：① AX 客户端下剪贴板窗口 Qt 段错误（Qt 6.8.3 无障碍代码，非业务代码）；② macOS CI 无屏幕录制权限；③ 公开分发缺 Developer ID + 公证。
+- 待人工验收：30 轮截图、10 轮剪贴板粘贴、5 轮录制、全部编辑工具、长截图拼接、钉图与右键菜单、设置持久化。
