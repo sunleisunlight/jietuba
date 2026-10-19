@@ -282,7 +282,8 @@ clipboard/
 │   ├── file_payload_service.py   # file payload JSON + legacy format compatibility
 │   ├── group_service.py          # group icon/name/delete helpers
 │   ├── import_export_service.py  # CSV import/export for text items
-│   └── manage_dialog_service.py  # persistence logic for the management window
+│   ├── manage_dialog_service.py  # persistence logic for the management window
+│   └── ocr_index_service.py      # OCR index for image history: new copies first, backfill in batches
 ├── ui/
 │   ├── layout_scale.py           # Shared size metrics for the management dialog
 │   ├── dialogs/
@@ -339,6 +340,7 @@ Logging, resource loading, theme management, i18n, hotkeys, and other infrastruc
 ```text
 core/
 ├── bootstrap.py             # PreloadManager — startup bootstrap, env init, DPI, single instance
+├── instance_broker.py       # InstanceBroker — per-user single instance, activates the owner, never kills it
 ├── brand_migration.py       # one-time migration from legacy jietuba brand (data dir, QSettings, autostart, shortcuts)
 ├── logger.py                # Logger — file + console logging (debug/info/warning/error/exception)
 ├── crash_handler.py         # install_crash_hooks() — global exception catching
@@ -622,7 +624,6 @@ ui/
 │   ├── page_log.py          # Log settings
 │   ├── page_developer.py    # Developer settings
 │   ├── page_misc.py         # Miscellaneous settings
-│   ├── page_about.py        # About page
 │   └── mock_config.py       # MockConfig — mock config for testing
 │
 ├── welcome/                 # First-run welcome wizard (6-page guided setup)

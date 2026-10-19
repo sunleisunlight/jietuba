@@ -4,6 +4,25 @@
 
 下方「源码发现清单」由 AST 提取，包含操作绑定与数据驱动设置，不等于 Windows 实机可见性已核验。相同用户操作可能在不同入口分别列出；不得将源码存在计为实测通过。任务5必须复核动态菜单、条件入口与遗漏。权限页为 Mac 等效入口，不是 Windows 自带权限页。用户接受差异：尚无。
 
+## 任务3 实测覆盖与残留（2026-10-19 收尾，候选 v2.10.0 / c2fec4e）
+
+任务3 的代码开发、本机定向测试与 Windows CI 精确 SHA 门禁已完成；本轮收尾追加真实 App 跨应用往返实测。证据见 `TEST_EVIDENCE.md` 批次 `T3-20261019-R`，明细见 `task-3.md`。
+
+已真实 App 实测（键盘/系统事件驱动的真实入口，非源码运行、非内部方法）：
+- 剪贴板全局热键：⌘⇧V 每次唤起剪贴板窗口（日志 `Carbon 热键事件到达` + `加载完成`），键盘驱动 22 次打开 0 崩溃；设置界面显示 `Command+Shift+v`，与 Windows `ctrl+shift+v` 同源配置。
+- 跨应用往返 10 轮（TextEdit 5 轮 + Chrome 5 轮）：复制 → 历史最新条目 → 粘贴回原目标，接收内容与期望逐字一致，粘贴后前台回到原目标应用。
+- 重复内容 3 轮：同内容重复复制后条目仍在、顺序正确、粘贴内容精确。
+- 目标切换：复制后焦点切到浏览器再唤起，粘贴落到唤起时的前台目标（Chrome），内容精确。
+- 目标失效保护：`已停止自动粘贴` 提示在 22:05:45 真实触发过一次（内容不越界、提示正确）；本轮两种构造（关闭标签页、关闭专用 app 模式窗口）未再触发，原因是 macOS 粘贴目标按 PID 粒度跟踪（见 `foreground_tracker.py` 注释），与 Windows 的 HWND 粒度存在已记录差异。
+- OCR/扫码：随包 `ppocr_rust` 真实推理，合成中英混排/数字/多行样本与 QR/Code128 均命中预期。
+
+本轮发现、未在应用层修改的残留问题（均需任务5 复核）：
+- AX 客户端（Computer Use / VoiceOver 一类无障碍客户端）在剪贴板窗口重建列表期间会导致 Qt 段错误：22:09–22:52 生成 6 份 `JileiScreenshot-*.ips`（签名 `QAccessibleCache::deleteInterface`；`libqcocoa` 释放 `__RELEASE_OBJECTS_IN_THE_ARRAY__`）。全部发生在 AX 客户端连着的会话；无 AX 客户端时 22 次打开无崩溃。根因在 Qt 6.8.3/PySide 的无障碍服务代码，应用层无安全修复手段。
+- `capture/window_finder.py` 在 macOS 导入时打印 `win32gui 未安装，智能选区功能不可用`：可用性实际由 `platforms/macos/window_finder.py` 提供（该模块底部已做平台分派），此行只是 Win32 分支的日志噪声。
+
+仍为 `未检查` 的任务3条目（含 29 条动态剪贴板菜单、7 条通用编辑菜单、37 条钉图绑定、364 条源码候选入口/设置）：本轮未逐条操作。其中需要真实鼠标或 AX 交互的条目（钉图创建与操作、右键菜单、智能选区滚轮粒度）在本机**记环境阻塞**——AX 交互会触发上述 Qt 崩溃；其余条目转任务5 与用户人工验收，不计为通过。
+
+
 ## 任务1验收操作
 
 | ID | Windows入口/行为或Mac等效要求 | 源码 | Mac实现 | 任务 | 场景与预期 | 实际/证据 | 验证版本/SHA | 状态 | 阻塞原因 |
@@ -403,7 +422,7 @@ AST提取器未扫描clipboard/controllers，无法从通用菜单渲染器恢�
 | WIN-3632792b0456 | 操作绑定: toolbar.redo_clicked | lambda: print('Redo clicked') | main/pin/pin_toolbar.py:210 | main/pin/pin_toolbar.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-f0820dc55b8c | 应用设置: hotkey | 'ctrl+1' | main/settings/tool_settings.py:286 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-1385c410826f | 应用设置: hotkey_2 | '' | main/settings/tool_settings.py:287 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
-| WIN-1caa8ef17751 | 应用设置: clipboard_hotkey | 'ctrl+2' | main/settings/tool_settings.py:288 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
+| WIN-1caa8ef17751 | 应用设置: clipboard_hotkey | 'ctrl+2' | main/settings/tool_settings.py:288 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 真实App：⌘⇧V 唤起剪贴板窗口 22 次并成功粘贴 / TEST_EVIDENCE.md T3-R | v2.10.0/c2fec4e；真实App | 对齐已实测 | Windows可见性待任务5核验 |
 | WIN-3983ca924e1f | 应用设置: clipboard_hotkey_2 | '' | main/settings/tool_settings.py:289 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-9aa7a5a584cc | 应用设置: pin_clipboard_hotkey | '' | main/settings/tool_settings.py:290 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-36f7ddb2971c | 应用设置: pin_clipboard_hotkey_2 | '' | main/settings/tool_settings.py:291 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
@@ -425,11 +444,11 @@ AST提取器未扫描clipboard/controllers，无法从通用菜单渲染器恢�
 | WIN-5fba257b98b5 | 应用设置: smart_selection_animation | False | main/settings/tool_settings.py:339 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-68d688d23692 | 应用设置: clipboard_file_reference_enabled | True | main/settings/tool_settings.py:346 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-80d0014f6068 | 应用设置: ocr_enabled | True | main/settings/tool_settings.py:364 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
-| WIN-bb7bcac8cb23 | 应用设置: ocr_engine | 'ppocr_rust' | main/settings/tool_settings.py:365 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
+| WIN-bb7bcac8cb23 | 应用设置: ocr_engine | 'ppocr_rust' | main/settings/tool_settings.py:365 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 随包 ppocr_rust 真实推理：中英混排/数字/多行逐行命中预期 / build/task3-native-content.log | v2.10.0/c2fec4e；真实App | 对齐已实测 | Windows可见性待任务5核验 |
 | WIN-7029027d3bf3 | 应用设置: ocr_grayscale | False | main/settings/tool_settings.py:366 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-25f924cd2900 | 应用设置: ocr_upscale | True | main/settings/tool_settings.py:367 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-7a885a7f4a52 | 应用设置: ocr_upscale_factor | 2.0 | main/settings/tool_settings.py:368 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
-| WIN-438398843ba4 | 应用设置: clipboard_enabled | True | main/settings/tool_settings.py:371 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
+| WIN-438398843ba4 | 应用设置: clipboard_enabled | True | main/settings/tool_settings.py:371 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 真实App：复制内容进历史且最新在顶部、可粘贴回目标 / TEST_EVIDENCE.md T3-R | v2.10.0/c2fec4e；真实App | 对齐已实测 | Windows可见性待任务5核验 |
 | WIN-0ee9fcfd2127 | 应用设置: clipboard_auto_paste | True | main/settings/tool_settings.py:372 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-982e1fece322 | 应用设置: clipboard_close_after_paste | True | main/settings/tool_settings.py:373 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |
 | WIN-b775c2504621 | 应用设置: clipboard_history_limit | 1000 | main/settings/tool_settings.py:374 | main/settings/tool_settings.py（共享，平台效果待核） | 3 | 按本节场景逐项验证 | 未执行；BASELINE.md源码索引 | 源码v2.7.0/a26380e；未实测 | 未检查 | 后续任务3；Windows可见性待核 |

@@ -1,6 +1,6 @@
 # Mac 对齐任务状态
 
-更新：2026-10-19（Asia/Shanghai）。任务1 阻塞未闭环；**任务2 已完成开发与自主测试（v2.9.0，Mac 四件套已出）**，不合回 main，待用户人工验收并在控制中心发布。任务3～5 未执行。
+更新：2026-10-19（Asia/Shanghai）。任务1 阻塞未闭环；任务2 已完成开发与自主测试（v2.9.0，Mac 四件套已出）；**任务3 已完成开发、本机定向门禁与真实 App 跨应用往返收尾实测（v2.10.0，Mac 四件套已出，Tag `v2.10.0` 待建）**；任务4～5 未执行。均不合回 main。
 
 ## 唯一接续目录
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | 1 | 阻塞 | 更新签名与Windows定向构建门禁已解除；安装App实测、Mac CI和公开分发条件未闭环 |
 | 2 | 已完成（待人工验收） | 捕获/画布/10标注/编辑/输出对齐，v2.9.0 四件套已出；184条=79对齐/3原生/102待实测；见 task-2.md |
-| 3 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
+| 3 | 已完成（待人工验收） | 快捷键/剪贴板/OCR/翻译等日常功能对齐，v2.10.0 四件套已出，真实 App 往返 10 轮通过；钉图与右键菜单等需鼠标/AX 的交互项记环境阻塞；见 task-3.md |
 | 4 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
 | 5 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
 
@@ -54,3 +54,29 @@
 矩阵统计（744行）：任务2（184条）已更新为 对齐79 / 原生3 / 待实测102；全矩阵当前对齐已实测79、原生等效3、已实现待实测102、未检查483，其余约77行为任务1填入的待办/阻塞描述（其状态列含文字，非标准枚举）。任务2 真实 App 选区/工具栏实测、QTest 真实鼠标事件为新增关键证据。
 
 （历史）任务1：本轮PID13381，系统设置显示辅助功能/输入监控均为on，但App内授权后恢复未验证；Dock AX超时；Finder列表曾追踪已移到备份的旧inode，后续必须重新导航并核对完整URL。DIST-01的c7e78a3实际包体验证已补齐，不能替代Windows交互实测。
+
+## 2026-10-19 18:55：任务3最终候选复测与修复
+
+- 最终候选源码提交 `c2fec4e`，版本 `2.10.0`，分支 `fix/macos-native-parity`；未合并 main。
+- 快捷键：Mac 持久化继续使用跨平台 `ctrl`，界面显示 Command；物理 Control 显示 Control，Option 显示 Option；Windows 仍显示 Ctrl。Finder 双击 `/Applications/积磊截图.app` 后真实设置页显示 `Command+Shift+a` 及 `例如: Command+Shift+a`；实按 Command+Shift+k 显示 `Command+Shift+k`，实按 Control+Option+k 显示 `Option+Control+k`。证据截图 `build/task3-command-final.png`。
+- 真实候选 App 主程序 SHA256 `ceab8d9c0c64eba291fd41f5109bb3f345be7286d06ebf041c8776c79f0ea794`；`build_macos.py` 退出0，Apple Development 深度签名校验通过，spctl 因缺 Developer ID/公证拒绝，不能作为公开分发结论。
+- 真实原生 OCR：`build/task3-native-content.log`，PP-OCRv6 对合成中英混排/数字/多行样本逐行返回预期文本；zxing-cpp 对合成 QR 与 Code128 返回预期内容。
+- 新增 Azure provider 离线 HTTP/错误契约测试；快捷键提示改为只转换文本中的快捷键示例，不改变翻译文案。
+- 修复 Mac Carbon 全局热键事件常量：HIToolbox `kEventHotKeyPressed/Released` 为 5/6（此前误用1/2导致注册成功但收不到事件）。Apple SDK 头文件核对，新增回归测试；此前真实剪贴板热键未唤起窗口的现象由此解释。
+- 修复 Mac 粘贴目标追踪：通过 AX focused window 记录 PID兼容 token，发送前再次核对窗口身份；无法核对则停止并提示，不向当前错误窗口盲粘。用户原剪贴板仅在本地安全文件临时保存后恢复，未输出内容。
+- 任务3定向本机测试最终批次：`build/task3-final-tests.log`，退出0；OCR/扫码/翻译/剪贴板/快捷键模块通过。Rust pyclipboard 6项通过，maturin wheel 已安装。
+- Windows CI 定向任务3运行 `39235405307`（提交 `3f679dd`）x64/ARM64测试与真实exe构建通过；最新含 Carbon 修复的运行 `39240802180` 待完成。Mac CI同批受 ScreenCaptureKit runner 无屏幕录制环境影响，`record_session_basic` 0帧失败，不是快捷键/剪贴板回归。
+- Mac四件套已生成且 `.sig` 使用密钥验证脚本核验通过；产物路径与SHA见 `build/task3-release.log` 及 `dist/积磊截图-v2.10.0-261019-macOS-arm64.sha256`。旧 release 未删除。
+
+结论：任务3代码与本机原生验证完成；跨 Windows 的 CI 任务3主线在最新提交待完成，公开分发与真实多轮跨应用粘贴/钉图循环仍需最终人工验收，任务状态保持“进行中”。
+
+## 2026-10-19 23:20：任务3 收尾（真实 App 往返实测 + 残留登记）
+
+- 候选 `2.10.0`，源码 `c2fec4e`，分支 `fix/macos-native-parity`，未合并 main；本轮只补文档与测试记录，未改运行代码，因此沿用同一份已构建四件套，不重新出包。
+- 真实 App 跨应用往返 10 轮（TextEdit 5 + Chrome 5）全部通过：接收内容逐字一致、焦点归还原目标；⌘⇧V 全局热键 22 次打开剪贴板窗口 0 崩溃；重复内容 3 轮、目标切换用例通过。证据 `TEST_EVIDENCE.md` 批次 T3-20261019-R、`build/task3-resume-clipboard-10rounds.log`。
+- 四件套完整性复核：`.sig` 用客户端固定公钥独立验证通过；四文件 SHA256 与 `dist/积磊截图-v2.10.0-261019-macOS-arm64.sha256` 一致；归档内 App 主程序与 `/Applications/积磊截图.app` 同一二进制（`688871e2…e49299`）。task-3.md 中旧的 `ceab8d9c…` 中间构建哈希已更正。
+- 顺带修复 README 目录树一致性（纯文档），`test_readme_tree.py` 3 failed → 3 passed。
+- 转任务5 的残留：① AX 客户端（Computer Use/VoiceOver）下剪贴板窗口重建列表会触发 Qt 段错误（6 份崩溃报告；无 AX 客户端 22 次打开 0 崩溃，根因在 Qt 6.8.3/PySide 无障碍代码）；② macOS 导入时 `win32gui 未安装，智能选区功能不可用` 只是日志噪声（可用性由 `platforms/macos/window_finder.py` 提供）。
+- 环境阻塞未通过项：钉图 5 轮、动态剪贴板右键菜单 29 条、通用编辑菜单 7 条、智能选区滚轮粒度 —— 均需真实鼠标或 AX 交互，AX 交互会触发上述崩溃，转任务5 与用户人工验收。
+- 用户原剪贴板在测试前本地备份（`build/task3-resume-pasteboard.plist`，未入库、未打印内容），结束后已恢复；剪贴板历史中会留有本轮合成测试条目。
+- 下一步：由用户人工验收 → 把 `dist/release/` 的 v2.10.0 四件套拖入积磊控制中心发布中心（analyze→stage→publish）；任务4（长截图/录制）为下一任务入口。

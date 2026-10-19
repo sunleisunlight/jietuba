@@ -160,3 +160,39 @@ Windows候选CI、源码Commit、Tag/远端引用在后续批次追加。Finder�
 - CI39168681792整体失败，失败在macOS Rust录制的record_session_basic（frame_count=0）及record_session_pause_resume（恢复后应有新帧），17通过/2失败，退出101；不改为跳过、不以本机19通过替代该runner结果。CI39169825988触发时未传parity_task1，因此是完整流程；另触发39170509042明确parity_task1=true，两者均指向c7e78a38fa304a6d38e6ac88c7d0d7d64e56e0b9。
 - 真实设置页导航：AX click首次只改变选中态，按截图坐标点击后页面实际切换，显示屏幕录制已授权、辅助功能/输入监控未授权；刷新未改变状态，没有点击系统授权按钮。关闭设置后AX返回noWindowsAvailable，PID78203仍存活。Dock接口timeoutReached，不能计Dock reopen通过。Finder曾返回已移动备份的旧URL，未双击该条目。
 - 最新归档/DMG通过现有脚本重新生成，暂存`dist/macos-release-sz88t8x3/`；DMG CRC32 F7DFC405。archive SHA256=b2ee26248961949c6e6679e989774663dd9f02e5d504800ebb790a82fe0fbec9；DMG SHA256=733dc54e8020a324fbd6acd1471439b5328f39b50f0cbc99f98711173830c43e；notes SHA256=d3a51f396f6ebfac79a4265558b664334bc03dd54bbf0cb8c6d9b224a235e7d6。签名在缺少环境口令处退出1，没有尝试空口令。日志build/task1-qt-network-bundle.log；旧release全部保留。
+
+## 2026-10-19 18:55：任务3最终候选复测与修复
+
+- 最终候选源码提交 `c2fec4e`，版本 `2.10.0`，分支 `fix/macos-native-parity`；未合并 main。
+- 快捷键：Mac 持久化继续使用跨平台 `ctrl`，界面显示 Command；物理 Control 显示 Control，Option 显示 Option；Windows 仍显示 Ctrl。Finder 双击 `/Applications/积磊截图.app` 后真实设置页显示 `Command+Shift+a` 及 `例如: Command+Shift+a`；实按 Command+Shift+k 显示 `Command+Shift+k`，实按 Control+Option+k 显示 `Option+Control+k`。证据截图 `build/task3-command-final.png`。
+- 真实候选 App 主程序 SHA256 `ceab8d9c0c64eba291fd41f5109bb3f345be7286d06ebf041c8776c79f0ea794`；`build_macos.py` 退出0，Apple Development 深度签名校验通过，spctl 因缺 Developer ID/公证拒绝，不能作为公开分发结论。
+- 真实原生 OCR：`build/task3-native-content.log`，PP-OCRv6 对合成中英混排/数字/多行样本逐行返回预期文本；zxing-cpp 对合成 QR 与 Code128 返回预期内容。
+- 新增 Azure provider 离线 HTTP/错误契约测试；快捷键提示改为只转换文本中的快捷键示例，不改变翻译文案。
+- 修复 Mac Carbon 全局热键事件常量：HIToolbox `kEventHotKeyPressed/Released` 为 5/6（此前误用1/2导致注册成功但收不到事件）。Apple SDK 头文件核对，新增回归测试；此前真实剪贴板热键未唤起窗口的现象由此解释。
+- 修复 Mac 粘贴目标追踪：通过 AX focused window 记录 PID兼容 token，发送前再次核对窗口身份；无法核对则停止并提示，不向当前错误窗口盲粘。用户原剪贴板仅在本地安全文件临时保存后恢复，未输出内容。
+- 任务3定向本机测试最终批次：`build/task3-final-tests.log`，退出0；OCR/扫码/翻译/剪贴板/快捷键模块通过。Rust pyclipboard 6项通过，maturin wheel 已安装。
+- Windows CI 定向任务3运行 `39235405307`（提交 `3f679dd`）x64/ARM64测试与真实exe构建通过；最新含 Carbon 修复的运行 `39240802180` 待完成。Mac CI同批受 ScreenCaptureKit runner 无屏幕录制环境影响，`record_session_basic` 0帧失败，不是快捷键/剪贴板回归。
+- Mac四件套已生成且 `.sig` 使用密钥验证脚本核验通过；产物路径与SHA见 `build/task3-release.log` 及 `dist/积磊截图-v2.10.0-261019-macOS-arm64.sha256`。旧 release 未删除。
+
+结论：任务3代码与本机原生验证完成；跨 Windows 的 CI 任务3主线在最新提交待完成，公开分发与真实多轮跨应用粘贴/钉图循环仍需最终人工验收，任务状态保持“进行中”。
+
+## T3-20261019-R：任务3收尾：真实 App 跨应用剪贴板往返与残留问题
+
+候选：`/Applications/积磊截图.app` v2.10.0（源码 `c2fec4e`，分支 `fix/macos-native-parity`）。
+环境：macOS 26.5 arm64；目标应用 TextEdit（系统原生编辑器）与 Google Chrome（本地合成页面 `build/task3-clipboard-target.html`，无网络请求）。
+驱动方式：真实系统事件（`osascript` System Events 键盘注入）+ 真实全局热键，不做源码运行、不调用内部方法、不做深层 AX 枚举。脚本 `build/task3-resume-clipboard-loop.py`，原始输出 `build/task3-resume-clipboard-10rounds.log`。
+
+| 检查 | 预期 | 实际/退出码 | 本地证据 |
+|---|---|---|---|
+| 定向本机测试门禁（20 模块） | 全部通过 | 退出 0；`failed modules/checks: []`；app_lifecycle 17/2skip、clipboard_manager_storage 33、clipboard_context_menu 4、clipboard_ocr_index 5、clipboard_preview_lifecycle 2、inapp_mouse_shortcut 39、macos_clipboard_contract 13、pin_context_menu 26、pin_image_transform 47、pin_shortcut 41、settings_dialog_state 57、shortcut_convention 12、translation_architecture 20、translation_provider_fields 16、ocr_ppocr_engine 15、barcode_scan 28、azure_translation_contract 5、backend_hotkey_dispatch 1；Windows 专属 clipboard_paste_target 7 skip、mouse_hotkey 28 skip | `build/task3-resume-gate.log` |
+| README 目录树一致性 | 三份 README 与代码结构一致 | 修复后 3 passed（此前 `page_about.py` 残留 + `ocr_index_service.py`/`instance_broker.py` 缺失，3 failed） | 本批命令输出；README.md / README_zh-CN.md / README_JA.md |
+| 剪贴板全局热键 | ⌘⇧V 唤起剪贴板窗口 | 22 次打开（日志 `Carbon 热键事件到达, hid.id=4` + `加载完成 - 获取到 38 条记录`），0 崩溃 | 应用日志 `~/Library/Application Support/JileiScreenshot/Logs/runtime_20261019.log` |
+| 跨应用往返 10 轮 | 接收内容与复制内容逐字一致、焦点归还原目标 | 10/10 通过：TextEdit 5 轮 + Chrome 5 轮，`copied=True / window-opened=True / content-match=True`，粘贴后 frontmost 为目标应用 | `build/task3-resume-clipboard-10rounds.log` |
+| 重复内容 3 轮 | 条目不丢失、粘贴精确 | 3/3 通过 | 同上脚本 duplicate 用例输出 |
+| 目标切换 | 粘贴落到唤起时的前台目标 | 通过：复制于 TextEdit、唤起时前台为 Chrome，粘贴内容精确落在 Chrome | 同上脚本 switched 用例输出 |
+| 目标失效保护 | 停止自动粘贴并提示 | 22:05:45 真实触发一次，日志 `目标窗口已关闭或无法恢复焦点，已停止自动粘贴`；本轮两种构造（关标签页/关 app 模式窗口）未再触发，因 macOS 目标按 PID 粒度跟踪 | 应用日志；`main/clipboard/controllers/foreground_tracker.py` 注释 |
+| 真实 OCR / 扫码 | 合成样本命中预期 | PP-OCRv6 中英混排/数字/多行逐行一致；zxing-cpp QR=`JILEI-TASK3-QR-261019`、Code128=`JILEI-128-261019` | `build/task3-native-content.log` |
+| AX 客户端下剪贴板窗口稳定性 | 不应崩溃 | 失败：同一时段生成 6 份 `JileiScreenshot-*.ips`（22:09/22:16/22:20/22:23/22:27/22:52），签名 `QAccessibleCache::deleteInterface` 与 `libqcocoa __RELEASE_OBJECTS_IN_THE_ARRAY__`；仅出现在 AX 客户端连着的会话，无 AX 客户端时 22 次打开 0 崩溃 | `~/Library/Logs/DiagnosticReports/JileiScreenshot-2026-10-19-*.ips`（本地，不入库） |
+| 平台包体与更新签名 | 四件套一致且签名匹配客户端公钥 | `.sig` 用固定公钥验证通过（`sunget-tauri/src-tauri/tools/verify-updater-signature.mjs`，退出 0）；四文件 SHA256 与 `dist/积磊截图-v2.10.0-261019-macOS-arm64.sha256` 一致；归档内主程序二进制与已安装 App 一致（`688871e2…e49299`） | `build/task3-release.log`；`dist/release/` |
+
+用户原剪贴板在本批开始前保存在本地安全文件 `build/task3-resume-pasteboard.plist`（内容未打印、未入库），测试使用合成内容，结束后按备份恢复。

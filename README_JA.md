@@ -281,7 +281,8 @@ clipboard/
 │   ├── file_payload_service.py   # file 型 JSON payload と旧形式互換
 │   ├── group_service.py          # グループのアイコン・命名・削除確認補助
 │   ├── import_export_service.py  # テキスト項目の CSV インポート/エクスポート
-│   └── manage_dialog_service.py  # 管理ウィンドウの保存ロジック
+│   ├── manage_dialog_service.py  # 管理ウィンドウの保存ロジック
+│   └── ocr_index_service.py      # 画像履歴の OCR インデックス：新規取り込みを優先、履歴は分割して補録
 ├── ui/
 │   ├── layout_scale.py           # 管理ウィンドウ共通のサイズ定数
 │   ├── dialogs/
@@ -338,6 +339,7 @@ clipboard/
 ```text
 core/
 ├── bootstrap.py             # PreloadManager — 起動ブートストラップ、環境初期化、DPI、シングルインスタンス
+├── instance_broker.py       # InstanceBroker — ユーザー単位のシングルインスタンス、既存インスタンスを復帰（強制終了しない）
 ├── brand_migration.py       # 旧ブランド（截图吧/jietuba）の一回限り移行：データ目录・QSettings・自動起動・ショートカット
 ├── logger.py                # Logger — ファイル＋コンソールログ（debug/info/warning/error/exception）
 ├── crash_handler.py         # install_crash_hooks() — グローバル例外キャッチ
@@ -621,7 +623,6 @@ ui/
 │   ├── page_log.py          # ログ設定
 │   ├── page_developer.py    # 開発者設定
 │   ├── page_misc.py         # その他設定
-│   ├── page_about.py        # アバウトページ
 │   └── mock_config.py       # MockConfig — テスト用モック設定
 │
 ├── welcome/                 # 初回起動ウェルカムウィザード（6ページガイド）
