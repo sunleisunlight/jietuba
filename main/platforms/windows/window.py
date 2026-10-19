@@ -48,7 +48,9 @@ HWND_TOPMOST = -1
 HWND_NOTOPMOST = -2
 SWP_NOSIZE = 0x0001
 SWP_NOMOVE = 0x0002
+SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
+SWP_FRAMECHANGED = 0x0020
 SWP_SHOWWINDOW = 0x0040
 
 WDA_NONE = 0x00000000
@@ -146,8 +148,15 @@ class WindowsWindowBackend(WindowBackend):
             if enable:
                 ex_style |= WS_EX_TRANSPARENT | WS_EX_LAYERED
             else:
-                ex_style &= ~(WS_EX_TRANSPARENT | WS_EX_LAYERED)
+                ex_style &= ~WS_EX_TRANSPARENT
+                ex_style |= WS_EX_LAYERED
             _user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style)
+            # 扩展样式变更后需要主动通知窗口重算框架，否则部分情况下
+            # 穿透在窗口重绘前不生效
+            _user32.SetWindowPos(
+                hwnd, 0, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+            )
         except Exception:
             pass
 

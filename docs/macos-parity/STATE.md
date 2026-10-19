@@ -1,6 +1,6 @@
 # Mac 对齐任务状态
 
-更新：2026-10-19（Asia/Shanghai）。任务1 阻塞未闭环；任务2 已完成开发与自主测试（v2.9.0，Mac 四件套已出）；**任务3 已完成开发、本机定向门禁与真实 App 跨应用往返收尾实测（v2.10.0，Mac 四件套已出，Tag `v2.10.0` 待建）**；任务4～5 未执行。均不合回 main。
+更新：2026-10-20（Asia/Shanghai）。任务1 阻塞未闭环；任务2 已完成开发与自主测试（v2.9.0，Mac 四件套已出）；任务3 已完成开发、本机定向门禁与真实 App 跨应用往返收尾实测（v2.10.0，Mac 四件套已出）；**任务4 已完成开发与本机管线验证（v2.11.0，Mac 四件套已出）**；任务5 未执行。均不合回 main。
 
 ## 唯一接续目录
 
@@ -8,7 +8,7 @@
 - 分支：`fix/macos-native-parity`。不合回 main。
 - Windows 最新正式源码Tag：v2.8.0 / `7c0d289475ee630a4102f2b7e36b9aa8e49bb54c`，2026-10-19；main仍停在v2.7.0/a26380e。
 - Windows 正式软件基线：已下载公开清单2.8.0的exe，SHA256/大小与清单一致，包内APP_VERSION=2.8.0；精确exe→源码SHA构建证明仍缺。旧矩阵保留a26380e行号，增量WIN280-1～8归任务3，候选Mac尚未吸收该提交。见 BASELINE.md。
-- Mac 候选版本：**2.9.0（任务2已封版，Mac 四件套已入 dist/release/）**。任务2 坐标/捕获重大对齐，MINOR 2.8.2→2.9.0。版本唯一源 main/main_app.py:24。
+- Mac 候选版本：**2.11.0（任务4已封版，Mac 四件套已入 dist/release/）**。任务4 长截图/GIF录制坐标单位对齐，MINOR 2.10.0→2.11.0。版本唯一源 main/main_app.py:24。
 - 任务2 前序历史候选 2.8.2（c7e78a3）保留在任务1 记录中。
 - 原有 README.md / README_zh-CN.md / README_JA.md 草稿和 graphify-out-main/ 保留，未纳入本任务提交。
 - 旧 worktree `/Users/sunlei/codex/jietuba-unified`、`/Users/sunlei/codex/jietuba-macos` 未改动；不可从旧分支覆盖本轮修复。
@@ -20,7 +20,7 @@
 | 1 | 阻塞 | 更新签名与Windows定向构建门禁已解除；安装App实测、Mac CI和公开分发条件未闭环 |
 | 2 | 已完成（待人工验收） | 捕获/画布/10标注/编辑/输出对齐，v2.9.0 四件套已出；184条=79对齐/3原生/102待实测；见 task-2.md |
 | 3 | 已完成（待人工验收） | 快捷键/剪贴板/OCR/翻译等日常功能对齐，v2.10.0 四件套已出，真实 App 往返 10 轮通过；钉图与右键菜单等需鼠标/AX 的交互项记环境阻塞；见 task-3.md |
-| 4 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
+| 4 | 已完成（待人工验收） | 长截图/GIF录制坐标单位对齐，v2.11.0 四件套已出，本机管线验证通过；GUI交互待人工验收；见 task-4.md |
 | 5 | 阻塞 | 尚未执行，等待前置任务与用户调用 |
 
 ## 当前交付与阻塞
@@ -80,3 +80,15 @@
 - 环境阻塞未通过项：钉图 5 轮、动态剪贴板右键菜单 29 条、通用编辑菜单 7 条、智能选区滚轮粒度 —— 均需真实鼠标或 AX 交互，AX 交互会触发上述崩溃，转任务5 与用户人工验收。
 - 用户原剪贴板在测试前本地备份（`build/task3-resume-pasteboard.plist`，未入库、未打印内容），结束后已恢复；剪贴板历史中会留有本轮合成测试条目。
 - 下一步：由用户人工验收 → 把 `dist/release/` 的 v2.10.0 四件套拖入积磊控制中心发布中心（analyze→stage→publish）；任务4（长截图/录制）为下一任务入口。
+
+## 2026-10-20 01:10：任务4 完成（长截图/GIF录制坐标单位对齐）
+
+- 候选 `2.11.0`，源码见本轮 Commit，分支 `fix/macos-native-parity`，未合并 main。
+- 核心修复：Retina 下录制/长截图坐标系单位错乱（窗口尺寸翻倍、画面重复、分辨率减半）。统一"场景=物理像素、屏幕=Qt 逻辑点"；GIF 录制以点定区域、像素定输出；长截图改用物理像素全桌面捕获+按像素裁剪。
+- 新增平台 input backend（`pointer_buttons`/`send_scroll`），Windows/macOS 共享业务逻辑；`base/coordinates` 新增 `reference_factor()`。
+- Rust `gifrecorder`：`RecordSession`/`ScreenCapture` 新增 `out_width/out_height` 参数；ObjC `JTKStartCapture` 新增 outW/outH 且不再排除自身窗口（标注入帧）。20 项 Rust 测试通过。
+- 本机管线验证（非 mock）：GIF 录制 Retina dpr=2，400x300 点 → 800x600 像素输出，14 帧非黑屏；长截图 7680x2160 物理像素全桌面，裁剪正确非黑屏。
+- Python 回归：`test_frame_recorder` 28 passed（新增点→像素换算测试）、`test_macos_coordinates` 7 passed、gif/stitch/platform 套件 185 passed / 6 skipped。
+- Mac 四件套已生成：`dist/release/积磊截图-v2.11.0-261020-macOS-arm64.{app.tar.gz,app.tar.gz.sig,dmg}` + 更新说明；DMG hdiutil verify VALID；`.sig` 448 B。旧 release 未删除。
+- 公开分发阻塞：仅有 Apple Development 签名，无 Developer ID + 公证凭据。
+- 待人工验收：长截图真实滚动拼接（浏览器+文本编辑器纵/横向）、GIF GUI 选区/标注入帧/导出、录制停止后焦点与鼠标穿透恢复。

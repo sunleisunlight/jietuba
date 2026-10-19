@@ -52,13 +52,11 @@ def mock_gifrecorder():
 
 @pytest.fixture(autouse=True)
 def mock_win32_cursor():
-    """所有测试默认屏蔽真实 GetCursorPos/GetAsyncKeyState 调用"""
-    with patch.object(FrameRecorder, "_get_cursor_pos",
+    """所有测试默认屏蔽真实光标位置/按键采集（平台后端统一封装）"""
+    with patch.object(FrameRecorder, "_get_cursor_pos_px",
                       new=staticmethod(lambda: (0, 0))), \
-         patch.object(FrameRecorder, "_is_left_pressed",
-                      new=staticmethod(lambda: False)), \
-         patch.object(FrameRecorder, "_is_right_pressed",
-                      new=staticmethod(lambda: False)):
+         patch.object(FrameRecorder, "_buttons_pressed",
+                      new=staticmethod(lambda: (False, False))):
         yield
 
 
@@ -153,6 +151,57 @@ class TestRecordStateMachine:
         recorder.start()
         assert "RECORDING" in received
         recorder._timer.stop()
+
+
+class TestUnitConversion:
+    """任务4：录制区域以 Qt 逻辑点传入，输出帧为物理像素（Retina 下 factor=2）。"""
+
+    def _fake_backend(self, factor):
+        from unittest.mock import MagicMock
+        backend = MagicMock()
+        backend.coordinates.qt_to_capture_factor.return_value = factor
+        backend.coordinates.qt_point_to_capture.side_effect = lambda x, y: (
+            int(round(x * factor)), int(round(y * factor)))
+        return backend
+
+    def test_retina_dpr2_scales_output_to_pixels(self, qapp, mock_gifrecorder):
+        """dpr=2 时 202x202 点（内缩后 200x200 点）→ 输出 400x400 像素。"""
+        fake_mod, fake_store, fake_session = mock_gifrecorder
+        with patch("platforms.get_platform_backend",
+                   return_value=self._fake_backend(2.0)):
+            recorder = FrameRecorder()
+            recorder.set_rect(QRect(0, 0, 202, 202))
+            recorder.start()
+            w, h = recorder.rec_size
+            assert w == 400  # (202 - 2) * 2
+            assert h == 400
+            # RecordSession 收到：区域=点、输出=像素
+            fake_mod.RecordSession.assert_called_once()
+            args = fake_mod.RecordSession.call_args[0]
+            # (store, pt_x, pt_y, pt_w, pt_h, fps, px_w, px_h)
+            assert args[1:5] == (1, 1, 200, 200)
+            assert args[5] == recorder._fps
+            assert args[6] == 400 and args[7] == 400
+            # FrameStore 用像素尺寸
+            fake_mod.FrameStore.assert_called_once()
+            fs_kwargs = fake_mod.FrameStore.call_args[1]
+            assert fs_kwargs["width"] == 400 and fs_kwargs["height"] == 400
+            recorder._timer.stop()
+
+    def test_windows_dpr1_points_equal_pixels(self, qapp, mock_gifrecorder):
+        """dpr=1（Windows）时点与像素一致，FrameStore/RecordSession 尺寸相同。"""
+        fake_mod, _, _ = mock_gifrecorder
+        with patch("platforms.get_platform_backend",
+                   return_value=self._fake_backend(1.0)):
+            recorder = FrameRecorder()
+            recorder.set_rect(QRect(0, 0, 202, 202))
+            recorder.start()
+            w, h = recorder.rec_size
+            assert w == 200 and h == 200
+            args = fake_mod.RecordSession.call_args[0]
+            assert args[1:5] == (1, 1, 200, 200)
+            assert args[6] == 200 and args[7] == 200
+            recorder._timer.stop()
 
 
 class TestRectInset:

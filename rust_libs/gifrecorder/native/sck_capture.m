@@ -92,11 +92,13 @@ typedef void (*JTKContextRelease)(void *ctx);
 
 @end
 
-// 启动区域录屏；区域 (x,y,w,h) 为全局显示坐标（CG 同系）。
+// 启动区域录屏；区域 (x,y,w,h) 为全局显示坐标（CG point 同系），
+// 输出帧固定为 outW×outH 像素（Retina 上 outW/outH 为物理像素，
+// 使录制分辨率与静态截图一致；二者不同时由 SCK 缩放）。
 // 返回 opaque handle（失败返回 NULL）。
-void *JTKStartCapture(int x, int y, int w, int h, double fps,
+void *JTKStartCapture(int x, int y, int w, int h, int outW, int outH, double fps,
                       JTKFrameCallback cb, void *ctx, JTKContextRelease releaseContext) {
-    if (w <= 0 || h <= 0 || cb == NULL) {
+    if (w <= 0 || h <= 0 || outW <= 0 || outH <= 0 || cb == NULL) {
         if (releaseContext != NULL) releaseContext(ctx);
         return NULL;
     }
@@ -104,8 +106,8 @@ void *JTKStartCapture(int x, int y, int w, int h, double fps,
     delegate.callback = cb;
     delegate.ctx = ctx;
     delegate.releaseContext = releaseContext;
-    delegate.width = (size_t)w;
-    delegate.height = (size_t)h;
+    delegate.width = (size_t)outW;
+    delegate.height = (size_t)outH;
     __block SCStream *stream = nil;
     __block dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
@@ -138,15 +140,18 @@ void *JTKStartCapture(int x, int y, int w, int h, double fps,
             CGRect src = CGRectMake(x - df.origin.x, y - df.origin.y, w, h);
             CGRect inter = CGRectIntersection(src,
                 CGRectMake(0, 0, df.size.width, df.size.height));
-            // Rust 编码器必须收到 w*h*4 字节；不能静默裁小后仍宣称原尺寸。
+            // Rust 编码器必须收到 outW*outH*4 字节；不能静默裁小后仍宣称原尺寸。
             if (!CGRectEqualToRect(inter, src)) {
                 NSLog(@"[gifrecorder-sck] recording region must stay within one display");
                 dispatch_semaphore_signal(sem);
                 return;
             }
             SCStreamConfiguration *conf = [[SCStreamConfiguration alloc] init];
-            conf.width = (NSInteger)inter.size.width;
-            conf.height = (NSInteger)inter.size.height;
+            // 输出像素尺寸：Retina 下必须是物理像素（= 逻辑点 × dpr），
+            // 否则录出来的 GIF 只有一半分辨率。SCK 负责把 sourceRect（点）
+            // 缩放到该像素尺寸，不做二次裁切。
+            conf.width = (NSInteger)outW;
+            conf.height = (NSInteger)outH;
             conf.sourceRect = inter;
             double f = fps > 1.0 ? fps : 15.0;
             conf.minimumFrameInterval = CMTimeMake(1, (int32_t)f);
@@ -156,14 +161,14 @@ void *JTKStartCapture(int x, int y, int w, int h, double fps,
             if (@available(macOS 14.0, *)) {
                 conf.captureResolution = SCCaptureResolutionBest;
             }
-            NSMutableArray<SCWindow *> *ownWindows = [NSMutableArray array];
-            for (SCWindow *window in content.windows) {
-                if (window.owningApplication.processID == getpid()) {
-                    [ownWindows addObject:window];
-                }
-            }
+            // 不排除本应用窗口：与 Windows BitBlt 抓屏语义一致，
+            // 录制期间画在绘制层上的标注才会进入 GIF（边框/工具栏本来就
+            // 位于录制区域之外，不会污染画面）。showsCursor=NO 保证系统
+            // 光标不入帧，光标由导出阶段按采集轨迹叠加。
             SCContentFilter *filter =
-                [[SCContentFilter alloc] initWithDisplay:target excludingWindows:ownWindows];
+                [[SCContentFilter alloc] initWithDisplay:target
+                                          excludingWindows:@[]];
+
             stream = [[SCStream alloc] initWithFilter:filter
                                         configuration:conf
                                              delegate:delegate];

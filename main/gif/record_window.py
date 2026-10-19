@@ -44,13 +44,24 @@ class GifRecordWindow(QObject):
     """GIF 录制的总协调者 — 管理3层窗口 + 工具栏 + 状态机
 
     回放/导出逻辑委托给 PlaybackController。
+
+    坐标系：``capture_rect`` 由 ScreenshotWindow 以 **场景物理像素** 传入
+    （与截图选区一致）。所有窗口层（overlay / 绘制层 / 工具栏 / 预览层）
+    统一使用 **Qt 逻辑点**，因此在构造时一次性换算；录制区域交给
+    FrameRecorder 后再换算回物理像素（输出帧为物理像素）。Windows 上
+    dpr=1，两种单位相同，行为与既有实现一致。
     """
 
     def __init__(self, capture_rect: QRect, parent=None):
         super().__init__(parent)
-        self._rect = QRect(capture_rect)
+        from PySide6.QtCore import QRectF
+        from platforms import get_platform_backend
+
+        self._mapper = get_platform_backend().coordinates
+        self._rect = self._mapper.capture_rect_to_qt(QRectF(capture_rect))
         self._state = AppState.IDLE
-        log_info(T("GifRecordWindow 初始化, 区域={capture_rect}", capture_rect=capture_rect), "GIF")
+        log_info(T("GifRecordWindow 初始化, 捕获区域(像素)={capture_rect} → 窗口区域(点)={win_rect}",
+                    capture_rect=capture_rect, win_rect=self._rect), "GIF")
 
         # ── 录制器 ──
         self._recorder = FrameRecorder()

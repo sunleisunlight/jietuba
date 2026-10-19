@@ -36,7 +36,7 @@ class PlatformBackend:
     """聚合子后端的容器对象（鸭子类型，无继承要求）。"""
 
     def __init__(self, *, capture, hotkey, clipboard, window,
-                 accessibility, coordinates, permissions):
+                 accessibility, coordinates, permissions, input):
         self.capture = capture
         self.hotkeys = hotkey
         self.clipboard = clipboard
@@ -44,6 +44,7 @@ class PlatformBackend:
         self.accessibility = accessibility
         self.coordinates = coordinates
         self.permissions = permissions
+        self.input = input
 
     @property
     def is_windows(self) -> bool:
@@ -66,6 +67,7 @@ class PlatformFactory:
             from .windows.accessibility import WindowsAccessibilityBackend
             from .windows.coordinates import WindowsCoordinateMapper
             from .windows.permissions import WindowsPermissionBackend
+            from .windows.input import WindowsInputBackend
             return PlatformBackend(
                 capture=WindowsCaptureBackend(),
                 hotkey=WindowsHotkeyBackend(),
@@ -74,6 +76,7 @@ class PlatformFactory:
                 accessibility=WindowsAccessibilityBackend(),
                 coordinates=WindowsCoordinateMapper(),
                 permissions=WindowsPermissionBackend(),
+                input=WindowsInputBackend(),
             )
         if sys.platform == "darwin":
             from .macos.capture import MacOSCaptureBackend
@@ -83,6 +86,7 @@ class PlatformFactory:
             from .macos.accessibility import MacOSAccessibilityBackend
             from .macos.coordinates import MacOSCoordinateMapper
             from .macos.permissions import MacOSPermissionBackend
+            from .macos.input import MacOSInputBackend
             return PlatformBackend(
                 capture=MacOSCaptureBackend(),
                 hotkey=MacOSHotkeyBackend(),
@@ -91,6 +95,7 @@ class PlatformFactory:
                 accessibility=MacOSAccessibilityBackend(),
                 coordinates=MacOSCoordinateMapper(),
                 permissions=MacOSPermissionBackend(),
+                input=MacOSInputBackend(),
             )
         raise RuntimeError(f"不支持的平台: {sys.platform}")
 

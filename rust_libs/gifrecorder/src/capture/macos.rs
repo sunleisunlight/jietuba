@@ -16,6 +16,8 @@ extern "C" {
         y: i32,
         w: i32,
         h: i32,
+        out_w: i32,
+        out_h: i32,
         fps: f64,
         cb: extern "C" fn(*mut c_void, *const u8, usize),
         ctx: *mut c_void,
@@ -57,16 +59,31 @@ pub(crate) struct ScreenCapture {
 unsafe impl Send for ScreenCapture {}
 
 impl ScreenCapture {
-    /// 创建截屏上下文（区域为 CG 全局显示坐标）。
-    pub fn new(left: i32, top: i32, width: i32, height: i32) -> Result<Self, String> {
-        if width <= 0 || height <= 0 {
-            return Err(format!("invalid capture size: {width}x{height}"));
+    /// 创建截屏上下文。
+    ///
+    /// * `left/top/width/height`：录制区域，CG 全局**逻辑点**（与 SCK sourceRect 同系）
+    /// * `out_width/out_height`：输出帧**物理像素**尺寸（Retina 上 = 点 × dpr；0 表示与区域 1:1）
+    pub fn new(
+        left: i32,
+        top: i32,
+        width: i32,
+        height: i32,
+        out_width: i32,
+        out_height: i32,
+    ) -> Result<Self, String> {
+        let out_width = if out_width == 0 { width } else { out_width };
+        let out_height = if out_height == 0 { height } else { out_height };
+        if width <= 0 || height <= 0 || out_width <= 0 || out_height <= 0 {
+            return Err(format!(
+                "invalid capture size: region {width}x{height} (points), output {out_width}x{out_height} (pixels)"
+            ));
         }
         let (tx, rx) = sync_channel::<Vec<u8>>(1);
         let ctx = Box::into_raw(Box::new(tx));
         let handle = unsafe {
             JTKStartCapture(
-                left, top, width, height, 15.0, on_frame, ctx as *mut c_void, release_context,
+                left, top, width, height, out_width, out_height, 15.0, on_frame,
+                ctx as *mut c_void, release_context,
             )
         };
         if handle.is_null() {
@@ -78,8 +95,8 @@ impl ScreenCapture {
             handle,
             rx,
             last: None,
-            width,
-            height,
+            width: out_width,
+            height: out_height,
         })
     }
 
@@ -143,6 +160,15 @@ impl Drop for ScreenCapture {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_region_or_output_size_is_rejected() {
+        // 区域非法
+        assert!(ScreenCapture::new(0, 0, 0, 10, 10, 10).is_err());
+        assert!(ScreenCapture::new(0, 0, 10, 10, -1, -1).is_err());
+        // 点与像素尺寸分别校验：区域合法但输出为非正数时也必须拒绝
+        assert!(ScreenCapture::new(0, 0, 10, 10, 0, -5).is_err());
+    }
 
     #[test]
     fn grab_keeps_newest_queued_frame_and_reuses_it_when_idle() {

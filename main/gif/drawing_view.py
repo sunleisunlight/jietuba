@@ -15,7 +15,6 @@ gdigrab 直接抓屏幕像素，因此本窗口画出的内容会被自动录进
 
 from __future__ import annotations
 
-import ctypes
 from typing import Optional
 
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsRectItem
@@ -47,39 +46,21 @@ from core.shortcut_manager import (
 from core import safe_event
 
 
-# ── Win32 穿透常量 ──
-GWL_EXSTYLE       = -20
-WS_EX_TRANSPARENT = 0x00000020
-SWP_NOMOVE        = 0x0002
-SWP_NOSIZE        = 0x0001
-SWP_NOZORDER      = 0x0004
-SWP_FRAMECHANGED  = 0x0020
+# ── 穿透常量由平台后端维护，本模块不再直接使用 Win32 ──
 
 
-def _set_click_through(hwnd: int, enable: bool, widget=None):
-    """设置/取消鼠标穿透。
+def _set_click_through(enable: bool, widget=None):
+    """设置/取消鼠标穿透（平台后端统一实现）。
 
-    Windows: WS_EX_TRANSPARENT；macOS: Qt WA_TransparentForMouseEvents。
+    Windows: WS_EX_TRANSPARENT + SetWindowPos(FRAMECHANGED)；
+    macOS: Qt WA_TransparentForMouseEvents + NSWindow.setIgnoresMouseEvents
+    （只设 Qt 属性在 Cocoa 上不足以让点击落到下层应用）。
     """
-    import sys
-    if sys.platform == "darwin":
-        if widget is not None:
-            widget.setAttribute(
-                Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable
-            )
-        return
     try:
-        user32 = ctypes.windll.user32
-        style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        if enable:
-            style |= WS_EX_TRANSPARENT
-        else:
-            style &= ~WS_EX_TRANSPARENT
-        user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-        user32.SetWindowPos(
-            hwnd, 0, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
-        )
+        from platforms import get_platform_backend
+        if widget is not None:
+            get_platform_backend().windows.set_window_click_through(widget, enable)
+            return
     except Exception as e:
         log_exception(e, T("GIF 绘制层设置透明"))
 
@@ -379,8 +360,7 @@ class GifDrawingView(CanvasView):
     def _apply_passthrough(self, enable: bool):
         self._passthrough = enable
         self._gif_scene.set_hit_test_visible(not enable)
-        hwnd = int(self.winId())
-        _set_click_through(hwnd, enable, widget=self)
+        _set_click_through(enable, widget=self)
         if not enable:
             self.activateWindow()
             self.raise_()

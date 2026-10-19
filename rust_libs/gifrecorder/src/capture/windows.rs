@@ -107,9 +107,26 @@ impl ScreenCapture {
     ///
     /// * `left`, `top` — 屏幕坐标 (虚拟桌面)
     /// * `width`, `height` — 截取区域大小
-    pub fn new(left: i32, top: i32, width: i32, height: i32) -> Result<Self, String> {
+    ///
+    /// Windows 上 Qt 逻辑坐标即物理像素（进程为 per-monitor DPI aware），
+    /// 因此区域尺寸与输出像素尺寸相同；`out_width/out_height` 为 0 时按区域尺寸处理。
+    pub fn new(
+        left: i32,
+        top: i32,
+        width: i32,
+        height: i32,
+        out_width: i32,
+        out_height: i32,
+    ) -> Result<Self, String> {
+        let out_width = if out_width == 0 { width } else { out_width };
+        let out_height = if out_height == 0 { height } else { out_height };
         if width <= 0 || height <= 0 {
             return Err(format!("invalid capture size: {width}x{height}"));
+        }
+        if out_width != width || out_height != height {
+            return Err(format!(
+                "windows capture requires region == output pixel size, got {width}x{height} vs {out_width}x{out_height}"
+            ));
         }
 
         unsafe {
@@ -228,7 +245,7 @@ mod tests {
 
     #[test]
     fn capture_small_region() {
-        let mut cap = ScreenCapture::new(0, 0, 64, 48).unwrap();
+        let mut cap = ScreenCapture::new(0, 0, 64, 48, 0, 0).unwrap();
         let bgra = cap.grab().unwrap();
         assert_eq!(bgra.len(), 64 * 48 * 4);
         // 像素不全是 0（屏幕上总有点东西）

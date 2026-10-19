@@ -196,3 +196,23 @@ Windows候选CI、源码Commit、Tag/远端引用在后续批次追加。Finder�
 | 平台包体与更新签名 | 四件套一致且签名匹配客户端公钥 | `.sig` 用固定公钥验证通过（`sunget-tauri/src-tauri/tools/verify-updater-signature.mjs`，退出 0）；四文件 SHA256 与 `dist/积磊截图-v2.10.0-261019-macOS-arm64.sha256` 一致；归档内主程序二进制与已安装 App 一致（`688871e2…e49299`） | `build/task3-release.log`；`dist/release/` |
 
 用户原剪贴板在本批开始前保存在本地安全文件 `build/task3-resume-pasteboard.plist`（内容未打印、未入库），测试使用合成内容，结束后按备份恢复。
+
+## T4-20261020：任务4：长截图/GIF录制坐标单位对齐
+
+候选：`dist/积磊截图.app` v2.11.0（分支 `fix/macos-native-parity`），四件套见 `dist/release/`。
+环境：macOS arm64，双 4K Retina（主屏 dpr=2，全桌面 7680x2160 物理像素）。
+驱动方式：直接调用真实平台后端与 Rust `gifrecorder` 扩展（非 mock），不做 GUI 鼠标交互。
+
+| 检查 | 预期 | 实际 | 本地证据 |
+|---|---|---|---|
+| Rust gifrecorder 测试 | 全部通过 | 20 passed / 0 failed（含 `invalid_region_or_output_size_is_rejected`） | `cargo test --workspace`（PYO3_PYTHON 指向项目 venv） |
+| GIF 录制：点→像素换算 | Retina 下区域(点)×dpr = 输出(像素) | dpr=2.0，400x300 点 → 800x600 像素输出；`RecordSession` 收到 (pt_x,pt_y,pt_w,pt_h,fps,px_w,px_h) | 单元测试 `test_frame_recorder.py::TestUnitConversion`；真实管线脚本输出 |
+| GIF 录制：非黑屏多帧 | 帧亮度非全 0、尺寸正确 | 1.5s 捕获 14 帧；frame0 luminance extrema=(0,255)；RGB 字节数=800×600×3=1440000 | 真实 `gifrecorder.RecordSession` + `get_frame_rgb` |
+| 长截图：物理像素全桌面 | 返回物理像素而非逻辑点 | 7680x2160 px，rect=(-3840,0,7680,2160)（负坐标保留） | 真实 `CaptureService.capture_all_screens()` |
+| 长截图：按像素裁剪 | 裁剪尺寸与输入一致、非黑 | crop 800x600 正确，max gray=255 | 真实 `QImage.copy(capture_rect_px)` |
+| 坐标换算闭环 | qt→capture→qt 往返一致 | (0,0),(100,200),(-50,30),(800,600) 四组往返一致；`reference_factor`==主屏 dpr | `test_macos_coordinates.py` |
+| Python 回归套件 | gif/stitch/platform 无回归 | 185 passed / 6 skipped（capture_service 的 Windows mss 路径 5 项在 darwin skip） | `pytest main/tests/test_{frame_recorder,gif_*,stitch_*,macos_coordinates,platform_*,capture_service,playback_engine}.py` |
+| Mac 构建与四件套 | 四件套齐全、DMG 校验通过、.sig 非空 | app.tar.gz(110MB)+.sig(448B)+dmg(119MB)+更新说明；hdiutil verify VALID | `scripts/make_release_bundle.py` 输出；`dist/release/` |
+| codesign | 本机可运行 | Apple Development 深度签名，`codesign --verify --deep --strict` 通过；spctl rejected（缺 Developer ID/公证，公开分发阻塞） | `build_macos.py` 输出 |
+
+未自动化项（需真实鼠标/GUI 交互，转用户人工验收）：长截图真实滚动拼接（浏览器+文本编辑器纵/横向）、GIF GUI 选区/标注入帧/导出、录制停止后焦点与鼠标穿透恢复。

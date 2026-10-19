@@ -43,6 +43,39 @@ def test_sck_uses_dpr(qapp):
     assert view == 1.0 / factor
 
 
+def test_qt_point_to_capture_roundtrip(qapp):
+    """Qt logical 点 → 捕获像素 → Qt logical 点 必须闭环（任务4 单位修复）。"""
+    from platforms.macos.coordinates import MacOSCoordinateMapper
+    m = MacOSCoordinateMapper()
+    for x, y in [(0, 0), (100, 200), (-50, 30), (800, 600)]:
+        px, py = m.qt_point_to_capture(x, y)
+        assert isinstance(px, int) and isinstance(py, int)
+        # 像素坐标必须 >= 逻辑坐标（Retina 放大）
+        assert abs(px) >= abs(x) or m.qt_to_capture_factor(x, y) == 1.0
+        rx, ry = m.capture_point_to_qt(px, py)
+        assert rx == x and ry == y
+
+
+def test_reference_factor_matches_primary_dpr(qapp):
+    """reference_factor 必须等于主屏 dpr（导出侧像素换算基准）。"""
+    from platforms.macos.coordinates import MacOSCoordinateMapper
+    from PySide6.QtGui import QGuiApplication
+    m = MacOSCoordinateMapper()
+    primary = QGuiApplication.primaryScreen()
+    expected = primary.devicePixelRatio() if primary else 1.0
+    assert m.reference_factor() == expected
+
+
+def test_cursor_pos_capture_returns_pixels(qapp):
+    """cursor_pos_capture 返回像素坐标（= 逻辑坐标 × dpr）。"""
+    from platforms.macos.coordinates import MacOSCoordinateMapper
+    from PySide6.QtGui import QCursor
+    m = MacOSCoordinateMapper()
+    cx, cy = m.cursor_pos_capture()
+    # 即便光标在屏幕外（INT_MAX）也必须返回 int，不抛异常
+    assert isinstance(cx, int) and isinstance(cy, int)
+
+
 def test_virtual_desktop_union_rect(qapp):
     """多屏联合矩形（虚拟桌面）可从所有屏幕推导。"""
     screens = qapp.screens()
