@@ -207,36 +207,50 @@ class TestUnitConversion:
 class TestRectInset:
     """录制区域会内缩1px避免录入选区边框线，最小2px"""
 
+    @staticmethod
+    def _fake_backend_dpr1():
+        from unittest.mock import MagicMock
+        backend = MagicMock()
+        backend.coordinates.qt_to_capture_factor.return_value = 1.0
+        backend.coordinates.qt_point_to_capture.side_effect = lambda x, y: (int(round(x)), int(round(y)))
+        return backend
+
     def test_normal_rect_insets_by_one_pixel_each_side(self, qapp, mock_gifrecorder):
-        recorder = FrameRecorder()
-        recorder.set_rect(QRect(100, 50, 202, 102))  # width=202, height=102
-        recorder.start()
-        w, h = recorder.rec_size
-        assert w == 200  # 202 - 2*1
-        assert h == 100  # 102 - 2*1
-        recorder._timer.stop()
+        with patch("platforms.get_platform_backend",
+                   return_value=self._fake_backend_dpr1()):
+            recorder = FrameRecorder()
+            recorder.set_rect(QRect(100, 50, 202, 102))  # width=202, height=102
+            recorder.start()
+            w, h = recorder.rec_size
+            assert w == 200  # 202 - 2*1
+            assert h == 100  # 102 - 2*1
+            recorder._timer.stop()
 
     def test_tiny_rect_clamped_to_minimum_two_pixels(self, qapp, mock_gifrecorder):
-        recorder = FrameRecorder()
-        recorder.set_rect(QRect(0, 0, 2, 2))  # 内缩后会变成0，应clamp到2
-        recorder.start()
-        w, h = recorder.rec_size
-        assert w == 2
-        assert h == 2
-        recorder._timer.stop()
+        with patch("platforms.get_platform_backend",
+                   return_value=self._fake_backend_dpr1()):
+            recorder = FrameRecorder()
+            recorder.set_rect(QRect(0, 0, 2, 2))  # 内缩后会变成0，应clamp到2
+            recorder.start()
+            w, h = recorder.rec_size
+            assert w == 2
+            assert h == 2
+            recorder._timer.stop()
 
     def test_rec_left_top_offset_by_inset(self, qapp, mock_gifrecorder):
         fake_module, fake_store, fake_session = mock_gifrecorder
-        recorder = FrameRecorder()
-        recorder.set_rect(QRect(300, 400, 202, 102))
-        recorder.start()
-        # RecordSession 应以内缩后的 left/top 被调用: (300+1, 400+1)
-        fake_module.RecordSession.assert_called_once()
-        call_args = fake_module.RecordSession.call_args[0]
-        # 签名: (store, left, top, w, h, fps)
-        assert call_args[1] == 301
-        assert call_args[2] == 401
-        recorder._timer.stop()
+        with patch("platforms.get_platform_backend",
+                   return_value=self._fake_backend_dpr1()):
+            recorder = FrameRecorder()
+            recorder.set_rect(QRect(300, 400, 202, 102))
+            recorder.start()
+            # RecordSession 应以内缩后的 left/top 被调用: (300+1, 400+1)
+            fake_module.RecordSession.assert_called_once()
+            call_args = fake_module.RecordSession.call_args[0]
+            # 签名: (store, left, top, w, h, fps, px_w, px_h)
+            assert call_args[1] == 301
+            assert call_args[2] == 401
+            recorder._timer.stop()
 
 
 class TestSyncFramesFromStore:

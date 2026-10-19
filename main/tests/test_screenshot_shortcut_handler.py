@@ -130,7 +130,8 @@ class TestHandlerIdentity:
 
 class TestIsActive:
 
-    def test_visible_and_not_closing_is_active(self):
+    def test_visible_and_not_closing_is_active(self, monkeypatch):
+        monkeypatch.setattr(QApplication, "activeModalWidget", staticmethod(lambda: None))
         assert _make_handler(_make_window()).is_active() is True
 
     def test_missing_window_is_inactive(self):

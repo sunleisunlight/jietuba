@@ -14,7 +14,7 @@ from .base_settings_panel import (
 )
 from .color_picker_button import ColorPickerButton
 from .text_background_control import (
-    EFFECT_PRESET_COLORS, TextBackgroundControl,
+    EFFECT_PRESET_COLORS, BACKGROUND_PRESET_STYLES, TextBackgroundControl,
     popup_controls_qss, preset_swatch_button, style_preset_swatch,
 )
 from canvas.items import TextItem

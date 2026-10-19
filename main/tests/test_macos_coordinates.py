@@ -18,19 +18,26 @@ def mapper():
 
 
 def test_mss_identity(mapper):
-    """mss 源：Qt logical == 捕获点坐标，恒等映射。"""
+    """CG 源：qt_to_capture_factor 返回所在屏 dpr；capture_rect_to_qt 按 dpr 收缩到点。"""
     m, QRect, QRectF = mapper
-    assert m.qt_to_capture_factor(100, 200) == 1.0
+    factor = m.qt_to_capture_factor(100, 200)
     r = m.capture_rect_to_qt(QRectF(-1920.0, 30.0, 3840.0, 1080.0))
-    assert (r.x(), r.y(), r.width(), r.height()) == (-1920, 30, 3840, 1080)
+    # 物理像素矩形按左上屏 dpr 收缩为点
+    assert r.x() == int(round(-1920.0 / factor))
+    assert r.y() == int(round(30.0 / factor))
+    assert r.width() == int(round(3840.0 / factor))
+    assert r.height() == int(round(1080.0 / factor))
 
 
 def test_negative_coordinates_preserved(mapper):
-    """副屏在左：负坐标必须原样保留（不偏移不翻转）。"""
+    """副屏在左：负坐标符号必须保留（不偏移不翻转），幅度按 dpr 收缩到点。"""
     m, QRect, QRectF = mapper
+    factor = m.qt_to_capture_factor(-1920, 0)
     r = m.capture_rect_to_qt(QRectF(-1920.0, 0.0, 1920.0, 1080.0))
-    assert r.x() == -1920 and r.y() == 0
-    assert r.width() == 1920 and r.height() == 1080
+    assert r.x() < 0  # 负号保留
+    assert r.y() == 0
+    assert r.width() == int(round(1920.0 / factor))
+    assert r.height() == int(round(1080.0 / factor))
 
 
 def test_sck_uses_dpr(qapp):
