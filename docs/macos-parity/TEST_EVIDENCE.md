@@ -1,5 +1,47 @@
 # 任务证据（追加记录）
 
+## T2-20261019：任务2 截图捕获/画布/标注/编辑/输出对齐（最新）
+
+### 环境与坐标事实（决定测试口径）
+- 两台 4K 显示器：主屏 U27V10R point(0,0,1920,1080)；左屏 U270CA point(-1920,0,1920,1080)；virtualGeometry QRect(-1920,0,3840,1080)。两屏 dpr=2.0，物理 3840x2160。
+- mss 在 macOS 上 monitors bounds / grab 只给逻辑点（1920x1080，发糊），已排除；CGWindowListCreateImage(CGRectInfinite) 返回覆盖整个虚拟桌面的物理像素图像（双 4K 为 7680x2160）。
+- 落地原则“场景=物理像素、屏幕/窗口=point”：线宽/字号/选区/标注单位与 Windows 一致；仅窗口几何、View transform、overlay 定位显式转换。早期红色标记窗口实验确认 pixel=(point-bbox.topLeft)×dpr。
+
+### 真实 App 实测（v2.9.0）
+- 启动真实 App（pid 25085）→ 菜单栏/托盘菜单触发全屏截图会话；CGWindowList 确认全屏窗口 id=6038 layer=8 bounds(-1920,0,3840,1080)。
+- 真实拖拽选区成功：一次主屏 1598×1400、一次左屏 656×1302，尺寸标签显示物理像素（point×dpr）；底部橙色工具栏出现、工具按钮齐全。
+- 选画笔/矩形后用 cu.drag 在画布内拖拽形状不可见——根因定位为 RPA 工具限制（合成事件在 down/up 之间缺少连续 mouseMove，形状尺寸≈0），非应用缺陷（见下 QTest 证据）。
+
+### QTest 真实鼠标事件（关键证据，cocoa 平台真实窗口）
+- `build/qtest_repro.py`：mousePress 与 mouseRelease 之间插入 12 个 mouseMove（间隔 6-8ms），矩形成功创建（RectItem sceneBoundingRect 587,587,1026,826），导出 1400×1200，导出图红色矩形边框清晰。
+- `build/qtest_all_tools.py`：**10/10 工具绘制全部通过**（pen/rect/ellipse/arrow/highlighter/mosaic/spotlight/number/text/note）；随后撤销 10 次（items 15→5）、重做 10 次（5→15）；导出 3440×1760，PNG 514KB / JPG 504KB / BMP 18.16MB / WEBP 170KB / PDF 376KB 全部成功。
+- `/tmp/qtest_all_annotated.png` 肉眼确认：画笔/矩形/椭圆/箭头/荧光笔/序号1/文字“Hello 世界”/note（目标框+箭头+“这是备注”）在正确物理像素位置，spotlight 压暗框外。日志 `/tmp/qtest_all.log`。
+
+### 工具专属子功能（build/test_special.py，12/12 通过）
+- rect.corner_radius=25（_corner_radius）、rect.line_style=dashed_dense（非 SolidLine）；
+- arrow.arrow_style=double（_arrow_style）；
+- number.style=hollow_bg（item.style）；
+- mosaic.block_size=32、style=blur（smooth）、draw_mode=rect（fill_mode）；
+- text 背景/描边/阴影开关（has_background/has_outline/has_shadow）；
+- note 背景（has_background）；spotlight.opacity=0.45（SpotlightCurtain.opacity）。
+- 日志 `/tmp/special.log`。
+
+### 其他程序化/隔离证据（历史，日志在 build/）
+- 输出链路：7680x2160→选区1600x1200→导出1600x1200；PNG/JPG/BMP/WEBP/PDF；中文空格路径 /tmp/截图测试；无写权限 /System 返回 False；剪贴板 1600x1200。
+- 样式：红色/线宽10/透明0.5 → item pen #ff0000/alpha128/width10；虚线 dashed→CustomDashLine；序号递增 1,2,3；橡皮擦删除+undo。
+- 工具快捷键：p/2/o/3/4/1/m/7/5/e/s 实测切换工具，spotlight 默认空；12 条全通过。
+- 设置持久化：隔离 ini 多轮写入/读取一致（format/quality/save_enabled/save_path 等）。
+- 边框/阴影/圆角：border20→1640x1240、shadow25→1650x1250；钉图创建入口几何（物理→point）正确。
+- arrow_size：代码级确认 v2.8.0 与 Mac 均仅在 settings 定义、无任何工具/item 读取，箭头大小由 stroke_width 推导，两边一致。
+
+### 两个非应用问题（不影响结论）
+- QTest.keyClicks 输入中文在 cocoa 上触发 qasciikey.cpp ASSERT 直接 abort（无法 try/except）；测试改用直接 setPlainText 到真实 TextItem。
+- 测试脚本末尾 “QThread: Destroyed while thread is still running”（HistoryWorker）；真实 App 走 main_app._on_about_toquit 的 shutdown_history_manager，测试脚本绕过才出现。
+- note 门控：测试环境为游客（can_create_note=False），脚本 monkeypatch NoteTool._pass_note_gate=True（账号门控非任务2范围）。
+
+### 任务2矩阵结果（184 条）
+对齐已实测 79、原生等效已验证 3、已实现待实测 102（工具专属取值、inapp 动作、对话框/操作绑定等未逐一触发，功能最终由用户人工验收）。混合 dpr 无设备，记环境阻塞。
+
 ## T1-20261019-J：用户提供凭据后的复核（最新，覆盖旧阻塞结论）
 
 - 用户明确指定桌面凭据目录，文件名检查确认包含 updater 私钥与口令文件，不含Apple Developer ID/p12。没有执行目录内安装脚本，没有把说明文件当成授权。路径、安全读取方式和两类签名的区别已写入AGENTS.md；秘密内容没有输出或入库。

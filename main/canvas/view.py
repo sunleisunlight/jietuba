@@ -90,12 +90,11 @@ class CanvasView(QGraphicsView):
         self.setViewportMargins(0, 0, 0, 0)
 
         
-        # 重要：设置视图变换，确保场景坐标和窗口坐标 1:1 对应
-        # 场景使用全局屏幕坐标（可能不是从 0,0 开始），需要将场景原点映射到视图原点
-        self.resetTransform()  # 重置变换
-        # 将场景的 topLeft (可能是负数或正数) 映射到视图的 (0,0)
-        scene_rect = scene.sceneRect()
-        self.translate(-scene_rect.x(), -scene_rect.y())
+        # 视图变换：场景（物理像素）映射到视口。先按 display_scale 缩放
+        # （macOS Retina 为 1/dpr；Windows 为 1.0），再把场景 topLeft
+        # （可能是负坐标）映射到视图原点。
+        self._display_scale = 1.0
+        self._apply_view_transform()
         
         # 禁用视图自动改变光标（避免与 CursorManager 冲突）
         self.viewport().setMouseTracking(True)
@@ -191,6 +190,28 @@ class CanvasView(QGraphicsView):
         # 旧手柄像素没人覆盖 —— 就是旋转后平移留下的一串手柄残影。
         # 挂在 changed 上之后，任何路径（含以后新加的）改了几何都会刷到。
         self.canvas_scene.changed.connect(self._on_scene_changed_for_handles)
+
+    def _apply_view_transform(self):
+        """重置视图变换：display_scale 缩放 + 场景 topLeft 对齐到视图原点。
+
+        右乘顺序保证 view_pt = display_scale * (scene_pt - scene_rect.topLeft)：
+        scale 先入矩阵，translate 后右乘（平移在缩放前作用于场景点）。
+        """
+        self.resetTransform()
+        scale = float(getattr(self, "_display_scale", 1.0))
+        self.scale(scale, scale)
+        scene_rect = self.canvas_scene.sceneRect()
+        self.translate(-scene_rect.x(), -scene_rect.y())
+
+    def apply_display_scale(self, scale: float):
+        """设置场景→视口整体缩放（macOS Retina 1/dpr；Windows 1.0）并刷新。"""
+        self._display_scale = float(scale)
+        self._apply_view_transform()
+        self.request_handles_repaint()
+
+    def display_scale(self) -> float:
+        """当前场景→视口缩放系数。"""
+        return float(getattr(self, "_display_scale", 1.0))
 
     def request_handles_repaint(self):
         """重绘手柄浮层。整层重画，所以不存在算漏脏区留残影的可能。"""

@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.8.2"
+APP_VERSION = "2.9.0"
 
 
 def create_fallback_app_icon():

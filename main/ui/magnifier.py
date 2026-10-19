@@ -560,8 +560,13 @@ class MagnifierOverlay(QWidget):
 		if parent is None:
 			return QPoint(0, 0)
 
-		global_pt = QPoint(round(scene_pos.x()), round(scene_pos.y()))
-		local = parent.mapFromGlobal(global_pt)
+		# 场景物理像素 → view 本地 point（自动含 Retina 1/dpr 缩放）；
+		# view 几何从 (0,0) 开始，故 view 本地坐标即父窗口本地坐标。
+		if getattr(self, "view", None) is not None:
+			local = self.view.mapFromScene(scene_pos)
+		else:
+			global_pt = QPoint(round(scene_pos.x()), round(scene_pos.y()))
+			local = parent.mapFromGlobal(global_pt)
 
 		margin = self.EDGE_MARGIN
 		w = self.INFO_WIDTH

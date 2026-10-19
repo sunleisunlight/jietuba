@@ -134,7 +134,12 @@ class PinWindow(QWidget):
         self.view = None
 
         # ====== 初始几何 ======
-        self.setGeometry(position.x(), position.y(), image.width(), image.height())
+        # 场景/image 是物理像素，窗口几何单位是 point（Retina 1 point = dpr px）。
+        # 经平台坐标映射转换；Windows mapper 恒等，行为不变。
+        from platforms import get_platform_backend
+        self._coordinate_mapper = get_platform_backend().coordinates
+        pin_px_rect = QRectF(position.x(), position.y(), image.width(), image.height())
+        self.setGeometry(self._coordinate_mapper.capture_rect_to_qt(pin_px_rect))
 
         # ====== UI 组件 ======
         self.setup_ui()
