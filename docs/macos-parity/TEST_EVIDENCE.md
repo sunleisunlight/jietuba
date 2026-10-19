@@ -1,5 +1,16 @@
 # 任务证据（追加记录）
 
+## T1-20261019-J：用户提供凭据后的复核（最新，覆盖旧阻塞结论）
+
+- 用户明确指定桌面凭据目录，文件名检查确认包含 updater 私钥与口令文件，不含Apple Developer ID/p12。没有执行目录内安装脚本，没有把说明文件当成授权。路径、安全读取方式和两类签名的区别已写入AGENTS.md；秘密内容没有输出或入库。
+- 对I批最新暂存archive静默加载口令并调用现有签名函数成功，生成448 bytes的同名.sig；使用 `sunget-tauri/src-tauri/tools/verify-updater-signature.mjs` 验证实际archive，固定公钥、key ID、包体签名及trusted comment验证全部通过，退出0。sig SHA256=`283631aaaa368e4ff7a1e3c5c296a30ec72d90078a88ef0accdc23fe27f3d6c9`。archive/DMG/notes SHA256与I批完全一致，四文件齐于`dist/macos-release-sz88t8x3/`，未封版或移入release，旧产物均保留。
+- CI39170509042精确SHA=`c7e78a38fa304a6d38e6ac88c7d0d7d64e56e0b9`；Windows x64/ARM64 job成功并产出真实exe。下载x64到`build/task1-windows-c7e78a3-x64/`；manifest版本2.8.2，exe为75,676,641 bytes，SHA256=`0cf5a189cb97110116940103491d430f215fab7fa21422e4f12380fc0ee6ed2b`，本地核对一致。CArchiveReader只读检查确认QtNetwork.pyd、Qt6Network.dll存在，PYZ含comtypes.shelllink和comtypes.persist。没有在Mac执行exe，不等于Windows UI验收。
+- 同跑次Mac job失败：ppocr_rust构建时报`could not find native static library onnxruntime`、`can't do xcframework linking for target aarch64-apple-darwin`。不得把Windows子job成功说成整条CI通过。
+- 全量39169825988的两个Windows job均失败：双击确认2项、README目录树3项、text_settings_panel的BACKGROUND_PRESET_STYLES导入1项。没有删除/跳过这些测试，也没有覆盖本地README草稿；双击/文字归任务2、文档全量归任务5，是否由任务1引入仍须源码归因。
+- Computer Use只读进入系统设置→隐私与安全性→辅助功能，积磊截图.app开关为on；返回再进入输入监控，同名开关也为on。没有改动任何授权、添加/删除条目或修改其他App。此证据只证明系统UI状态，不能替代当前App内权限查询和授权后恢复截图。
+- `/Applications/积磊截图.app` PID13381、设置显示v2.8.2；自动化AX/坐标点击导航会改变选中项，但右侧仍停留快捷键设置，键盘激活也未切换。尚未区分Qt AX执行语义和真实导航故障，不计权限页刷新通过。没有点击应用/重置、没有更改用户ctrl+shift+a与Cmd+2快捷键。可恢复自启测试已获用户同意，但尚未执行；没有更改LaunchAgent。
+- 本批只修改文档与生成既有候选签名，不改运行代码，不重新构建，不递增版本或伪造完成Tag。任务1仍未通过；公开分发仍缺Developer ID/公证条件，真实入口循环与首次配置等继续待验。
+
 ## T1-20261019-A：初始审计与复现
 
 环境：macOS26.5 arm64；项目Python3.11.16；PySide6/Qt6.8.3。工作目录见STATE.md。源码起点c788d19，候选2.8.2工作区。原始用户日志/进程采样不提交Git。

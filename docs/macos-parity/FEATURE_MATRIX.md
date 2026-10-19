@@ -37,8 +37,8 @@
 | BASE-02 | 原生扩展可加载 | rust_libs/gifrecorder/build.rs | 链接Clang availability runtime | 1 | 四个扩展import成功 | 最新App构建原生库/资源校验通过；UI未测 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 最低系统及App功能未测 |
 | BASE-03 | 基础区域截图入口 | main/main_app.py | 共享权限检查/捕获线程 | 1 | 从菜单启动区域截图并检查结果 | 未实际执行 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | Windows门禁待完成，候选尚未安装 |
 | BASE-04 | 本轮日志/崩溃复核 | main/core/logger.py | 保留明确失败日志 | 1 | 对应本轮App路径/版本/哈希 | 单元进程正常；App运行未执行 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 未检查 | 候选安装尚未进行 |
-| DIST-01 | Windows受影响入口原生测试/构建 | .github/workflows/ci.yml | 既有CI定向任务1门禁 | 1 | 精确SHA测试成功且取得exe | 旧候选中文快捷方式失败已定位；修复后CI39168681792运行中 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 已实现待实测 | 最新候选原生测试和exe构建待验 |
-| DIST-02 | Mac四件套 | scripts/macos_release.py | 同版本archive/sig/DMG/notes | 1 | 新文件齐全、旧文件保留 | 最新App/归档/DMG已生成，暂存u4oz6qdm；缺.sig / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 未提供签名口令 |
+| DIST-01 | Windows受影响入口原生测试/构建 | .github/workflows/ci.yml | 既有CI定向任务1门禁 | 1 | 精确SHA测试成功且取得exe | CI39170509042双架构定向测试/构建成功；x64哈希及QtNetwork/comtypes包体核验通过 / TEST_EVIDENCE.md J | v2.8.2/c7e78a3 | 已实现待实测 | 定向自动门禁已满足；Windows UI未测，全量CI另有失败 |
+| DIST-02 | Mac四件套 | scripts/macos_release.py | 同版本archive/sig/DMG/notes | 1 | 新文件齐全、旧文件保留 | 暂存sz88t8x3四文件齐全，有效.sig已用固定公钥验证 / TEST_EVIDENCE.md J | v2.8.2/c7e78a3 | 环境阻塞 | 签名口令已解决；正式release封版待App实测与公开分发条件 |
 | DIST-03 | 安装路径测试 | build_macos.py | /Applications/积磊截图.app | 1 | 备份旧安装→新包→Finder双击 | 旧App已退出并完成可恢复备份；未替换安装 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | Windows候选门禁待完成 |
 | DIST-04 | 公开分发 | scripts/notarize_macos.sh | 需Developer ID+notary | 1 | 签名/公证/staple/Gatekeeper | 最新包Apple Development签名校验通过，未公证 / TEST_EVIDENCE.md | v2.8.2/98a1cbc；App未实测 | 环境阻塞 | 缺Developer ID公证条件 |
 
