@@ -76,7 +76,6 @@ def test_reference_factor_matches_primary_dpr(qapp):
 def test_cursor_pos_capture_returns_pixels(qapp):
     """cursor_pos_capture 返回像素坐标（= 逻辑坐标 × dpr）。"""
     from platforms.macos.coordinates import MacOSCoordinateMapper
-    from PySide6.QtGui import QCursor
     m = MacOSCoordinateMapper()
     cx, cy = m.cursor_pos_capture()
     # 即便光标在屏幕外（INT_MAX）也必须返回 int，不抛异常

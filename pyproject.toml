@@ -71,3 +71,5 @@ ignore = [
 # 包的 __init__.py 汇总导出子模块符号，这里的"未使用导入"是有意的
 "main/ui/settings_ui/__init__.py" = ["F401"]
 "main/ui/welcome/__init__.py" = ["F401"]
+# text_settings_panel 从 text_background_control 重导出 BACKGROUND_PRESET_STYLES 等符号
+"main/ui/text_settings_panel.py" = ["F401"]
