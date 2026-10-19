@@ -158,7 +158,7 @@ class HotkeyEdit(QWidget):
         return self.edit.text()
     
     def setPlaceholderText(self, text):
-        self.edit.setPlaceholderText(get_shortcut_convention().display(text))
+        self.edit.setPlaceholderText(get_shortcut_convention().display_hint(text))
     
     def setFixedWidth(self, w):
         # Apply width to the composite widget or the edit?

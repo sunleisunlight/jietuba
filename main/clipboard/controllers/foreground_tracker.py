@@ -70,7 +70,7 @@ def get_foreground_hwnd() -> Optional[int]:
     try:
         if _IS_MACOS:
             from platforms import get_platform_backend
-            return get_platform_backend().windows.foreground_handle()
+            return get_platform_backend().windows.capture_paste_target()
         return _user32.GetForegroundWindow() or None
     except Exception as e:
         log_exception(e, T("读取前台窗口"))
@@ -193,7 +193,11 @@ class ForegroundWindowTracker:
             log_exception(e, T("取样前台窗口"))
             return False
 
-        if hwnd is None or hwnd == self._target_hwnd:
+        if hwnd is None:
+            return False
+        if hwnd == self._target_hwnd:
+            # A platform token may carry a newer window identity for the same PID.
+            self._target_hwnd = hwnd
             return False
         self._target_hwnd = hwnd
         log_debug(

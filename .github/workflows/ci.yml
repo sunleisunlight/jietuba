@@ -224,6 +224,7 @@ jobs:
         run: >
           python scripts/run_platform_tests.py --timeout 180
           --module test_shortcut_convention.py
+          --module test_azure_translation_contract.py
           --module test_clipboard_ocr_index.py
           --module test_macos_clipboard_contract.py
           --module test_backend_hotkey_dispatch.py

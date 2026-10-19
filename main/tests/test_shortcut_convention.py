@@ -7,6 +7,18 @@ from platforms.base.shortcut import ShortcutConvention
 
 
 @pytest.mark.parametrize("macos", [True, False])
+def test_localized_placeholder_preserves_prose(qapp, monkeypatch, macos):
+    from ui import hotkey_edit
+    policy = ShortcutConvention(macos=macos)
+    monkeypatch.setattr(hotkey_edit, "get_shortcut_convention", lambda: policy)
+    widget = hotkey_edit.HotkeyEdit()
+    widget.setPlaceholderText("例如: ctrl+shift+a")
+    assert widget.edit.placeholderText() == ("例如: Command+Shift+a" if macos
+                                            else "例如: ctrl+shift+a")
+    widget.deleteLater()
+
+
+@pytest.mark.parametrize("macos", [True, False])
 @pytest.mark.parametrize("modifier,token", [(Qt.ControlModifier, "ctrl"),
                                           (Qt.AltModifier, "alt"),
                                           (Qt.MetaModifier, "meta")])

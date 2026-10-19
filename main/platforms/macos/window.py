@@ -24,6 +24,22 @@ _MAX_WINDOW_SIZE = 20000
 _log = logging.getLogger(__name__)
 
 
+class MacPasteTarget(int):
+    """PID-compatible token retaining the exact AX window, never its content."""
+
+    def __new__(cls, pid, window):
+        target = super().__new__(cls, pid)
+        target.window = window
+        return target
+
+
+def _focused_window(pid):
+    import ApplicationServices as AS
+    app = AS.AXUIElementCreateApplication(int(pid))
+    error, window = AS.AXUIElementCopyAttributeValue(app, AS.kAXFocusedWindowAttribute, None)
+    return window if error == 0 else None
+
+
 def _native_window(widget):
     """Qt Cocoa 的 winId 是 NSView 指针，而非 NSWindow。"""
     import objc
@@ -124,6 +140,28 @@ class MacOSWindowBackend(WindowBackend):
         return [0, 0, 0, 0]
 
     # ── 前台跟踪（按应用 PID 粒度）──
+
+    def capture_paste_target(self):
+        pid = self.get_foreground_handle()
+        if not pid or pid == self.current_pid():
+            return None
+        try:
+            window = _focused_window(pid)
+            return MacPasteTarget(pid, window) if window is not None else None
+        except Exception:
+            _log.exception("无法记录粘贴目标窗口")
+            return None
+
+    def matches_paste_target(self, target):
+        if not isinstance(target, MacPasteTarget):
+            return False
+        try:
+            from CoreFoundation import CFEqual
+            current = _focused_window(target)
+            return current is not None and bool(CFEqual(current, target.window))
+        except Exception:
+            _log.exception("无法核实粘贴目标窗口")
+            return False
 
     def get_foreground_handle(self) -> Optional[int]:
         """返回前台应用 PID（macOS 激活粒度为应用）。"""

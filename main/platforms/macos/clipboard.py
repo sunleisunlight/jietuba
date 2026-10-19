@@ -105,7 +105,7 @@ class MacOSClipboardBackend(ClipboardBackend):
         if not target:
             _notify_paste_failure()
             return
-        _activate_then_paste(int(target), 0)
+        _activate_then_paste(target, 0)
 
 
 def _foreground_is_own_process() -> bool:
@@ -118,7 +118,8 @@ def _foreground_is_own_process() -> bool:
 
 def _send_paste():
     release_modifiers()
-    send_cmd_v()
+    if not send_cmd_v():
+        _notify_paste_failure()
 
 
 def _send_paste_to_foreground():
@@ -135,6 +136,9 @@ def _activate_then_paste(pid: int, attempt: int):
         return
 
     if backend.windows.get_foreground_handle() == pid:
+        if not backend.windows.matches_paste_target(pid):
+            _notify_paste_failure()
+            return
         _send_paste()
         return
 

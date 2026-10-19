@@ -3,6 +3,8 @@
 Qt swaps Control/Meta on macOS: ControlModifier is the physical Command key.
 Keep persisted ctrl portable; reserve lctrl for the physical Mac Control key.
 """
+import re
+
 from PySide6.QtCore import Qt
 
 
@@ -36,6 +38,11 @@ class ShortcutConvention:
         for token in ("control", "lctrl"):
             result[token] = mod.MetaModifier if self.macos else mod.ControlModifier
         return result
+
+    def display_hint(self, text):
+        """Format embedded shortcut examples without changing translated prose."""
+        return re.sub(r"(?<![A-Za-z0-9_])(?:[A-Za-z0-9_]+\+)+[A-Za-z0-9_]+",
+                      lambda match: self.display(match.group()), text)
 
     def modifier_tokens(self, modifiers, key=None, *, released_key=None):
         pairs = ((Qt.ControlModifier, Qt.Key_Control, "ctrl"),
