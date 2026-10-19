@@ -84,6 +84,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
     def __init__(self):
         self._id_to_callback: Dict[int, Callable] = {}
         self._id_to_ref: Dict[int, c_void_p] = {}
+        self._id_to_binding = {}
         self._handler_ref = None
         self._installed = False
         self._framework = None
@@ -225,6 +226,8 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
         if parsed is None:
             return False
         keycode, mods = parsed
+        if hotkey_id in self._id_to_ref or parsed in self._id_to_binding.values():
+            return False
         if not self._ensure_installed():
             return False
         try:
@@ -244,6 +247,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
                 return False
             self._id_to_callback[hotkey_id] = callback
             self._id_to_ref[hotkey_id] = ref
+            self._id_to_binding[hotkey_id] = parsed
             return True
         except Exception:
             return False
@@ -251,6 +255,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
     def unregister(self, hotkey_id: int) -> None:
         ref = self._id_to_ref.pop(hotkey_id, None)
         self._id_to_callback.pop(hotkey_id, None)
+        self._id_to_binding.pop(hotkey_id, None)
         if ref is not None and self._framework is not None:
             try:
                 self._framework.UnregisterEventHotKey.argtypes = [c_void_p]
@@ -264,5 +269,14 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
             self.unregister(hid)
 
     def check_available(self, hotkey_str: str) -> bool:
-        """探测是否可用：可解析即认为可注册（Carbon 无全局占用查询）。"""
-        return self.parse_hotkey(hotkey_str) is not None
+        """Probe Carbon registration, then release; own bindings remain editable."""
+        parsed = self.parse_hotkey(hotkey_str)
+        if parsed is None:
+            return False
+        if parsed in self._id_to_binding.values():
+            return True
+        probe_id = 0x7FFFFFFF
+        if not self.register(probe_id, hotkey_str, lambda: None):
+            return False
+        self.unregister(probe_id)
+        return True

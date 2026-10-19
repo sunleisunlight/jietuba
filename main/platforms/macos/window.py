@@ -14,6 +14,7 @@ from typing import List, Optional, Tuple
 from PySide6.QtCore import Qt
 
 from ..base.window import WindowBackend
+from .coordinates import MacOSCoordinateMapper
 
 # 排除的"壳"窗口：桌面、菜单栏、Dock 之外的系统层
 _SHELL_OWNERS = frozenset({"Window Server", "Dock"})
@@ -57,6 +58,8 @@ class MacOSWindowBackend(WindowBackend):
                     if layer != 0:
                         continue
                     owner = win.get("kCGWindowOwnerName", "") or ""
+                    if win.get("kCGWindowOwnerPID") == os.getpid():
+                        continue
                     if owner in _SHELL_OWNERS:
                         continue
                     name = win.get("kCGWindowName", "") or ""
@@ -80,10 +83,11 @@ class MacOSWindowBackend(WindowBackend):
                     if alpha is not None and alpha < 0.3:
                         continue
                     number = win.get("kCGWindowNumber", 0)
+                    rect = MacOSCoordinateMapper().native_rect_to_capture(left, top, width, height)
                     results.append((
                         int(number),
-                        [left - offset_x, top - offset_y,
-                         left + width - offset_x, top + height - offset_y],
+                        [rect[0] - offset_x, rect[1] - offset_y,
+                         rect[2] - offset_x, rect[3] - offset_y],
                         name,
                     ))
                 except Exception:
@@ -112,8 +116,9 @@ class MacOSWindowBackend(WindowBackend):
                 top = int(bounds.origin.y)
                 w = int(bounds.size.width)
                 h = int(bounds.size.height)
-                if left <= x < left + w and top <= y < top + h:
-                    return [left, top, left + w, top + h]
+                rect = MacOSCoordinateMapper().native_rect_to_capture(left, top, w, h)
+                if rect[0] <= x < rect[2] and rect[1] <= y < rect[3]:
+                    return rect
         except Exception:
             _log.exception("查询显示器边界失败")
         return [0, 0, 0, 0]

@@ -5,7 +5,7 @@
 from typing import Optional
 
 from PySide6.QtWidgets import QApplication, QGraphicsView, QGraphicsTextItem
-from PySide6.QtCore import Qt, QPointF, QRectF, QTimer
+from PySide6.QtCore import Qt, QPoint, QPointF, QRectF, QTimer
 from PySide6.QtGui import QPen, QColor, QBrush, QCursor
 import shiboken6
 from canvas.items import (
@@ -456,7 +456,8 @@ class CanvasView(QGraphicsView):
                 if is_uia_available():
                     self.element_finder = UIAElementFinder(self)
                     self.element_finder.cache_updated.connect(self._on_uia_cache_updated)
-                    cursor_pos = QCursor.pos()
+                    from platforms import get_platform_backend
+                    cursor_pos = QPoint(*get_platform_backend().coordinates.cursor_pos_capture())
                     window_hit = self.window_finder.find_window_at_point_info(
                         cursor_pos.x(), cursor_pos.y()
                     )
@@ -615,7 +616,8 @@ class CanvasView(QGraphicsView):
                 or self.selection_drag.active):
             return
 
-        cursor_pos = QCursor.pos()
+        from platforms import get_platform_backend
+        cursor_pos = QPoint(*get_platform_backend().coordinates.cursor_pos_capture())
         window_hit = self.window_finder.find_window_at_point_info(
             cursor_pos.x(), cursor_pos.y()
         )

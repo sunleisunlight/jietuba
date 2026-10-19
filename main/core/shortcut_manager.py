@@ -114,20 +114,8 @@ def _split_modifiers(text: str):
     """
     from PySide6.QtCore import Qt as _Qt
 
-    mod_map = {
-        "ctrl": _Qt.KeyboardModifier.ControlModifier,
-        "shift": _Qt.KeyboardModifier.ShiftModifier,
-        "alt": _Qt.KeyboardModifier.AltModifier,
-    }
-    if _IS_MACOS:
-        # Qt 的 ControlModifier 在 macOS 对应 Command，MetaModifier 对应 Control。
-        mod_map.update({
-            "cmd": _Qt.KeyboardModifier.ControlModifier,
-            "command": _Qt.KeyboardModifier.ControlModifier,
-            "option": _Qt.KeyboardModifier.AltModifier,
-            "control": _Qt.KeyboardModifier.MetaModifier,
-            "lctrl": _Qt.KeyboardModifier.MetaModifier,
-        })
+    from platforms.factory import get_shortcut_convention
+    mod_map = get_shortcut_convention().modifier_map()
     mods = _Qt.KeyboardModifier.NoModifier
     rest = []
     for part in [p.strip() for p in (text or "").lower().split("+") if p.strip()]:
@@ -169,8 +157,8 @@ def inapp_shortcut_display_text(text: str) -> str:
         prefix = text.rsplit("+", 1)[0].upper() + "+" if "+" in text else ""
         # 这是界面文案，走 Qt 的翻译；模块里那个 T() 是日志翻译（中文源串 →
         # 英文），方向正相反，别用错。
-        return prefix + QCoreApplication.translate("InAppShortcut", "Middle")
-    return text.upper()
+        return display_hotkey_str(prefix) + QCoreApplication.translate("InAppShortcut", "Middle")
+    return display_hotkey_str(text.upper())
 
 
 def hotkey_identity(hotkey_str: str):
@@ -356,6 +344,7 @@ class ShortcutManager(QObject):
         # ── 系统热键 ──
         self._id_to_callback: Dict[int, Callable] = {}
         self._id_to_metadata: Dict[int, Tuple[int, int]] = {}  # id → (mods, vk)
+        self._id_to_qt = {}  # native callback capture must use Qt, not Win32 bits
         self._next_hotkey_id = 1
         self._global_hotkeys_suppressed = False
 
@@ -668,6 +657,7 @@ class ShortcutManager(QObject):
             hid, hotkey_str, lambda: self._on_backend_hotkey(hid)
         ):
             self._id_to_callback[hid] = callback
+            self._id_to_qt[hid] = parse_shortcut_to_qt(hotkey_str)
             try:
                 self._id_to_metadata[hid] = self._parse_hotkey(hotkey_str)
             except (TypeError, ValueError):
@@ -828,6 +818,7 @@ class ShortcutManager(QObject):
         self._hotkey_backend.unregister_all()
         self._id_to_callback.clear()
         self._id_to_metadata.clear()
+        self._id_to_qt.clear()
 
         for token in self._mouse_callbacks:
             ShortcutManager._registered_mouse_buttons_global.discard(token)
@@ -996,39 +987,9 @@ _STR_TO_QT_KEY: Optional[Dict[str, int]] = None
 
 
 # ── 平台化热键字符串显示 ───────────────────────────────
-_MOD_DISPLAY = (
-    ("ctrl", "Cmd"),
-    ("control", "Control"),
-    ("lctrl", "Control"),
-    ("win", "Cmd"),
-    ("meta", "Cmd"),
-    ("super", "Cmd"),
-    ("cmd", "Cmd"),
-    ("command", "Cmd"),
-    ("alt", "Option"),
-    ("shift", "Shift"),
-)
-
-
 def display_hotkey_str(hotkey: str) -> str:
-    """设置/欢迎页展示用：macOS 上把 win/ctrl/alt 显示为 Cmd/Cmd/Option。
-
-    只影响显示，不改变存储格式（配置跨平台保持 ctrl+1 等原样）。
-    """
-    import sys
-    if sys.platform != "darwin" or not hotkey:
-        return hotkey
-    parts = [p.strip() for p in hotkey.split("+") if p.strip()]
-    out = []
-    for p in parts:
-        lp = p.lower()
-        mapped = None
-        for mod, disp in _MOD_DISPLAY:
-            if lp == mod:
-                mapped = disp
-                break
-        out.append(mapped if mapped else p)
-    return "+".join(out)
+    from platforms.factory import get_shortcut_convention
+    return get_shortcut_convention().display(hotkey)
 
 
 def get_key_display_map() -> Dict[int, str]:

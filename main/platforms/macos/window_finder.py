@@ -96,17 +96,11 @@ class MacWindowFinder:
         return self._get_virtual_desktop_rect()
 
     def _get_virtual_desktop_rect(self) -> List[int]:
-        """虚拟桌面矩形（CGDisplay 联合边界）。"""
-        try:
-            import Quartz
-            bounds = Quartz.CGDisplayBounds(Quartz.CGMainDisplayID())
-            return [
-                int(bounds.origin.x), int(bounds.origin.y),
-                int(bounds.origin.x + bounds.size.width),
-                int(bounds.origin.y + bounds.size.height),
-            ]
-        except Exception:
-            return [0, 0, 1920, 1080]
+        """All displays, on the capture reference grid (including negative origins)."""
+        from .coordinates import MacOSCoordinateMapper
+        mapper = MacOSCoordinateMapper()
+        rect = mapper.virtual_point_bbox()
+        return mapper.native_rect_to_capture(rect.x(), rect.y(), rect.width(), rect.height())
 
     def clear(self):
         self.windows = []

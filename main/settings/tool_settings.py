@@ -387,6 +387,7 @@ class ToolSettingsManager(QObject):
         "clipboard_display_lines": 1,          # 剪贴板项最大显示行数
         "clipboard_theme": "light",            # 剪贴板窗口主题（light/dark/blue/green/pink/purple/orange）
         "clipboard_group_bar_position": "top", # 分组栏位置（right/left/top）
+        "clipboard_preview_size": "large",     # 悬停预览窗口尺寸（small/medium/large/xlarge）
         "clipboard_preserve_search": False,    # 关闭时保留搜索栏内容
         "clipboard_db_path": "",               # 剪贴板数据库自定义路径（空=默认位置）
 
@@ -1790,6 +1791,17 @@ class ToolSettingsManager(QObject):
         """设置分组栏位置"""
         if value in ("right", "left", "top"):
             self.qsettings.setValue("clipboard/group_bar_position", value)
+
+    def get_clipboard_preview_size(self) -> str:
+        """获取悬停预览窗口尺寸档位（small/medium/large/xlarge）"""
+        v = self.qsettings.value("clipboard/preview_size",
+                                 self.APP_DEFAULT_SETTINGS["clipboard_preview_size"], type=str)
+        return v if v in ("small", "medium", "large", "xlarge") else "large"
+
+    def set_clipboard_preview_size(self, value: str):
+        """设置悬停预览窗口尺寸档位"""
+        if value in ("small", "medium", "large", "xlarge"):
+            self.qsettings.setValue("clipboard/preview_size", value)
 
     # ==================== GIF录制设置 ====================
 

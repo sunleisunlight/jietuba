@@ -426,7 +426,7 @@ class ClipboardManager:
         """获取图片数据"""
         if not self.is_available:
             return None
-        
+
         try:
             data = self._manager.get_image_data(image_id)
             if data is None or isinstance(data, bytes):
@@ -436,6 +436,36 @@ class ClipboardManager:
         except Exception as e:
             log_error(T("获取图片失败: {e}", e=e), "Clipboard")
             return None
+
+    def update_ocr_text(self, image_id: str, ocr_text: str) -> int:
+        """写入图片 OCR 文本（按 image_id 更新所有同图记录），返回更新条数。
+
+        旧版 pyclipboard 没有该接口时静默失败，OCR 索引功能随之降级，
+        不影响剪贴板主流程。
+        """
+        if not self.is_available:
+            return 0
+        update_fn = getattr(self._manager, "update_ocr_text", None)
+        if update_fn is None:
+            return 0
+        try:
+            return int(update_fn(image_id, ocr_text))
+        except Exception as e:
+            log_error(T("更新图片 OCR 文本失败: {e}", e=e), "Clipboard")
+            return 0
+
+    def get_pending_ocr_images(self, limit: int = 100) -> List[str]:
+        """获取尚未做 OCR 的图片 image_id 列表（去重，最新在前）。"""
+        if not self.is_available:
+            return []
+        fetch_fn = getattr(self._manager, "get_pending_ocr_images", None)
+        if fetch_fn is None:
+            return []
+        try:
+            return list(fetch_fn(limit))
+        except Exception as e:
+            log_error(T("获取待 OCR 图片失败: {e}", e=e), "Clipboard")
+            return []
     
     # ==================== 分组功能 ====================
     

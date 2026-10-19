@@ -158,13 +158,15 @@ def test_auto_repeat_is_false_for_mouse_events():
     ("", ""),
 ])
 def test_keyboard_display_is_unchanged(text, expected):
-    assert inapp_shortcut_display_text(text) == expected
+    from core.shortcut_manager import display_hotkey_str
+    assert inapp_shortcut_display_text(text) == display_hotkey_str(expected)
 
 
 def test_mouse_display_is_not_the_raw_token():
     """右键菜单里不该出现 MOUSEMIDDLE。"""
     assert "MOUSEMIDDLE" not in inapp_shortcut_display_text(MOUSE_BUTTON_MIDDLE)
-    assert inapp_shortcut_display_text("ctrl+mousemiddle").startswith("CTRL+")
+    from core.shortcut_manager import display_hotkey_str
+    assert inapp_shortcut_display_text("ctrl+mousemiddle").startswith(display_hotkey_str("CTRL+"))
 
 
 # ============================================================================

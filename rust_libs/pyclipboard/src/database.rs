@@ -34,6 +34,7 @@ impl Database {
                 source_app TEXT,
                 char_count INTEGER,
                 group_id INTEGER,
+                ocr_text TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
@@ -42,6 +43,10 @@ impl Database {
         
         // 迁移：添加 title 字段（如果不存在）
         let _ = conn.execute("ALTER TABLE clipboard ADD COLUMN title TEXT", []);
+
+        // 迁移：图片 OCR 文本索引列（NULL=尚未识别，空串=已识别但无文字），
+        // 让搜索可以命中截图里的文字。
+        let _ = conn.execute("ALTER TABLE clipboard ADD COLUMN ocr_text TEXT", []);
 
         // ── Ditto 风格：原始格式数据表 ──────────────────────────────────────
         // clipboard_formats 与 clipboard 通过 event_id 关联（一次复制对应一个 event_id）
@@ -228,8 +233,16 @@ impl Database {
         
         if let Some(ref s) = search {
             if !s.trim().is_empty() {
-                where_clauses.push("content LIKE ?".to_string());
-                params_vec.push(Value::from(format!("%{}%", s)));
+                // 同时匹配正文、用户标题与图片 OCR 文本，这样截图里的文字
+                // 也能被搜索到。title/ocr_text 可能为 NULL，用 COALESCE 兜底。
+                let like = format!("%{}%", s);
+                where_clauses.push(
+                    "(content LIKE ? OR COALESCE(title, '') LIKE ? OR COALESCE(ocr_text, '') LIKE ?)"
+                        .to_string(),
+                );
+                params_vec.push(Value::from(like.clone()));
+                params_vec.push(Value::from(like.clone()));
+                params_vec.push(Value::from(like));
             }
         }
         
@@ -990,6 +1003,37 @@ impl Database {
             params![title, content, chrono::Local::now().timestamp(), id],
         ).map_err(|e| format!("更新内容失败: {}", e))?;
         Ok(())
+    }
+
+    /// 写入图片 OCR 文本：同一张图（image_id）可能对应多条历史记录，
+    /// 一次性全部更新。ocr_text 为空串表示"已识别但图中没有文字"。
+    pub fn update_ocr_text_by_image(&self, image_id: &str, ocr_text: &str) -> Result<usize, String> {
+        let affected = self.conn.execute(
+            "UPDATE clipboard SET ocr_text = ?1 WHERE image_id = ?2 AND content_type = 'image'",
+            params![ocr_text, image_id],
+        ).map_err(|e| format!("更新 OCR 文本失败: {}", e))?;
+        Ok(affected)
+    }
+
+    /// 取出尚未做 OCR 的图片 image_id（去重，最新的在前）。
+    /// ocr_text IS NULL 表示从未识别；空串代表已识别无文字，不再重复处理。
+    pub fn get_pending_ocr_image_ids(&self, limit: i64) -> Result<Vec<String>, String> {
+        let mut stmt = self.conn.prepare(
+            "SELECT image_id FROM clipboard
+             WHERE content_type = 'image' AND image_id IS NOT NULL AND image_id != '' AND ocr_text IS NULL
+             GROUP BY image_id
+             ORDER BY MAX(item_order) DESC
+             LIMIT ?1",
+        ).map_err(|e| format!("准备待 OCR 查询失败: {}", e))?;
+        let rows = stmt.query_map(params![limit], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("查询待 OCR 图片失败: {}", e))?;
+        let mut ids = Vec::new();
+        for row in rows {
+            if let Ok(image_id) = row {
+                ids.push(image_id);
+            }
+        }
+        Ok(ids)
     }
 
     // ==================== 原始格式存取（Ditto 风格）====================

@@ -1660,6 +1660,26 @@ Replace it?</translation>
         <translation>▲ Top</translation>
     </message>
     <message>
+        <source>Preview Size</source>
+        <translation>Preview Size</translation>
+    </message>
+    <message>
+        <source>Small</source>
+        <translation>Small</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>Medium</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>Large</translation>
+    </message>
+    <message>
+        <source>Extra Large</source>
+        <translation>Extra Large</translation>
+    </message>
+    <message>
         <source>Max Display Lines</source>
         <translation>Max Display Lines</translation>
     </message>

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import QMimeData, QTimer, QUrl
+from PySide6.QtCore import QMimeData, QTimer, QUrl, Qt
 from PySide6.QtGui import QGuiApplication, QImage
 
 from ..base.clipboard import ClipboardBackend
@@ -103,7 +103,7 @@ class MacOSClipboardBackend(ClipboardBackend):
     def paste_to_target(self, target: object) -> None:
         """target 为前台应用 PID（macOS 前台句柄=PID）或 None。"""
         if not target:
-            _send_paste_to_foreground()
+            _notify_paste_failure()
             return
         _activate_then_paste(int(target), 0)
 
@@ -130,14 +130,31 @@ def _activate_then_paste(pid: int, attempt: int):
     from platforms import get_platform_backend
     backend = get_platform_backend()
 
+    if pid == backend.windows.current_pid() or not backend.windows.is_alive(pid):
+        _notify_paste_failure()
+        return
+
     if backend.windows.get_foreground_handle() == pid:
         _send_paste()
         return
 
     if attempt >= _ACTIVATE_MAX_ATTEMPTS:
-        from core.logger import log_debug, T
-        log_debug(T("目标应用 {pid} 未切到前台，放弃本次补按键", pid=pid), "Clipboard")
+        _notify_paste_failure()
         return
 
     backend.windows.set_foreground(pid)
     QTimer.singleShot(_ACTIVATE_RETRY_MS, lambda: _activate_then_paste(pid, attempt + 1))
+
+
+def _notify_paste_failure():
+    from core.logger import log_warning
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    message = "目标窗口已关闭或无法恢复焦点，已停止自动粘贴。内容仍在剪贴板中，请切到目标窗口手动粘贴。"
+    log_warning(message, "Clipboard")
+    if QApplication.instance() is not None:
+        # Non-modal and retained by QApplication: never block an input callback.
+        app = QApplication.instance()
+        box = QMessageBox(QMessageBox.Icon.Warning, "积磊截图", message)
+        box.setAttribute(Qt.WA_DeleteOnClose)
+        app._paste_failure_dialog = box
+        box.open()

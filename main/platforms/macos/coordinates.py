@@ -55,6 +55,12 @@ class MacOSCoordinateMapper(CoordinateMapper):
 
     # ── 矩形 ──────────────────────────────────────────────
 
+    def native_rect_to_capture(self, x, y, width, height):
+        """CG/AX points -> the same reference-display pixel grid as capture."""
+        factor = self.reference_factor()
+        return [round(x * factor), round(y * factor),
+                round((x + width) * factor), round((y + height) * factor)]
+
     def capture_rect_to_qt(self, rect: QRectF) -> QRect:
         """物理像素矩形 → point 窗口几何（按左上所在屏 dpr 收缩）。
 

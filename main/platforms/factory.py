@@ -10,6 +10,12 @@ import sys
 _lifecycle = None
 
 
+def get_shortcut_convention():
+    """Pure key naming/parsing policy; never initializes native hooks."""
+    from .base.shortcut import ShortcutConvention
+    return ShortcutConvention(macos=sys.platform == "darwin")
+
+
 def get_lifecycle_backend():
     """Lifecycle is lazy and independent of capture/clipboard initialization."""
     global _lifecycle

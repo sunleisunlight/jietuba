@@ -1828,6 +1828,26 @@ Replace it?</source>
         <translation>▲ 顶部</translation>
     </message>
     <message>
+        <source>Preview Size</source>
+        <translation>预览大小</translation>
+    </message>
+    <message>
+        <source>Small</source>
+        <translation>小</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>中</translation>
+    </message>
+    <message>
+        <source>Large</source>
+        <translation>大</translation>
+    </message>
+    <message>
+        <source>Extra Large</source>
+        <translation>特大</translation>
+    </message>
+    <message>
         <source>Max Display Lines</source>
         <translation>最多显示行数</translation>
     </message>

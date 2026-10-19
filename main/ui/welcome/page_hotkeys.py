@@ -223,7 +223,10 @@ class _KeyboardMap(QWidget):
                 x += key_w + self.KEY_GAP
 
     def _draw_key(self, p, theme, box: QRectF, label: str, bindable: bool):
-        pressed = _label_token(label) in self._pressed
+        from platforms.factory import get_shortcut_convention
+        convention = get_shortcut_convention()
+        pressed = convention.storage(_label_token(label)) in self._pressed
+        label = convention.display(label)
         fill, border, text = self._key_colors(theme, bindable, pressed)
         p.setBrush(fill)
         p.setPen(QPen(border, 1.6 if pressed else 1))

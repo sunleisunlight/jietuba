@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      parity_task3:
+        description: 'Task 3 shortcuts, clipboard, pin, OCR, translation regressions and real Windows builds'
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main, master, integration/unified-platform]
   pull_request:
@@ -196,7 +201,7 @@ jobs:
         run: ruff check main
 
       - name: Run test suite with coverage
-        if: ${{ !inputs.parity_task1 }}
+        if: ${{ !inputs.parity_task1 && !inputs.parity_task3 }}
         # 从仓库根目录运行，保证 .coveragerc 里的相对路径能正确解析。
         # --cov-fail-under 是一个只升不降的棘轮：覆盖率掉下去 CI 就红，
         # 补完测试后把这个数字往上调。
@@ -214,7 +219,32 @@ jobs:
           --module test_about_update.py
           --module test_brand_migration.py
 
+      - name: Task 3 daily workflow regression gate
+        if: ${{ inputs.parity_task3 }}
+        run: >
+          python scripts/run_platform_tests.py --timeout 180
+          --module test_shortcut_convention.py
+          --module test_clipboard_ocr_index.py
+          --module test_macos_clipboard_contract.py
+          --module test_backend_hotkey_dispatch.py
+          --module test_inapp_mouse_shortcut.py
+          --module test_mouse_hotkey.py
+          --module test_settings_dialog_state.py
+          --module test_clipboard_manager_storage.py
+          --module test_clipboard_context_menu.py
+          --module test_clipboard_paste_target.py
+          --module test_clipboard_preview_lifecycle.py
+          --module test_pin_shortcut.py
+          --module test_pin_context_menu.py
+          --module test_pin_image_transform.py
+          --module test_ocr_ppocr_engine.py
+          --module test_barcode_scan.py
+          --module test_translation_architecture.py
+          --module test_translation_provider_fields.py
+          --module test_app_lifecycle.py
+
       - name: Build current Windows software
+        # Both bounded gates preserve failures; neither claims full-suite acceptance.
         run: python build_with_ocr_onefile.py
 
       - name: Record Windows artifact provenance

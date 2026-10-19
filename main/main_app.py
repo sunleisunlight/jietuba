@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.9.0"
+APP_VERSION = "2.10.0"
 
 
 def create_fallback_app_icon():
@@ -236,6 +236,12 @@ class MainApp(QObject):
             shutdown_history_manager()
         except Exception as e:
             log_exception(e, T("收尾历史后台线程"))
+        try:
+            from clipboard.services.ocr_index_service import OcrIndexService
+
+            OcrIndexService.instance().shutdown()
+        except Exception as e:
+            log_exception(e, T("等待剪贴板 OCR 索引线程"))
         try:
             from translation import TranslationManager
 
@@ -898,6 +904,16 @@ class MainApp(QObject):
     @Slot(object)
     def _on_clipboard_item_received(self, item):
         """Refresh clipboard UI on the GUI thread without owning probe logic."""
+        # 新截图入库后投递 OCR 索引，让截图里的文字可被搜索（无论历史窗口是否可见）
+        if item is not None and getattr(item, "content_type", None) == "image":
+            image_id = getattr(item, "image_id", None)
+            if image_id:
+                try:
+                    from clipboard.services.ocr_index_service import OcrIndexService
+
+                    OcrIndexService.instance().enqueue_image(image_id)
+                except Exception as e:
+                    log_debug(T("投递剪贴板图片 OCR 任务失败: {e}", e=e), "Clipboard")
         if self.clipboard_window:
             self.clipboard_window.notify_new_content(item)
 
@@ -947,6 +963,13 @@ class MainApp(QObject):
             started = manager.is_monitoring()
             if started:
                 log_info(T("剪贴板监听已按设置启动"), "Clipboard")
+                # 启动图片 OCR 索引后台服务（幂等）：新图优先、历史图分批补录
+                try:
+                    from clipboard.services.ocr_index_service import OcrIndexService
+
+                    OcrIndexService.instance(manager).start()
+                except Exception as e:
+                    log_debug(T("启动剪贴板 OCR 索引服务失败: {e}", e=e), "Clipboard")
             else:
                 log_warning(T("剪贴板监听启动失败"), "Clipboard")
             return started

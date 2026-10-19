@@ -60,9 +60,11 @@ def test_untrusted_input_does_not_inject(monkeypatch):
 def test_activation_timeout_never_pastes_into_another_app(monkeypatch):
     import platforms
     monkeypatch.setattr(platforms, "get_platform_backend", lambda: SimpleNamespace(
-        windows=SimpleNamespace(get_foreground_handle=lambda: 99),
+        windows=SimpleNamespace(get_foreground_handle=lambda: 99,
+                                current_pid=lambda: 1, is_alive=lambda pid: True),
     ))
     monkeypatch.setattr(clipboard, "_send_paste", lambda: pytest.fail("wrong app"))
+    monkeypatch.setattr(clipboard, "_notify_paste_failure", lambda: None)
     clipboard._activate_then_paste(42, clipboard._ACTIVATE_MAX_ATTEMPTS)
 
 
@@ -71,7 +73,7 @@ def test_macos_display_matches_registered_modifier(monkeypatch):
     from platforms.macos.hotkey import MacOSHotkeyBackend, cmdKey, controlKey
 
     monkeypatch.setattr(shortcut_manager.sys, "platform", "darwin")
-    assert shortcut_manager.display_hotkey_str("ctrl+shift+a") == "Cmd+Shift+a"
+    assert shortcut_manager.display_hotkey_str("ctrl+shift+a") == "Command+Shift+a"
     assert shortcut_manager.display_hotkey_str("lctrl+a") == "Control+a"
     assert MacOSHotkeyBackend.parse_hotkey("ctrl+a")[1] == cmdKey
     assert MacOSHotkeyBackend.parse_hotkey("lctrl+a")[1] == controlKey

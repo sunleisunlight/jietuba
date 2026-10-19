@@ -23,6 +23,7 @@ from core.logger import T
 
 from ..base.accessibility import AccessibilityBackend, ElementSnapshot
 from .permissions import _ax_is_trusted
+from .coordinates import MacOSCoordinateMapper
 
 
 def is_macos_accessibility_available() -> bool:
@@ -70,6 +71,17 @@ def _ax_value(element, attribute):
         return None
 
 
+def _window_frame(window_id):
+    import Quartz
+    windows = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionIncludingWindow, window_id)
+    for window in windows or []:
+        if window.get("kCGWindowNumber") == window_id:
+            bounds = window.get("kCGWindowBounds", {})
+            return tuple(float(bounds[k]) for k in ("X", "Y", "Width", "Height"))
+    return None
+
+
 def _ax_position_size(element):
     """返回 (x, y, width, height) 或 None（AX 坐标=屏幕全局点坐标，左上原点）。"""
     try:
@@ -114,7 +126,8 @@ def _scan_tree(element, out: list, depth: int, max_depth: int, max_elements: int
                     x, y, w, h = rect
                     if w >= 2 and h >= 2:
                         out.append(ElementSnapshot(
-                            (int(x), int(y), int(x + w), int(y + h)), order=len(out)
+                            tuple(MacOSCoordinateMapper().native_rect_to_capture(x, y, w, h)),
+                            order=len(out)
                         ))
                 _scan_tree(child, out, depth + 1, max_depth, max_elements)
             except Exception:
@@ -145,9 +158,16 @@ class _MacScanWorker(threading.Thread):
                 self._on_done(self._window_id, ())
                 return
             windows = _ax_value(app, ApplicationServices.kAXWindowsAttribute)
+            target_frame = _window_frame(self._window_id)
             out: List[ElementSnapshot] = []
             for win in windows or []:
+                frame = _ax_position_size(win)
+                if target_frame is None or frame is None or any(
+                    abs(a - b) > 2 for a, b in zip(frame, target_frame)
+                ):
+                    continue
                 _scan_tree(win, out, 0, 12, 4096)
+                break
             # 由细到粗：面积升序
             out.sort(key=lambda s: s.area)
             self._on_done(self._window_id, tuple(out))

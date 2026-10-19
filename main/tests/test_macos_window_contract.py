@@ -6,6 +6,7 @@ from platforms.macos import window
 
 
 def test_display_list_uses_pyobjc_error_displays_count(monkeypatch):
+    monkeypatch.setattr(window.MacOSCoordinateMapper, "reference_factor", lambda self: 1.0)
     bounds = SimpleNamespace(origin=SimpleNamespace(x=-1920, y=0),
                              size=SimpleNamespace(width=1920, height=1080))
     monkeypatch.setitem(sys.modules, "Quartz", SimpleNamespace(
@@ -24,3 +25,13 @@ def test_click_through_reaches_nswindow(monkeypatch):
     backend.set_window_click_through(widget, True)
     backend.set_window_click_through(widget, False)
     assert native == qt == [True, False]
+
+
+def test_retina_window_rect_and_self_exclusion(monkeypatch):
+    monkeypatch.setattr(window.MacOSCoordinateMapper, "reference_factor", lambda self: 2.0)
+    sample = dict(kCGWindowLayer=0, kCGWindowOwnerName="Synthetic",
+                  kCGWindowName="Task3", kCGWindowIsOnscreen=True,
+                  kCGWindowBounds=dict(X=-500, Y=20, Width=300, Height=200),
+                  kCGWindowNumber=42, kCGWindowOwnerPID=999999)
+    monkeypatch.setattr(window, "_window_list", lambda: [sample, dict(sample, kCGWindowOwnerPID=window.os.getpid())])
+    assert window.MacOSWindowBackend().enum_windows() == [(42, [-1000, 40, -400, 440], "Task3")]
