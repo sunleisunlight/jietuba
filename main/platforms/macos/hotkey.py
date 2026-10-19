@@ -22,8 +22,9 @@ from ..base.hotkey import GlobalHotkeyBackend
 # ── Carbon 常量 ──────────────────────────────────────────────
 
 kEventClassKeyboard = 0x6B657962  # 'keyb'
-kEventHotKeyPressed = 1
-kEventHotKeyReleased = 2
+# HIToolbox/CarbonEvents.h: 1/2 are raw key down/repeat, not hotkeys.
+kEventHotKeyPressed = 5
+kEventHotKeyReleased = 6
 kEventParamDirectObject = 0x2D2D2D2D  # '----'
 typeEventHotKeyID = 0x686B6964         # 'hkid'
 

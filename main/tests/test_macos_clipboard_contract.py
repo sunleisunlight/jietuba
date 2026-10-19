@@ -6,6 +6,11 @@ import pytest
 from platforms.macos import clipboard
 
 
+def test_carbon_event_kind_matches_apple_sdk():
+    from platforms.macos.hotkey import kEventHotKeyPressed, kEventHotKeyReleased
+    assert (kEventHotKeyPressed, kEventHotKeyReleased) == (5, 6)
+
+
 @pytest.fixture(autouse=True)
 def trusted_input(monkeypatch):
     monkeypatch.setattr(clipboard, "_ax_is_trusted", lambda: True)
