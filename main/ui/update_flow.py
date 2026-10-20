@@ -24,7 +24,7 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QSettings, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QSettings, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication, QDialog, QDialogButtonBox, QLabel, QProgressBar, QPushButton,
     QVBoxLayout,
@@ -157,7 +157,17 @@ class _DownloadThread(QThread):
 
 
 class _UpdateDialog(QDialog):
-    """发现新版本：立即更新 / 稍后 / 跳过此版本，下载时显示进度。"""
+    """发现新版本：立即更新 / 稍后 / 跳过此版本，下载时显示进度。
+
+    下载中可以**最小化**到任务栏（下载线程照常跑），也可以完全不管它——
+    下载状态通过 ``download_*`` 信号广播给更新控制器，设置窗口侧栏底部
+    会同步显示下载进度（见 SettingsDialog._bind_update_entry）。
+    """
+
+    # 供外部（设置窗口）观察下载进度；GUI 线程内经 Qt 排队投递
+    download_started = Signal()
+    download_progress = Signal(int, int)
+    download_finished = Signal(bool)   # True = 下载完成（即将重启安装）
 
     def __init__(self, parent, info: updater.UpdateInfo):
         super().__init__(parent)
@@ -170,6 +180,9 @@ class _UpdateDialog(QDialog):
         # MainApp 检测到模态会直接放弃截图（见 _activate_blocking_modal），
         # 表现就是"更新弹窗一出，截图热键就没用了"。
         self.setModal(False)
+        # 允许最小化：下载大包（70MB+）时用户可以把弹窗收进任务栏继续干活，
+        # 下载在后台线程进行，进度同时显示在设置窗口侧栏底部。
+        self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, True)
         self.setMinimumWidth(dialog_scaled(400))
 
         tokens = get_ui_theme().tokens
@@ -247,6 +260,7 @@ class _UpdateDialog(QDialog):
                 self._thread.cancel()
             self.status.setText(self.tr("已取消下载。"))
             self._reset_to_idle()
+            self.download_finished.emit(False)
             return
         self.reject()
 
@@ -269,6 +283,9 @@ class _UpdateDialog(QDialog):
         if self._downloading:
             return
         self._downloading = True
+        # 脱离父窗口：下载要能在后台持续进行，父窗口（设置窗口等）随时可能
+        # 被用户关掉；有父窗口时父窗口销毁会连带销毁本弹窗、杀死下载线程。
+        self.setParent(None)
         self.install_btn.setEnabled(False)
         self.skip_btn.setEnabled(False)
         self.later_btn.setText(self.tr("取消下载"))
@@ -277,6 +294,7 @@ class _UpdateDialog(QDialog):
         self.progress.setVisible(True)
         self.status.setVisible(True)
         self.status.setText(self.tr("正在下载更新…"))
+        self.download_started.emit()
 
         self._thread = _DownloadThread(self.info, self)
         self._thread.progress.connect(self._on_progress)
@@ -292,6 +310,7 @@ class _UpdateDialog(QDialog):
 
     @Slot(int, int)
     def _on_progress(self, done: int, total: int) -> None:
+        self.download_progress.emit(done, total)
         if total > 0:
             pct = max(0, min(100, int(done * 100 / total)))
             self.progress.setRange(0, 100)
@@ -312,10 +331,12 @@ class _UpdateDialog(QDialog):
                 # 下载失败：保留窗口，允许再点一次「立即更新」
                 self.status.setText(self.tr("下载失败或完整性校验未通过，请检查网络后重试。"))
                 self._reset_to_idle()
+                self.download_finished.emit(False)
             return
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
         self.status.setText(self.tr("下载完成，即将退出并安装新版本…"))
+        self.download_finished.emit(True)
         if updater.install_and_restart(path):
             self.accept()
             return
@@ -329,6 +350,10 @@ class UpdateController(QObject):
     """更新检查的唯一入口（GUI 线程单例，见 ``get_update_controller``）。"""
 
     checking_changed = Signal(bool)
+    # 下载状态广播：设置窗口侧栏底部据此显示后台下载进度
+    download_active_changed = Signal(bool)
+    download_progress = Signal(int, int)
+    download_finished = Signal(bool)
 
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
@@ -338,10 +363,15 @@ class UpdateController(QObject):
         self._notice_thread: _NoticeThread | None = None
         self._notice_timer = None
         self._dialog = None
+        self._downloading = False
 
     @property
     def is_checking(self) -> bool:
         return self._thread is not None
+
+    @property
+    def is_downloading(self) -> bool:
+        return self._downloading
 
     @property
     def dialog(self):
@@ -462,9 +492,24 @@ class UpdateController(QObject):
         dialog = _UpdateDialog(self._dialog_parent(), info)
         self._dialog = dialog
         dialog.finished.connect(self._on_dialog_finished)
+        # 下载状态转发给本控制器，设置窗口等观察者只认控制器
+        dialog.download_started.connect(self._on_dialog_download_started)
+        dialog.download_progress.connect(self.download_progress)
+        dialog.download_finished.connect(self._on_dialog_download_finished)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
+
+    @Slot()
+    def _on_dialog_download_started(self) -> None:
+        self._downloading = True
+        self.download_active_changed.emit(True)
+
+    @Slot(bool)
+    def _on_dialog_download_finished(self, success: bool) -> None:
+        self._downloading = False
+        self.download_active_changed.emit(False)
+        self.download_finished.emit(success)
 
     @Slot(int)
     def _on_dialog_finished(self, _result: int) -> None:

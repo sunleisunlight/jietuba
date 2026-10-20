@@ -357,6 +357,82 @@ class SettingsDialog(FrostedFramelessDialog):
         # 控制器常驻，这里只挂一次回调；设置窗销毁时 Qt 自动断开
         controller.checking_changed.connect(self._apply_update_entry_state)
         self._apply_update_entry_state(controller.is_checking)
+        # 侧栏底部后台下载进度：更新弹窗最小化后，在这里仍能看到下载进度
+        self._build_download_progress_footer(nav, controller)
+
+    def _build_download_progress_footer(self, nav, controller):
+        """侧栏底部的下载进度条。
+
+        更新弹窗下载中可最小化到任务栏（下载线程照常跑），此时设置窗口
+        侧栏底部会同步显示进度，用户不会失去对下载状态的可见性。
+        """
+        from PySide6.QtWidgets import QProgressBar, QVBoxLayout
+
+        holder = QWidget(nav)
+        lay = QVBoxLayout(holder)
+        lay.setContentsMargins(
+            dialog_scaled(15), dialog_scaled(4), dialog_scaled(15), dialog_scaled(6)
+        )
+        lay.setSpacing(dialog_scaled(4))
+
+        self._download_caption = CaptionLabel(self.tr("正在下载更新…"), holder)
+        lay.addWidget(self._download_caption)
+
+        self._download_bar = QProgressBar(holder)
+        self._download_bar.setRange(0, 100)
+        self._download_bar.setValue(0)
+        self._download_bar.setTextVisible(False)
+        self._download_bar.setFixedHeight(dialog_scaled(6))
+        self._download_bar.setStyleSheet(
+            "QProgressBar { background: rgba(128, 128, 128, 0.25); border: none;"
+            f" border-radius: {dialog_scaled(3)}px; }}"
+            "QProgressBar::chunk { background: %s; border-radius: %dpx; }"
+            % (ACCENT, dialog_scaled(3))
+        )
+        lay.addWidget(self._download_bar)
+
+        holder.hide()
+        nav.addFooterWidget(holder, NavigationItemPosition.BOTTOM)
+        self._download_footer = holder
+
+        controller.download_active_changed.connect(self._apply_download_state)
+        controller.download_progress.connect(self._apply_download_progress)
+        controller.download_finished.connect(self._apply_download_finished)
+        # 打开设置窗时下载可能已在后台进行（更新弹窗被最小化的场景）
+        self._apply_download_state(controller.is_downloading)
+
+    @Slot(bool)
+    def _apply_download_state(self, active: bool):
+        footer = getattr(self, "_download_footer", None)
+        if footer is None:
+            return
+        footer.setVisible(active)
+        if active:
+            self._download_bar.setValue(0)
+            self._download_caption.setText(self.tr("正在下载更新…"))
+
+    @Slot(int, int)
+    def _apply_download_progress(self, done: int, total: int):
+        footer = getattr(self, "_download_footer", None)
+        if footer is None or not footer.isVisible() or total <= 0:
+            return
+        pct = max(0, min(100, int(done * 100 / total)))
+        self._download_bar.setValue(pct)
+        self._download_caption.setText(
+            self.tr("正在下载更新… %1%").replace("%1", str(pct))
+        )
+
+    @Slot(bool)
+    def _apply_download_finished(self, success: bool):
+        footer = getattr(self, "_download_footer", None)
+        if footer is None:
+            return
+        if success:
+            # 下载完成马上就要重启安装，保持可见一瞬即可
+            self._download_bar.setValue(100)
+            self._download_caption.setText(self.tr("下载完成，正在重启安装…"))
+        else:
+            footer.hide()
 
     @Slot(bool)
     def _apply_update_entry_state(self, busy: bool):

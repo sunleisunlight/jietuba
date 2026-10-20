@@ -344,11 +344,12 @@ class _HistoryCard(QFrame):
 
     def enterEvent(self, event):
         self._preview.set_actions_visible(True)
-        # 悬停出预览浮窗：与剪贴板一致，延迟 500ms，避开宿主窗口
+        # 悬停出预览浮窗：与剪贴板一致（delegate 路径 delay_ms=5，近乎即时），
+        # 避开宿主窗口
         _HoverPreviewPopup.instance().show_preview(
             self.record,
             QCursor.pos(),
-            delay_ms=500,
+            delay_ms=5,
             avoid_rect=self.window().geometry(),
         )
         super().enterEvent(event)

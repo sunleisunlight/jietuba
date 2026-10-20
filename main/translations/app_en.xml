@@ -3245,6 +3245,9 @@ SOFTWARE.</translation></message>
     <message><source>Version</source><translation>Version</translation></message>
     <message><source>Check for Updates</source><translation>Check for Updates</translation></message>
     <message><source>Checking...</source><translation>Checking...</translation></message>
+    <message><source>正在下载更新…</source><translation>Downloading update…</translation></message>
+    <message><source>正在下载更新… %1%</source><translation>Downloading update… %1%</translation></message>
+    <message><source>下载完成，正在重启安装…</source><translation>Download complete, restarting to install…</translation></message>
     <message><source>Update Check</source><translation>Update Check</translation></message>
     <message><source>You're using the latest version (%1).</source><translation>You're using the latest version (%1).</translation></message>
     <message><source>Update Available</source><translation>Update Available</translation></message>

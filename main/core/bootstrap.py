@@ -423,9 +423,59 @@ def run():
     set_app_user_model_id("cc.jilei.jileiscreenshot")
 
     # 6. 启动主应用
-    from main_app import MainApp
-    main = MainApp()
+    try:
+        from main_app import MainApp
+        main = MainApp()
+    except ModuleNotFoundError as exc:
+        # 应用内更新刚替换完 exe 后的**首次**启动，onefile 解压出的个别 .pyd
+        # 可能被杀毒软件实时扫描临时锁定/隔离（实测：PySide6.QtNetwork 报
+        # ModuleNotFoundError，同一 exe 第二次启动即正常）。这里拦下来自动
+        # 重试一次，把英文崩溃弹窗换成无感重启；只有重试也失败才提示用户。
+        _handle_startup_import_failure(exc)
+        return
     main.run()
+
+
+def _handle_startup_import_failure(exc: ModuleNotFoundError) -> None:
+    """启动阶段缺 PySide6 模块：自动重启一次；仍失败则给中文提示。
+
+    非 PySide6 的缺模块属于真实打包缺陷，必须原样抛出，绝不掩盖。
+    """
+    from core.logger import log_warning
+
+    log_warning(f"启动阶段模块加载失败: {exc}", "Bootstrap")
+    if "PySide6" not in str(exc):
+        raise
+
+    import os
+    import subprocess
+    import sys
+
+    # 环境变量哨兵：重试进程不再二次重启，避免死循环
+    if os.environ.get("JILEI_STARTUP_RETRY") != "1":
+        env = dict(os.environ)
+        env["JILEI_STARTUP_RETRY"] = "1"
+        try:
+            subprocess.Popen([sys.executable], close_fds=True, env=env)
+            log_warning("已自动重启一次以规避杀毒软件解压干扰", "Bootstrap")
+            return
+        except OSError as e:
+            log_warning(f"自动重启失败: {e}", "Bootstrap")
+
+    message = (
+        "软件启动组件被杀毒软件临时拦截，自动重试未成功。\n\n"
+        "请稍后再打开一次积磊截图即可正常使用；\n"
+        "若反复出现，可将安装目录加入杀毒软件白名单。"
+    )
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(0, message, "积磊截图", 0x10)
+        except Exception:
+            pass
+    else:
+        print(message, file=sys.stderr)
 
 
 if __name__ == "__main__":

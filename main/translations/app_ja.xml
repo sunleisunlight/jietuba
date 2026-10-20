@@ -3405,6 +3405,9 @@ SOFTWARE.</translation></message>
     <message><source>Version</source><translation>バージョン</translation></message>
     <message><source>Check for Updates</source><translation>更新を確認</translation></message>
     <message><source>Checking...</source><translation>確認中...</translation></message>
+    <message><source>正在下载更新…</source><translation>アップデートをダウンロード中…</translation></message>
+    <message><source>正在下载更新… %1%</source><translation>アップデートをダウンロード中… %1%</translation></message>
+    <message><source>下载完成，正在重启安装…</source><translation>ダウンロード完了、再起動してインストール中…</translation></message>
     <message><source>Update Check</source><translation>更新の確認</translation></message>
     <message><source>You're using the latest version (%1).</source><translation>最新バージョン（%1）を使用中です。</translation></message>
     <message><source>Update Available</source><translation>更新があります</translation></message>
