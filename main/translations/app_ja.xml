@@ -3940,6 +3940,11 @@ Replace it?</source>
     <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>この履歴の元画像が失われているため、続きを編集できません。</translation></message>
     <message><source>这条历史不存在或已损坏。</source><translation>この履歴は存在しないか破損しています。</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>この履歴の元画像またはプロジェクト状態が破損しており、続きを編集できません。</translation></message>
+    <message><source>预览大小</source><translation>プレビューサイズ</translation></message>
+    <message><source>小</source><translation>小</translation></message>
+    <message><source>中</source><translation>中</translation></message>
+    <message><source>大</source><translation>大</translation></message>
+    <message><source>特大</source><translation>特大</translation></message>
 </context>
 
 <!-- ========== Jilei Account: settings page ========== -->

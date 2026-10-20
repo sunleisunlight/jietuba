@@ -3899,6 +3899,11 @@ Replace it?</source>
     <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>이 기록의 원본 이미지가 없어 이어서 편집할 수 없습니다.</translation></message>
     <message><source>这条历史不存在或已损坏。</source><translation>이 기록이 없거나 손상되었습니다.</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>이 기록의 원본 이미지 또는 프로젝트 상태가 손상되어 이어서 편집할 수 없습니다.</translation></message>
+    <message><source>预览大小</source><translation>미리보기 크기</translation></message>
+    <message><source>小</source><translation>소</translation></message>
+    <message><source>中</source><translation>중</translation></message>
+    <message><source>大</source><translation>대</translation></message>
+    <message><source>特大</source><translation>초대형</translation></message>
 </context>
 
 <!-- ========== Jilei Account: settings page ========== -->

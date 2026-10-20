@@ -15,11 +15,11 @@ import os
 from collections import OrderedDict
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer, Signal
+from PySide6.QtGui import QCursor, QPixmap
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QApplication, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QMenu,
+    QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from core.i18n import make_tr
@@ -100,6 +100,166 @@ def _annotation_text(count: int) -> str:
 
 def _source_text(source_type: str) -> str:
     return _tr(_SOURCE_LABELS.get(str(source_type), "截图"))
+
+
+# ── 悬停预览（行为与档位对齐剪贴板悬停预览） ─────────────────────────
+
+def _preview_size_levels():
+    """档位定义直接复用剪贴板悬停预览的同一份常量，保证两处行为一致。"""
+    from clipboard.ui.widgets.preview_popup import PREVIEW_SIZE_LEVELS
+
+    return PREVIEW_SIZE_LEVELS
+
+
+def _read_preview_level() -> str:
+    """读取继续标注悬停预览的尺寸档位，非法值回退为 large（默认档）。"""
+    try:
+        from settings import get_tool_settings_manager
+
+        level = get_tool_settings_manager().get_annotation_preview_size()
+        return level if level in _preview_size_levels() else "large"
+    except Exception:
+        return "large"
+
+
+def _preview_image_limits(global_pos):
+    """按档位算出悬停预览的 (最大宽, 最大高)，基于鼠标所在屏幕的可用区域。"""
+    from clipboard.ui.widgets.preview_popup import IMAGE_SCREEN_RATIO
+
+    screen = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
+    # 极端环境（无屏幕 / offscreen）下退化为 1080p 假设，避免 None 崩溃
+    geo = screen.availableGeometry() if screen is not None else QRect(0, 0, 1920, 1080)
+    conf = IMAGE_SCREEN_RATIO[_read_preview_level()]
+    if isinstance(conf[0], float):
+        return (
+            max(300, int(geo.width() * conf[0])),
+            max(240, int(geo.height() * conf[1])),
+        )
+    return conf
+
+
+class _HoverPreviewPopup(QWidget):
+    """继续标注悬停预览浮窗：鼠标停在卡片上稍候即弹出该工程的预览大图。
+
+    行为对齐剪贴板悬停预览（延迟弹出、避开宿主窗口、钳制在屏幕内）。
+    图源只用 preview.jpg（最大边 640），绝不加载 source.png，避免悬停
+    一次就把全分辨率母片读进内存；小图不放大，大图收到档位上限内。
+    """
+
+    _instance = None  # 单例，避免多个弹窗
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        super().__init__(None)
+        # 无边框 + 工具窗口 + 置顶，与剪贴板预览浮窗一致
+        self.setWindowFlags(
+            Qt.WindowType.ToolTip
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setStyleSheet(
+            "background: #FAFAFA; border: 1px solid #D0D0D0; border-radius: 8px;"
+        )
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        self._label = QLabel(self)
+        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._label.setStyleSheet("background: transparent; border: none;")
+        layout.addWidget(self._label)
+
+        self._pending_record = None
+        self._pending_pos = None
+        self._pending_avoid_rect = None
+        self._show_timer = QTimer(self)
+        self._show_timer.setSingleShot(True)
+        self._show_timer.timeout.connect(self._do_show)
+
+    def show_preview(self, record, global_pos, *, delay_ms: int = 500, avoid_rect=None):
+        """请求显示预览（带延迟）；record 为 None 时直接隐藏。"""
+        if record is None:
+            self.hide_preview()
+            return
+        self._pending_record = record
+        self._pending_pos = QPoint(global_pos)
+        self._pending_avoid_rect = QRect(avoid_rect) if avoid_rect is not None else None
+        self._show_timer.start(max(0, int(delay_ms)))
+
+    def hide_preview(self):
+        self._show_timer.stop()
+        self._pending_record = None
+        self._pending_pos = None
+        self._pending_avoid_rect = None
+        self.hide()
+
+    def _do_show(self):
+        record = self._pending_record
+        pos = self._pending_pos
+        if record is None or pos is None:
+            return
+
+        max_w, max_h = _preview_image_limits(pos)
+        pixmap = self._load_pixmap(record, max_w, max_h)
+        if pixmap is None:
+            return  # 预览缺失：不弹窗，不打断操作
+
+        self._label.setPixmap(pixmap)
+        self.adjustSize()
+
+        screen = QApplication.screenAt(pos) or QApplication.primaryScreen()
+        geo = screen.availableGeometry() if screen is not None else QRect(0, 0, 1920, 1080)
+
+        # 摆放策略与剪贴板预览一致：优先放在宿主窗口之外，再钳制进屏幕
+        gap = 10
+        x = pos.x() + 20
+        y = pos.y()
+        avoid_rect = self._pending_avoid_rect
+        if avoid_rect is not None:
+            left_space = avoid_rect.left() - geo.left()
+            right_space = geo.right() - avoid_rect.right()
+            place_left = avoid_rect.left() - self.width() - gap
+            place_right = avoid_rect.right() + gap
+            if right_space >= self.width() + gap:
+                x = place_right
+            elif left_space >= self.width() + gap:
+                x = place_left
+            else:
+                x = place_right if right_space >= left_space else place_left
+
+        if x + self.width() > geo.right():
+            x = geo.right() - self.width() - gap
+        if x < geo.left():
+            x = geo.left()
+        if y + self.height() > geo.bottom():
+            y = geo.bottom() - self.height() - gap
+        if y < geo.top():
+            y = geo.top()
+
+        self.move(x, y)
+        self.show()
+
+    @staticmethod
+    def _load_pixmap(record, max_w: int, max_h: int):
+        path = record.preview_path
+        if not path or not os.path.isfile(path):
+            return None
+        source = QPixmap(path)
+        if source.isNull():
+            return None
+        # 小图保持原尺寸（不放大以免模糊），大图等比收进档位上限
+        target_w = min(max_w, source.width())
+        target_h = min(max_h, source.height())
+        return source.scaled(
+            target_w, target_h,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
 
 class _HistoryCard(QFrame):
@@ -184,10 +344,18 @@ class _HistoryCard(QFrame):
 
     def enterEvent(self, event):
         self._preview.set_actions_visible(True)
+        # 悬停出预览浮窗：与剪贴板一致，延迟 500ms，避开宿主窗口
+        _HoverPreviewPopup.instance().show_preview(
+            self.record,
+            QCursor.pos(),
+            delay_ms=500,
+            avoid_rect=self.window().geometry(),
+        )
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self._preview.set_actions_visible(False)
+        _HoverPreviewPopup.instance().hide_preview()
         super().leaveEvent(event)
 
     def _on_continue(self):
@@ -400,6 +568,20 @@ class AnnotationHistoryDialog(QDialog):
         self._sort_tabs.addItem("favorite", _tr("收藏"))
         header.addWidget(self._sort_tabs)
 
+        # ── 预览大小：与剪贴板一样提供 小/中/大/特大 四档，默认"大" ──
+        self._preview_size_btn = QPushButton(_tr("预览大小"), self)
+        self._preview_size_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._preview_size_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._preview_size_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {tokens.text_muted};"
+            f" border: 1px solid {tokens.border}; border-radius: {dialog_scaled(6)}px;"
+            f" padding: {dialog_scaled(4)}px {dialog_scaled(10)}px;"
+            f" font-size: {dialog_scaled(12)}px; }}"
+            f"QPushButton:hover {{ border-color: {tokens.accent}; color: {tokens.text}; }}"
+        )
+        self._preview_size_btn.clicked.connect(self._show_preview_size_menu)
+        header.addWidget(self._preview_size_btn)
+
         root.addLayout(header)
 
         # ── 卡片网格 ──
@@ -501,6 +683,8 @@ class AnnotationHistoryDialog(QDialog):
                     count=self._offset, total=self._total), "AnnotationHistory")
 
     def _clear_cards(self):
+        # 重建列表时把可能还挂着的悬停预览一起收掉
+        _HoverPreviewPopup.instance().hide_preview()
         for card in self._cards:
             self._grid.removeWidget(card)
             card.setParent(None)
@@ -546,6 +730,37 @@ class AnnotationHistoryDialog(QDialog):
     def _on_sort_tab_changed(self, key: str):
         self._favorite_only = (key == "favorite")
         self.reload()
+
+    def _show_preview_size_menu(self):
+        current = _read_preview_level()
+        labels = {
+            "small": _tr("小"),
+            "medium": _tr("中"),
+            "large": _tr("大"),
+            "xlarge": _tr("特大"),
+        }
+        tokens = ui_tokens(self)
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background: {tokens.surface}; color: {tokens.text};"
+            f" border: 1px solid {tokens.border}; }}"
+            "QMenu::item { padding: 4px 20px; }"
+            f"QMenu::item:selected {{ background: {tokens.accent}; color: #FFFFFF; }}"
+        )
+        for key in _preview_size_levels():
+            act = menu.addAction(labels[key])
+            act.setCheckable(True)
+            act.setChecked(current == key)
+            act.triggered.connect(lambda _c, k=key: self._set_preview_size(k))
+        menu.exec(self._preview_size_btn.mapToGlobal(QPoint(0, self._preview_size_btn.height())))
+
+    def _set_preview_size(self, level: str):
+        try:
+            from settings import get_tool_settings_manager
+
+            get_tool_settings_manager().set_annotation_preview_size(level)
+        except Exception as e:
+            log_exception(e, T("保存悬停预览尺寸档位"))
 
     def _record_for(self, history_id: str):
         for card in self._cards:
@@ -623,6 +838,11 @@ class AnnotationHistoryDialog(QDialog):
         if obj is self._scroll.viewport() and event.type() == event.Type.Resize:
             self._relayout_timer.start()
         return super().eventFilter(obj, event)
+
+    def hideEvent(self, event):
+        # 窗口隐藏时同步收掉悬停预览浮窗，避免浮窗残留在屏幕上
+        _HoverPreviewPopup.instance().hide_preview()
+        super().hideEvent(event)
 
     def showEvent(self, event):
         super().showEvent(event)

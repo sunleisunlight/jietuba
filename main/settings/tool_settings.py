@@ -388,6 +388,7 @@ class ToolSettingsManager(QObject):
         "clipboard_theme": "light",            # 剪贴板窗口主题（light/dark/blue/green/pink/purple/orange）
         "clipboard_group_bar_position": "top", # 分组栏位置（right/left/top）
         "clipboard_preview_size": "large",     # 悬停预览窗口尺寸（small/medium/large/xlarge）
+        "annotation_preview_size": "large",    # 继续标注悬停预览尺寸（small/medium/large/xlarge）
         "clipboard_preserve_search": False,    # 关闭时保留搜索栏内容
         "clipboard_db_path": "",               # 剪贴板数据库自定义路径（空=默认位置）
 
@@ -1802,6 +1803,17 @@ class ToolSettingsManager(QObject):
         """设置悬停预览窗口尺寸档位"""
         if value in ("small", "medium", "large", "xlarge"):
             self.qsettings.setValue("clipboard/preview_size", value)
+
+    def get_annotation_preview_size(self) -> str:
+        """获取继续标注窗口悬停预览尺寸档位（small/medium/large/xlarge）"""
+        v = self.qsettings.value("annotation_history/preview_size",
+                                 self.APP_DEFAULT_SETTINGS["annotation_preview_size"], type=str)
+        return v if v in ("small", "medium", "large", "xlarge") else "large"
+
+    def set_annotation_preview_size(self, value: str):
+        """设置继续标注窗口悬停预览尺寸档位"""
+        if value in ("small", "medium", "large", "xlarge"):
+            self.qsettings.setValue("annotation_history/preview_size", value)
 
     # ==================== GIF录制设置 ====================
 

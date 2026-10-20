@@ -3777,6 +3777,11 @@ Delete it?</translation></message>
     <message><source>这条历史的母片已丢失，无法继续标注。</source><translation>This history's source image is missing; it cannot be continued.</translation></message>
     <message><source>这条历史不存在或已损坏。</source><translation>This history does not exist or is damaged.</translation></message>
     <message><source>这条历史的母片或工程状态已损坏，无法继续标注。</source><translation>This history's source image or project state is damaged; it cannot be continued.</translation></message>
+    <message><source>预览大小</source><translation>Preview Size</translation></message>
+    <message><source>小</source><translation>Small</translation></message>
+    <message><source>中</source><translation>Medium</translation></message>
+    <message><source>大</source><translation>Large</translation></message>
+    <message><source>特大</source><translation>Extra Large</translation></message>
 </context>
 
 <!-- ========== Jilei Account: settings page ========== -->
