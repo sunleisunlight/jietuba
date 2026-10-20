@@ -420,7 +420,12 @@ class PlaybackController(QObject):
             gif_width = DEFAULT_GIF_WIDTH
             scale = gif_width / src_w if src_w > 0 and gif_width > 0 else 1.0
 
-            cursor_sprites = rasterize_cursor_sprites(scale)
+            # 帧是物理像素：光标 sprite 以 point 为单位设计，需按像素比例
+            # 放大，导出后的光标大小/位置才与 Windows（点即像素）一致。
+            from platforms import get_platform_backend
+            sprite_scale = scale * get_platform_backend().coordinates.reference_factor()
+
+            cursor_sprites = rasterize_cursor_sprites(sprite_scale)
 
             cursors = [f.cursor for f in frames]
             burst_states = compute_burst_states(cursors)

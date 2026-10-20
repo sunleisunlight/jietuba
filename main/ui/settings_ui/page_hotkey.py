@@ -460,7 +460,9 @@ def create_hotkey_page(dialog) -> QWidget:
 
 def _on_shortcut_changed(dialog, changed_key: str, new_text: str, base_style: str):
     """某个输入框值变化时，检查同组内是否冲突，弹窗询问是否替换"""
-    new_text = new_text.strip().lower()
+    from platforms.factory import get_shortcut_convention
+    from core.shortcut_manager import hotkey_identity
+    new_text = get_shortcut_convention().storage(new_text).strip()
     # 忽略空值、未完成的中间态（如 "ctrl+"）
     if not new_text or new_text.endswith("+"):
         return
@@ -474,7 +476,7 @@ def _on_shortcut_changed(dialog, changed_key: str, new_text: str, base_style: st
             continue
         if dialog._inapp_groups.get(cfg_key, "") != my_group:
             continue
-        if edit.text().strip().lower() == new_text:
+        if hotkey_identity(edit.text()) == hotkey_identity(new_text):
             conflict_key = cfg_key
             break
 

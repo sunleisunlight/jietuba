@@ -7,13 +7,36 @@ accessibility/coordinates/permissions），业务代码通过
 """
 import sys
 
+_lifecycle = None
+
+
+def get_shortcut_convention():
+    """Pure key naming/parsing policy; never initializes native hooks."""
+    from .base.shortcut import ShortcutConvention
+    return ShortcutConvention(macos=sys.platform == "darwin")
+
+
+def get_lifecycle_backend():
+    """Lifecycle is lazy and independent of capture/clipboard initialization."""
+    global _lifecycle
+    if _lifecycle is None:
+        if sys.platform == "darwin":
+            from .macos.lifecycle import MacOSLifecycleBackend
+            _lifecycle = MacOSLifecycleBackend()
+        elif sys.platform == "win32":
+            from .windows.lifecycle import WindowsLifecycleBackend
+            _lifecycle = WindowsLifecycleBackend()
+        else:
+            raise RuntimeError(f"不支持的平台: {sys.platform}")
+    return _lifecycle
+
 
 
 class PlatformBackend:
     """聚合子后端的容器对象（鸭子类型，无继承要求）。"""
 
     def __init__(self, *, capture, hotkey, clipboard, window,
-                 accessibility, coordinates, permissions):
+                 accessibility, coordinates, permissions, input):
         self.capture = capture
         self.hotkeys = hotkey
         self.clipboard = clipboard
@@ -21,6 +44,7 @@ class PlatformBackend:
         self.accessibility = accessibility
         self.coordinates = coordinates
         self.permissions = permissions
+        self.input = input
 
     @property
     def is_windows(self) -> bool:
@@ -43,6 +67,7 @@ class PlatformFactory:
             from .windows.accessibility import WindowsAccessibilityBackend
             from .windows.coordinates import WindowsCoordinateMapper
             from .windows.permissions import WindowsPermissionBackend
+            from .windows.input import WindowsInputBackend
             return PlatformBackend(
                 capture=WindowsCaptureBackend(),
                 hotkey=WindowsHotkeyBackend(),
@@ -51,6 +76,7 @@ class PlatformFactory:
                 accessibility=WindowsAccessibilityBackend(),
                 coordinates=WindowsCoordinateMapper(),
                 permissions=WindowsPermissionBackend(),
+                input=WindowsInputBackend(),
             )
         if sys.platform == "darwin":
             from .macos.capture import MacOSCaptureBackend
@@ -60,6 +86,7 @@ class PlatformFactory:
             from .macos.accessibility import MacOSAccessibilityBackend
             from .macos.coordinates import MacOSCoordinateMapper
             from .macos.permissions import MacOSPermissionBackend
+            from .macos.input import MacOSInputBackend
             return PlatformBackend(
                 capture=MacOSCaptureBackend(),
                 hotkey=MacOSHotkeyBackend(),
@@ -68,5 +95,22 @@ class PlatformFactory:
                 accessibility=MacOSAccessibilityBackend(),
                 coordinates=MacOSCoordinateMapper(),
                 permissions=MacOSPermissionBackend(),
+                input=MacOSInputBackend(),
             )
         raise RuntimeError(f"不支持的平台: {sys.platform}")
+
+
+def get_native_updater():
+    """Windows onefile 更新保留现有实现；Mac 使用 .app 后端。"""
+    if sys.platform == "darwin":
+        from .macos import updater
+        return updater
+    return None
+
+
+def update_target_arch():
+    import platform
+    machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        return "darwin", "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
+    return "windows", "arm64" if machine in ("arm64", "aarch64") else "x86_64"

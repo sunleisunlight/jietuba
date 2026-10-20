@@ -102,11 +102,21 @@ def test_mac_spec_and_scripts_derive_dmg_and_plist_from_app_version(app_version)
     assert '"CFBundleVersion": APP_VERSION' in spec
     for script in ("scripts/package_macos.sh", "scripts/notarize_macos.sh"):
         source = _read(script)
-        assert "JileiScreenshot-${VERSION}-arm64.dmg" in source, script
+        assert "积磊截图-${VERSION}-arm64.dmg" in source, script
     assert app_version
 
 
 # ── 3/4. ppocr_rust 与 OCR 模型必须是 Mac 正式构建的一部分 ─────────────────
+
+def test_mac_spec_keeps_single_instance_network_dependency():
+    tree = ast.parse(_read("jileiscreenshot_macos.spec"))
+    lists = {target.id: ast.literal_eval(node.value)
+             for node in tree.body if isinstance(node, ast.Assign)
+             for target in node.targets if isinstance(target, ast.Name)
+             and target.id in ("hiddenimports", "excludes")}
+    assert "PySide6.QtNetwork" in lists["hiddenimports"]
+    assert "PySide6.QtNetwork" not in lists["excludes"]
+
 
 def test_mac_spec_does_not_exclude_ppocr_rust():
     spec = _read("jileiscreenshot_macos.spec")
@@ -178,3 +188,37 @@ def test_setup_macos_checks_architecture_and_verifies_extensions():
     assert "arm64" in source
     for name in ("gifrecorder", "longstitch", "pyclipboard", "ppocr_rust"):
         assert name in source, name
+
+
+def test_mac_visible_brand_matches_windows_and_preserves_bundle_identity():
+    spec = _read("jileiscreenshot_macos.spec")
+    for entry in (
+        'name="积磊截图.app"',
+        '"CFBundleName": "积磊截图"',
+        '"CFBundleDisplayName": "积磊截图"',
+        '"CFBundleIdentifier": "cc.jilei.jileiscreenshot"',
+        '"CFBundleExecutable": "JileiScreenshot"',
+    ):
+        assert entry in spec
+    assert 'APP = DIST / "积磊截图.app"' in _read("build_macos.py")
+    assert 'APP_NAME = "积磊截图.app"' in _read("main/platforms/macos/updater.py")
+    assert 'NEW_APP_BUNDLE = "积磊截图.app"' in _read("main/core/brand_migration.py")
+
+
+def test_mac_icon_is_generated_from_largest_windows_icon_layer():
+    source = _read("build_macos.py")
+    assert 'icon_png = REPO / "托盘.ico"' in source
+    assert "max(ico.ico.sizes(), key=lambda s: s[0] * s[1])" in source
+    assert "ico.ico.getimage(largest)" in source
+    assert 'if ICNS.exists()' not in source
+
+
+def test_mac_release_checks_arm64_with_input_before_verify_arch():
+    tree = ast.parse(_read("scripts/macos_release.py"))
+    commands = [node for node in ast.walk(tree) if isinstance(node, ast.List)
+                and node.elts and isinstance(node.elts[0], ast.Constant)
+                and node.elts[0].value == "lipo"]
+    assert len(commands) == 1
+    assert len(commands[0].elts) == 4
+    assert ast.literal_eval(commands[0].elts[2]) == "-verify_arch"
+    assert ast.literal_eval(commands[0].elts[3]) == "arm64"

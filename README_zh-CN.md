@@ -297,7 +297,8 @@ clipboard/
 │   ├── file_payload_service.py   # file 类型 JSON payload 与旧格式兼容
 │   ├── group_service.py          # 分组图标、命名与删除确认辅助
 │   ├── import_export_service.py  # 文本条目 CSV 导入/导出
-│   └── manage_dialog_service.py  # 管理窗口保存逻辑
+│   ├── manage_dialog_service.py  # 管理窗口保存逻辑
+│   └── ocr_index_service.py      # 图片历史 OCR 索引：新入库优先识别，历史分批补录
 ├── ui/
 │   ├── layout_scale.py           # 管理窗口共用尺寸常量
 │   ├── dialogs/
@@ -357,6 +358,7 @@ clipboard/
 core/
 ├── __init__.py
 ├── bootstrap.py             # PreloadManager — 启动引导，环境初始化、DPI感知、单实例控制、链式预加载
+├── instance_broker.py       # InstanceBroker — 按用户单实例，唤醒已有实例，绝不强杀
 ├── brand_migration.py       # 旧品牌（截图吧/jietuba）一次性迁移：数据目录、QSettings、自启项、快捷方式
 ├── logger.py                # Logger — 文件+控制台日志系统，支持多级别 (debug/info/warning/error/exception)
 ├── crash_handler.py         # install_crash_hooks() — 全局异常和线程异常捕获
@@ -698,7 +700,6 @@ ui/
 │   ├── page_log.py          # 日志设置页
 │   ├── page_developer.py    # 开发者设置页
 │   ├── page_misc.py         # 杂项设置页
-│   ├── page_about.py        # 关于页面
 │   └── mock_config.py       # MockConfig — 测试用模拟配置
 │
 ├── welcome/                 # 首次启动欢迎向导

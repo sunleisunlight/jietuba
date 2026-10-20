@@ -313,16 +313,25 @@ class TestWindowsIntegration:
         finally:
             self._delete_regkey_tree(sandbox)
 
-    def test_desktop_shortcut_migrated(self, qapp, tmp_path):
+    def test_desktop_shortcut_migrated(self, qapp, tmp_path, monkeypatch):
+        # Migration is deliberately non-fatal at startup. Surface its diagnostic
+        # on CI instead of reducing a native PowerShell/COM failure to False.
+        messages = []
+        monkeypatch.setattr("core.brand_migration._log",
+                            lambda level, message: messages.append((level, message)))
         desktop = tmp_path / "Desktop"
         desktop.mkdir()
         (desktop / "Jietuba.lnk").write_bytes(b"")
         exe = tmp_path / "积磊截图.exe"
         exe.write_bytes(b"")
 
-        assert migrate_windows_desktop_shortcut(
+        migrated = migrate_windows_desktop_shortcut(
             desktop_dir=str(desktop), exe_path=str(exe),
-        ) is True
+        )
+        if migrated is not True:
+            # pytest abbreviates container reprs, losing the middle of CLIXML.
+            pytest.fail("\n".join(message for _level, message in messages)
+                        or "Desktop shortcut migration failed without diagnostics")
 
         assert (desktop / "积磊截图.lnk").exists()
         assert not (desktop / "Jietuba.lnk").exists()

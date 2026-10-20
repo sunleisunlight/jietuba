@@ -366,7 +366,13 @@ class ScreenshotWindow(QWidget):
         self.virtual_y = rect.y()
         self.virtual_width = rect.width()
         self.virtual_height = rect.height()
-        
+
+        # 平台坐标映射：rect 与场景是物理像素；窗口几何单位是 point（macOS
+        # Retina 上 1 point = dpr 物理像素）。Windows mapper 恒等，geom == rect。
+        from platforms import get_platform_backend
+        self._coordinate_mapper = get_platform_backend().coordinates
+        self._window_geom = self._coordinate_mapper.capture_rect_to_qt(rect)
+
         log_debug(T("虚拟桌面: {width}x{height} at ({x}, {y})",
                      width=self.virtual_width, height=self.virtual_height,
                      x=self.virtual_x, y=self.virtual_y), "ScreenshotWindow")
@@ -376,12 +382,14 @@ class ScreenshotWindow(QWidget):
         # 2. 窗口属性 & 几何形状（必须在创建子控件之前完成）
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
-        self.setGeometry(int(self.virtual_x), int(self.virtual_y), int(self.virtual_width), int(self.virtual_height))
+        self.setGeometry(self._window_geom)
 
         # 3. 初始化场景和视图
         self.scene = CanvasScene(self.original_image, rect, enable_mosaic=True)
         self.view = self._create_canvas_view(self.scene)
-        self.view.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.view.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
+        # 场景（物理像素）→ 视口（point）整体缩放，与 Windows 标注尺寸一致
+        self.view.apply_display_scale(self._coordinate_mapper.view_scale())
         
         _t2 = time.perf_counter()
         _timings['Scene+View'] = (_t2 - _t1) * 1000
@@ -407,14 +415,14 @@ class ScreenshotWindow(QWidget):
         )
 
         # 6. 遮罩叠层（QWidget），覆盖整个窗口，位于 View 之上
-        self.mask_overlay = MaskOverlayWidget(self, self.scene.selection_model)
-        self.mask_overlay.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.mask_overlay = MaskOverlayWidget(self, self.scene.selection_model, self.view)
+        self.mask_overlay.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
 
         # 6.1 选区装饰浮层，必须在遮罩之上，否则边框/手柄跨出选区的部分会被压暗
         self.selection_overlay = SelectionOverlayWidget(
-            self, self.scene.selection_item, self.scene.selection_model
+            self, self.scene.selection_item, self.scene.selection_model, self.view
         )
-        self.selection_overlay.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.selection_overlay.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
         self.selection_overlay.raise_()
 
         _t4 = time.perf_counter()
@@ -566,15 +574,20 @@ class ScreenshotWindow(QWidget):
         self.virtual_y = rect.y()
         self.virtual_width = rect.width()
         self.virtual_height = rect.height()
-        
+
+        # 平台坐标映射：物理像素 rect → point 窗口几何（Windows 恒等）
+        from platforms import get_platform_backend
+        self._coordinate_mapper = get_platform_backend().coordinates
+        self._window_geom = self._coordinate_mapper.capture_rect_to_qt(rect)
+
         # 更新窗口几何形状（多显示器可能变化）
-        self.setGeometry(int(self.virtual_x), int(self.virtual_y),
-                         int(self.virtual_width), int(self.virtual_height))
-        
+        self.setGeometry(self._window_geom)
+
         # 创建新的 Scene + View（每次截图内容不同，不可复用）
         self.scene = CanvasScene(image, rect, enable_mosaic=True)
         self.view = self._create_canvas_view(self.scene)
-        self.view.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.view.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
+        self.view.apply_display_scale(self._coordinate_mapper.view_scale())
         self.view.lower()  # 确保 view 在最底层，overlay 在上方
         
         self.smart_selection_mode = self._get_configured_smart_selection_mode()
@@ -589,14 +602,16 @@ class ScreenshotWindow(QWidget):
             parent_window=self
         )
         
-        # 复用 mask_overlay —— 重新绑定到新的 selection_model
+        # 复用 mask_overlay —— 重新绑定到新的 selection_model 与 view
         self.mask_overlay.rebind_model(self.scene.selection_model)
-        self.mask_overlay.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.mask_overlay._view = self.view
+        self.mask_overlay.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
         self.mask_overlay.raise_()
 
-        # 复用 selection_overlay —— 绑到新 scene 的 item/model，并保持在遮罩之上
+        # 复用 selection_overlay —— 绑到新 scene 的 item/model/view，并保持在遮罩之上
         self.selection_overlay.rebind(self.scene.selection_item, self.scene.selection_model)
-        self.selection_overlay.setGeometry(0, 0, int(self.virtual_width), int(self.virtual_height))
+        self.selection_overlay._view = self.view
+        self.selection_overlay.setGeometry(0, 0, self._window_geom.width(), self._window_geom.height())
         self.selection_overlay.raise_()
         
         # 复用 info_panel —— swap view 引用，重建 controller

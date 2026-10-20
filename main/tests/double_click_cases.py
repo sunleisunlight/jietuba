@@ -459,7 +459,7 @@ def test_selection_border_double_click_restores_rect_and_confirms(qapp):
     window, _scene, view = _make_view(qapp)
     before = _scene.selection_model.rect()
 
-    _single_then_double(view, point=QPoint(3, 60))
+    _single_then_double(view, point=QPoint(10, 60))
 
     assert window.confirm_calls == 1
     assert _scene.selection_model.rect() == before
@@ -468,7 +468,7 @@ def test_selection_border_double_click_restores_rect_and_confirms(qapp):
 def test_subthreshold_crop_mutation_is_restored_before_confirm(qapp):
     window, scene, view = _make_view(qapp)
     before = scene.selection_model.rect()
-    point = QPoint(3, 60)
+    point = QPoint(10, 60)
 
     QTest.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
     scene.selection_model.set_rect(before.adjusted(2, 0, 0, 0))

@@ -22,11 +22,10 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, QSettings, Signal
 
-from core.logger import log_info, log_warning, T
+from core.logger import log_warning, T
 
 from . import api, constants as C
 from . import token_store
-from .device import get_device_id
 
 
 class AccountManager(QObject):

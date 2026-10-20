@@ -11,6 +11,7 @@ from PySide6.QtGui import QKeyEvent, QKeySequence
 from core.shortcut_manager import (
     ShortcutManager, ShortcutHandler, get_key_display_map, hotkey_identity,
 )
+from platforms.factory import get_shortcut_convention
 from core import safe_event
 from core.i18n import make_tr
 from core.ui_scale import dialog_scaled
@@ -57,6 +58,11 @@ class _HotkeyEditHandler(ShortcutHandler):
             MOD_CONTROL, MOD_ALT, MOD_SHIFT, MOD_WIN,
         )
         mgr = ShortcutManager.instance()
+        qt_binding = mgr._id_to_qt.get(hotkey_id)
+        if qt_binding is not None:
+            qt_key, qt_mods = qt_binding
+            self._line_edit.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, qt_key, qt_mods))
+            return True
         meta = mgr._id_to_metadata.get(hotkey_id)
         if meta is None:
             return True  # 不知道是什么键，直接拦截不触发
@@ -142,7 +148,7 @@ class HotkeyEdit(QWidget):
 
         # Connect internal edit signals
         self.edit.textChanged.connect(self._on_text_changed)
-        self.edit.textChanged.connect(self.textChanged.emit)
+        self.edit.textChanged.connect(lambda _text: self.textChanged.emit(self.text()))
 
     def setText(self, text):
         self.edit.setText(text)
@@ -152,7 +158,7 @@ class HotkeyEdit(QWidget):
         return self.edit.text()
     
     def setPlaceholderText(self, text):
-        self.edit.setPlaceholderText(text)
+        self.edit.setPlaceholderText(get_shortcut_convention().display_hint(text))
     
     def setFixedWidth(self, w):
         # Apply width to the composite widget or the edit?
@@ -287,6 +293,12 @@ class _HotkeyLineEdit(QLineEdit):
         # 保证 focusIn / focusOut 成对增减，不会漏放或重复放。
         self._mouse_capture_held = False
 
+    def setText(self, text):
+        super().setText(get_shortcut_convention().display(text))
+
+    def text(self):
+        return get_shortcut_convention().storage(super().text())
+
     def _apply_theme(self, _tokens=None):
         tokens = get_ui_theme().tokens
         self.setStyleSheet(f"""
@@ -315,25 +327,7 @@ class _HotkeyLineEdit(QLineEdit):
         # Accept the event to prevent propagation/default handling
         event.accept()
 
-        # 2. Check for modifiers
-        parts = []
-        
-        # Check modifiers from event state
-        if modifiers & Qt.KeyboardModifier.ControlModifier:
-            parts.append("Ctrl")
-        if modifiers & Qt.KeyboardModifier.ShiftModifier:
-            parts.append("Shift")
-        if modifiers & Qt.KeyboardModifier.AltModifier:
-            parts.append("Alt")
-        if modifiers & Qt.KeyboardModifier.MetaModifier:
-            parts.append("Win")
-
-        # Handle case where the pressed key IS a modifier but 'modifiers' flags might be lagging or different context
-        # (Though usually modifiers() is accurate for combo, let's be safe if user just pressed Ctrl)
-        if key == Qt.Key.Key_Control and "Ctrl" not in parts: parts.append("Ctrl")
-        if key == Qt.Key.Key_Shift and "Shift" not in parts: parts.append("Shift")
-        if key == Qt.Key.Key_Alt and "Alt" not in parts: parts.append("Alt")
-        if key == Qt.Key.Key_Meta and "Win" not in parts: parts.append("Win")
+        parts = get_shortcut_convention().modifier_tokens(modifiers, key)
 
         is_modifier_present = len(parts) > 0
         
@@ -422,11 +416,7 @@ class _HotkeyLineEdit(QLineEdit):
                 # Usually modifiers() in release event reflects the remaining modifiers.
                 
                 modifiers = event.modifiers()
-                parts = []
-                if modifiers & Qt.KeyboardModifier.ControlModifier: parts.append("Ctrl")
-                if modifiers & Qt.KeyboardModifier.ShiftModifier: parts.append("Shift")
-                if modifiers & Qt.KeyboardModifier.AltModifier: parts.append("Alt")
-                if modifiers & Qt.KeyboardModifier.MetaModifier: parts.append("Win")
+                parts = get_shortcut_convention().modifier_tokens(modifiers, released_key=key)
 
                 if parts:
                     self.setText("+".join(parts).lower() + "+")

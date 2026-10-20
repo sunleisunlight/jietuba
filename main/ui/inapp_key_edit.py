@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent, QKeySequence
 
 from core.shortcut_manager import MOUSE_BUTTON_MIDDLE, get_key_display_map
+from platforms.factory import get_shortcut_convention
 from core import safe_event
 
 
@@ -31,6 +32,12 @@ class InAppKeyEdit(QLineEdit):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setPlaceholderText("...")
 
+    def setText(self, text):
+        super().setText(get_shortcut_convention().display(text))
+
+    def text(self):
+        return get_shortcut_convention().storage(super().text())
+
     # ── 鼠标事件 ──────────────────────────────────────────
 
     @safe_event
@@ -45,14 +52,7 @@ class InAppKeyEdit(QLineEdit):
             return
         event.accept()
         self.setFocus(Qt.FocusReason.MouseFocusReason)
-        parts = []
-        mods = event.modifiers()
-        if mods & Qt.KeyboardModifier.ControlModifier:
-            parts.append("Ctrl")
-        if mods & Qt.KeyboardModifier.ShiftModifier:
-            parts.append("Shift")
-        if mods & Qt.KeyboardModifier.AltModifier:
-            parts.append("Alt")
+        parts = get_shortcut_convention().modifier_tokens(event.modifiers())
         parts.append(MOUSE_BUTTON_MIDDLE)
         # 存进配置的就是这段文本，所以必须是解析器认识的形态（全小写）
         self.setText("+".join(parts).lower())
@@ -70,13 +70,7 @@ class InAppKeyEdit(QLineEdit):
             self.setText("")
             return
 
-        parts: list[str] = []
-        if mods & Qt.KeyboardModifier.ControlModifier:
-            parts.append("Ctrl")
-        if mods & Qt.KeyboardModifier.ShiftModifier:
-            parts.append("Shift")
-        if mods & Qt.KeyboardModifier.AltModifier:
-            parts.append("Alt")
+        parts = get_shortcut_convention().modifier_tokens(mods, key)
 
         is_modifier = key in (
             Qt.Key.Key_Control, Qt.Key.Key_Shift,
@@ -110,13 +104,7 @@ class InAppKeyEdit(QLineEdit):
             if self.text().endswith("+"):
                 # 修饰键松开而未完成组合 → 清空
                 remaining = event.modifiers()
-                parts = []
-                if remaining & Qt.KeyboardModifier.ControlModifier:
-                    parts.append("Ctrl")
-                if remaining & Qt.KeyboardModifier.ShiftModifier:
-                    parts.append("Shift")
-                if remaining & Qt.KeyboardModifier.AltModifier:
-                    parts.append("Alt")
+                parts = get_shortcut_convention().modifier_tokens(remaining, released_key=key)
                 if parts:
                     self.setText("+".join(parts).lower() + "+")
                 else:

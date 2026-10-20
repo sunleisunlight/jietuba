@@ -5,23 +5,56 @@
 #import <CoreGraphics/CoreGraphics.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <unistd.h>
 
 // gifrecorder macOS 录屏 shim（只负责 ScreenCaptureKit → BGRA 帧）
 // Rust 侧通过 extern "C" 调用；帧数据逐帧回调给 Rust。
 
 typedef void (*JTKFrameCallback)(void *ctx, const uint8_t *data, size_t len);
+typedef void (*JTKContextRelease)(void *ctx);
 
 @interface JTKStreamDelegate : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, assign) JTKFrameCallback callback;
 @property (nonatomic) void *ctx;
+@property (nonatomic, assign) JTKContextRelease releaseContext;
 @property (nonatomic, strong) SCStream *stream;
+@property (nonatomic) BOOL cancelled;
+@property (nonatomic) BOOL started;
+@property (nonatomic) size_t width;
+@property (nonatomic) size_t height;
+- (void)cancel;
 @end
 
 @implementation JTKStreamDelegate
 
+- (void)dealloc {
+    // Rust context 的所有权随 delegate。包括启动超时后的迟到回调，均不会
+    // 在 Rust 先释放 sender 后再使用它，也不再每次录制泄漏一个 Box。
+    if (_releaseContext != NULL && _ctx != NULL) _releaseContext(_ctx);
+}
+
+- (void)cancel {
+    @synchronized (self) {
+        self.cancelled = YES;
+        self.callback = NULL;
+        SCStream *stream = self.stream;
+        self.stream = nil;
+        if (stream != nil) {
+            [stream stopCaptureWithCompletionHandler:^(NSError *error) {
+                NSError *removeError = nil;
+                [stream removeStreamOutput:self type:SCStreamOutputTypeScreen error:&removeError];
+            }];
+        }
+    }
+}
+
 - (void)stream:(SCStream *)stream didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
                                                ofType:(SCStreamOutputType)type {
     if (type != SCStreamOutputTypeScreen) return;
+    if (!CMSampleBufferIsValid(sampleBuffer)) return;
+    NSArray *attachments = (__bridge NSArray *)CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, NO);
+    NSNumber *status = attachments.firstObject[SCStreamFrameInfoStatus];
+    if (status == nil || status.integerValue != SCFrameStatusComplete) return;
     CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (imageBuffer == NULL) return;
     CVPixelBufferLockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
@@ -29,7 +62,9 @@ typedef void (*JTKFrameCallback)(void *ctx, const uint8_t *data, size_t len);
     size_t height = CVPixelBufferGetHeight(imageBuffer);
     size_t rowBytes = CVPixelBufferGetBytesPerRow(imageBuffer);
     uint8_t *base = (uint8_t *)CVPixelBufferGetBaseAddress(imageBuffer);
-    if (base != NULL && self.callback != NULL) {
+    @synchronized (self) {
+    if (base != NULL && !self.cancelled && self.callback != NULL &&
+        width == self.width && height == self.height) {
         size_t tight = width * 4;
         size_t total = tight * height;
         if (rowBytes == tight) {
@@ -46,29 +81,44 @@ typedef void (*JTKFrameCallback)(void *ctx, const uint8_t *data, size_t len);
             }
         }
     }
+    }
     CVPixelBufferUnlockBaseAddress(imageBuffer, kCVPixelBufferLock_ReadOnly);
 }
 
 - (void)stream:(SCStream *)stream didStopWithError:(NSError *)error {
     NSLog(@"[gifrecorder-sck] stream stopped: %@", error);
+    [self cancel];
 }
 
 @end
 
-// 启动区域录屏；区域 (x,y,w,h) 为全局显示坐标（CG 同系）。
+// 启动区域录屏；区域 (x,y,w,h) 为全局显示坐标（CG point 同系），
+// 输出帧固定为 outW×outH 像素（Retina 上 outW/outH 为物理像素，
+// 使录制分辨率与静态截图一致；二者不同时由 SCK 缩放）。
 // 返回 opaque handle（失败返回 NULL）。
-void *JTKStartCapture(int x, int y, int w, int h, double fps,
-                      JTKFrameCallback cb, void *ctx) {
-    if (w <= 0 || h <= 0 || cb == NULL) return NULL;
+void *JTKStartCapture(int x, int y, int w, int h, int outW, int outH, double fps,
+                      JTKFrameCallback cb, void *ctx, JTKContextRelease releaseContext) {
+    if (w <= 0 || h <= 0 || outW <= 0 || outH <= 0 || cb == NULL) {
+        if (releaseContext != NULL) releaseContext(ctx);
+        return NULL;
+    }
     JTKStreamDelegate *delegate = [[JTKStreamDelegate alloc] init];
     delegate.callback = cb;
     delegate.ctx = ctx;
+    delegate.releaseContext = releaseContext;
+    delegate.width = (size_t)outW;
+    delegate.height = (size_t)outH;
     __block SCStream *stream = nil;
     __block dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         [SCShareableContent getShareableContentWithCompletionHandler:^(
             SCShareableContent *content, NSError *err) {
+            @synchronized (delegate) {
+            if (delegate.cancelled) {
+                dispatch_semaphore_signal(sem);
+                return;
+            }
             if (content == nil || err != nil) {
                 NSLog(@"[gifrecorder-sck] no shareable content: %@", err);
                 dispatch_semaphore_signal(sem);
@@ -90,22 +140,35 @@ void *JTKStartCapture(int x, int y, int w, int h, double fps,
             CGRect src = CGRectMake(x - df.origin.x, y - df.origin.y, w, h);
             CGRect inter = CGRectIntersection(src,
                 CGRectMake(0, 0, df.size.width, df.size.height));
-            if (inter.size.width < 1 || inter.size.height < 1) {
+            // Rust 编码器必须收到 outW*outH*4 字节；不能静默裁小后仍宣称原尺寸。
+            if (!CGRectEqualToRect(inter, src)) {
+                NSLog(@"[gifrecorder-sck] recording region must stay within one display");
                 dispatch_semaphore_signal(sem);
                 return;
             }
             SCStreamConfiguration *conf = [[SCStreamConfiguration alloc] init];
-            conf.width = (NSInteger)inter.size.width;
-            conf.height = (NSInteger)inter.size.height;
+            // 输出像素尺寸：Retina 下必须是物理像素（= 逻辑点 × dpr），
+            // 否则录出来的 GIF 只有一半分辨率。SCK 负责把 sourceRect（点）
+            // 缩放到该像素尺寸，不做二次裁切。
+            conf.width = (NSInteger)outW;
+            conf.height = (NSInteger)outH;
             conf.sourceRect = inter;
             double f = fps > 1.0 ? fps : 15.0;
             conf.minimumFrameInterval = CMTimeMake(1, (int32_t)f);
             conf.pixelFormat = kCVPixelFormatType_32BGRA;
             conf.showsCursor = NO;
             conf.queueDepth = 2;
-            conf.captureResolution = SCCaptureResolutionBest;
+            if (@available(macOS 14.0, *)) {
+                conf.captureResolution = SCCaptureResolutionBest;
+            }
+            // 不排除本应用窗口：与 Windows BitBlt 抓屏语义一致，
+            // 录制期间画在绘制层上的标注才会进入 GIF（边框/工具栏本来就
+            // 位于录制区域之外，不会污染画面）。showsCursor=NO 保证系统
+            // 光标不入帧，光标由导出阶段按采集轨迹叠加。
             SCContentFilter *filter =
-                [[SCContentFilter alloc] initWithDisplay:target excludingWindows:@[]];
+                [[SCContentFilter alloc] initWithDisplay:target
+                                          excludingWindows:@[]];
+
             stream = [[SCStream alloc] initWithFilter:filter
                                         configuration:conf
                                              delegate:delegate];
@@ -113,41 +176,44 @@ void *JTKStartCapture(int x, int y, int w, int h, double fps,
             NSError *addErr = nil;
             BOOL added = [stream addStreamOutput:delegate
                                             type:SCStreamOutputTypeScreen
-                               sampleHandlerQueue:dispatch_get_global_queue(
-                                   QOS_CLASS_USER_INITIATED, 0)
+                               sampleHandlerQueue:dispatch_queue_create("cc.jilei.sck.frames", DISPATCH_QUEUE_SERIAL)
                                              error:&addErr];
             if (!added) {
                 NSLog(@"[gifrecorder-sck] addStreamOutput failed: %@", addErr);
+                [delegate cancel];
                 dispatch_semaphore_signal(sem);
                 return;
             }
             [stream startCaptureWithCompletionHandler:^(NSError *err2) {
+                @synchronized (delegate) {
                 if (err2 != nil) {
                     NSLog(@"[gifrecorder-sck] start error: %@", err2);
+                    [delegate cancel];
+                } else if (delegate.cancelled) {
+                    [stream stopCaptureWithCompletionHandler:nil];
+                } else {
+                    delegate.started = YES;
+                }
                 }
                 dispatch_semaphore_signal(sem);
             }];
+            }
         }];
     });
 
     long waited = dispatch_semaphore_wait(
         sem, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    if (waited != 0 || stream == nil) {
-        return NULL;
+    @synchronized (delegate) {
+        if (waited != 0 || !delegate.started || delegate.cancelled) {
+            [delegate cancel];
+            return NULL;
+        }
+        return (void *)CFBridgingRetain(delegate);
     }
-    return (void *)CFBridgingRetain(delegate);
 }
 
 void JTKStopCapture(void *handle) {
     if (handle == NULL) return;
-    JTKStreamDelegate *delegate = (__bridge JTKStreamDelegate *)handle;
-    SCStream *stream = delegate.stream;
-    if (stream != nil) {
-        [stream stopCaptureWithCompletionHandler:nil];
-    }
-    // 延迟释放，避免 stop 异步回调期间 delegate 已被释放
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        CFRelease(handle);
-    });
+    JTKStreamDelegate *delegate = CFBridgingRelease(handle);
+    [delegate cancel];
 }

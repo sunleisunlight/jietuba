@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 """蓝色/红色选区边框覆盖层 — 动态穿透切换 + RESIZE 模式下 4 边拖拽"""
 
-import ctypes
 from enum import Enum, auto
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QRect, QPoint, Signal
 from PySide6.QtGui import QPainter, QPen, QColor, QCursor
 from core import safe_event
-
-GWL_EXSTYLE = -20
-WS_EX_TRANSPARENT = 0x00000020
-WS_EX_LAYERED     = 0x00080000
+from core.logger import log_exception, T
 
 # 边框外扩量（供鼠标检测，不画在内容上）
 _BORDER_W    = 3    # 实际绘制边框宽度（px）
@@ -84,21 +80,12 @@ class CaptureOverlay(QWidget):
     # ══════════════════════════════════════════════
 
     def _set_passthrough(self, enable: bool):
-        import sys
-        if sys.platform == "darwin":
-            # macOS：Qt 原生透明鼠标事件（仅穿透输入，不影响绘制）
-            self.setAttribute(
-                Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable
-            )
-            return
-        hwnd = int(self.winId())
-        style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-        if enable:
-            style |= WS_EX_TRANSPARENT | WS_EX_LAYERED
-        else:
-            style &= ~WS_EX_TRANSPARENT
-            style |= WS_EX_LAYERED
-        ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+        """切换鼠标穿透（平台后端：Windows 扩展样式 / macOS 原生属性）"""
+        try:
+            from platforms import get_platform_backend
+            get_platform_backend().windows.set_window_click_through(self, enable)
+        except Exception as e:
+            log_exception(e, T("GIF 选区边框设置穿透"))
 
     # ══════════════════════════════════════════════
     # 绘制

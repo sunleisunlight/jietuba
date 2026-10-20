@@ -2,8 +2,15 @@
 """
 帧采集控制器 — 全 Rust 架构 (gifrecorder)
 
-录制：Rust 线程 Win32 BitBlt 截屏 → JPEG 压缩 → FrameStore 存储
+录制：Rust 线程 抓屏（Windows BitBlt / macOS ScreenCaptureKit）→ JPEG 压缩 → FrameStore 存储
       Python 侧仅 QTimer tick 通知 UI 帧数，完全不碰像素
+
+坐标系（与静态截图一致）：
+  录制区域由 GifRecordWindow 以 **Qt 逻辑点（point）** 传入（窗口几何单位）；
+  Rust 侧在 macOS 用逻辑点定位 SCK sourceRect，同时要求输出帧为
+  **物理像素**（point × dpr），因此 FrameStore 的宽高是物理像素，
+  与 Windows（点即像素）行为一致。
+  鼠标轨迹按同一套换算采集，导出时直接落在帧像素坐标系。
 
 停止后：
   - _store: gifrecorder.FrameStore 实例（持有全部帧数据）
@@ -13,14 +20,9 @@
 """
 
 import time
-import ctypes
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Optional, Tuple
-
-# Win32 POINT 结构体（复用）
-class _POINT(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
 from PySide6.QtCore import QObject, QTimer, QRect, QThread, Signal
 
@@ -67,13 +69,17 @@ class FrameData:
 
 class FrameRecorder(QObject):
     """
-    以指定帧率截屏，通过 gifrecorder.RecordSession (Rust) 驱动。
+    以指定帧率采集屏幕，通过 gifrecorder.RecordSession (Rust) 驱动。
 
     架构：
-      Rust 线程: Win32 BitBlt 截屏 → JPEG 压缩 → FrameStore
+      Rust 线程: 抓屏（BitBlt / ScreenCaptureKit）→ JPEG 压缩 → FrameStore
       Python 侧: QTimer tick 仅发信号通知 UI 帧数变化
 
     Python 完全不参与截屏和像素处理，零 GIL 争用。
+
+    录制区域用 **Qt 逻辑点** 表达（与窗口几何同一坐标系）；录制开始
+    时换算成平台原生坐标系（Windows 像素 / macOS CG 点）并把输出帧
+    固定为物理像素，使 Retina 下的 GIF 与 Windows 同为全分辨率。
     """
 
     frame_captured = Signal(int)   # 当前总帧数
@@ -103,10 +109,11 @@ class FrameRecorder(QObject):
         self._rec_width: int = 0
         self._rec_height: int = 0
 
-        # 鼠标轨迹（录制期间每 tick 采集一次）
+        # 鼠标轨迹（录制期间每 tick 采集一次，坐标为帧像素）
         self._cursor_track: List[CursorSnapshot] = []
-        self._rec_left: int = 0       # 录制区域屏幕左上角
+        self._rec_left: int = 0       # 录制区域屏幕左上角（物理像素）
         self._rec_top: int = 0
+        self._capture_factor: float = 1.0  # 点 → 物理像素系数（Retina = dpr）
 
         # pynput 滚轮监听（录制期间启动，读取后清零）
         self._scroll_value: int = 0   # 0=无, 1=向上, -1=向下
@@ -147,6 +154,7 @@ class FrameRecorder(QObject):
     # ── 配置 ──
 
     def set_rect(self, rect: QRect):
+        """设置录制区域（Qt 逻辑点；macOS Retina 下由本类换算为物理像素输出）"""
         self._rect = QRect(rect)
 
     def set_fps(self, fps: int):
@@ -157,7 +165,7 @@ class FrameRecorder(QObject):
     # ── 生命周期 ──
 
     def start(self):
-        """开始录制。Rust 线程 Win32 BitBlt 截屏 → FrameStore。"""
+        """开始录制。Rust 线程抓屏（BitBlt / SCK）→ FrameStore。"""
         if self._state not in (RecordState.IDLE, RecordState.STOPPED):
             return
         self._frames.clear()
@@ -168,25 +176,35 @@ class FrameRecorder(QObject):
             log_error(T("gifrecorder 不可用，无法录制"), "GIF")
             return
 
-        # 内缩 1px 四边，避免录入选区边框线
+        # 内缩 1 点（Windows 上 1 点 = 1 像素），避免录入选区边框线
         _INSET = 1
-        w = self._rect.width()  - _INSET * 2
-        h = self._rect.height() - _INSET * 2
-        left = self._rect.x() + _INSET
-        top  = self._rect.y() + _INSET
-        w = max(w, 2)
-        h = max(h, 2)
-        self._rec_width = w
-        self._rec_height = h
-        self._rec_left = left
-        self._rec_top = top
+        pt_x = self._rect.x() + _INSET
+        pt_y = self._rect.y() + _INSET
+        pt_w = max(self._rect.width() - _INSET * 2, 2)
+        pt_h = max(self._rect.height() - _INSET * 2, 2)
+
+        from platforms import get_platform_backend
+        mapper = get_platform_backend().coordinates
+        factor = mapper.qt_to_capture_factor(pt_x, pt_y)
+
+        # 物理像素区域：Retina 下点 → 像素（Windows factor=1，与旧行为一致）
+        left_px, top_px = mapper.qt_point_to_capture(pt_x, pt_y)
+        right_px, bottom_px = mapper.qt_point_to_capture(pt_x + pt_w, pt_y + pt_h)
+        px_w = max(right_px - left_px, 2)
+        px_h = max(bottom_px - top_px, 2)
+
+        self._rec_width = px_w
+        self._rec_height = px_h
+        self._rec_left = left_px
+        self._rec_top = top_px
+        self._capture_factor = factor
         self._cursor_track.clear()
 
-        # 创建 FrameStore
+        # 创建 FrameStore（像素尺寸）
         try:
             self._store = gifrecorder.FrameStore(
-                width=w,
-                height=h,
+                width=px_w,
+                height=px_h,
                 fps=self._fps,
                 jpeg_quality=90,
             )
@@ -196,10 +214,11 @@ class FrameRecorder(QObject):
             self._store = None
             return
 
-        # 启动 Rust 截屏会话（Win32 BitBlt，独立 Rust 线程）
+        # 启动 Rust 截屏会话（区域=点、输出=像素）
         try:
             self._session = gifrecorder.RecordSession(
-                self._store, left, top, w, h, self._fps,
+                self._store, pt_x, pt_y, pt_w, pt_h, self._fps,
+                px_w, px_h,
             )
         except Exception as e:
             log_error(T("RecordSession 启动失败: {e}", e=e), "GIF")
@@ -215,7 +234,9 @@ class FrameRecorder(QObject):
         self._timer.start(1000 // self._fps)
         self._start_scroll_listener()
         self.state_changed.emit(self._state.name)
-        log_info(T("录制开始: {w}x{h} @ {fps}fps (Rust Win32 BitBlt)", w=w, h=h, fps=self._fps), "GIF")
+        log_info(T(
+            "录制开始: 区域 {pt_w}x{pt_h} 点 → 输出 {w}x{h} 像素 @ {fps}fps (dpr={factor})",
+            pt_w=pt_w, pt_h=pt_h, w=px_w, h=px_h, fps=self._fps, factor=factor), "GIF")
 
     def pause(self):
         """暂停录制"""
@@ -392,44 +413,16 @@ class FrameRecorder(QObject):
     # ── 鼠标采集 ──
 
     @staticmethod
-    def _get_cursor_pos() -> Tuple[int, int]:
-        """获取鼠标屏幕坐标（Windows: GetCursorPos；macOS: Quartz 全局坐标，与 mss 同点空间）"""
-        import sys
-        if sys.platform == "darwin":
-            import Quartz
-            p = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
-            return int(p.x), int(p.y)
-        pt = _POINT()
-        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-        return pt.x, pt.y
+    def _get_cursor_pos_px() -> Tuple[int, int]:
+        """当前鼠标位置（截图物理像素坐标系，平台后端统一换算）。"""
+        from platforms import get_platform_backend
+        return get_platform_backend().coordinates.cursor_pos_capture()
 
     @staticmethod
-    def _is_left_pressed() -> bool:
-        """鼠标左键是否按下（Windows: GetAsyncKeyState；macOS: CGEventSourceButtonState）"""
-        import sys
-        if sys.platform == "darwin":
-            import Quartz
-            return bool(
-                Quartz.CGEventSourceButtonState(
-                    Quartz.kCGEventSourceStateCombinedSessionState, 0
-                )
-            )
-        # VK_LBUTTON = 0x01
-        return bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
-
-    @staticmethod
-    def _is_right_pressed() -> bool:
-        """鼠标右键是否按下（Windows: GetAsyncKeyState；macOS: CGEventSourceButtonState）"""
-        import sys
-        if sys.platform == "darwin":
-            import Quartz
-            return bool(
-                Quartz.CGEventSourceButtonState(
-                    Quartz.kCGEventSourceStateCombinedSessionState, 1
-                )
-            )
-        # VK_RBUTTON = 0x02
-        return bool(ctypes.windll.user32.GetAsyncKeyState(0x02) & 0x8000)
+    def _buttons_pressed() -> Tuple[bool, bool]:
+        """当前指针左右键状态（平台后端：GetAsyncKeyState / CGEventSourceButtonState）。"""
+        from platforms import get_platform_backend
+        return get_platform_backend().input.pointer_buttons()
 
     def _start_scroll_listener(self):
         """启动 pynput 滚轮监听（后台线程）"""
@@ -460,16 +453,17 @@ class FrameRecorder(QObject):
         self._scroll_value = 0
 
     def _sample_cursor(self):
-        """采集一次鼠标快照，追加到 _cursor_track"""
+        """采集一次鼠标快照（坐标已是帧像素坐标系），追加到 _cursor_track"""
         try:
-            sx, sy = self._get_cursor_pos()
+            sx, sy = self._get_cursor_pos_px()
             rx = sx - self._rec_left
             ry = sy - self._rec_top
             visible = (0 <= rx < self._rec_width and 0 <= ry < self._rec_height)
             # 左键优先，右键次之
-            if self._is_left_pressed():
+            left_down, right_down = self._buttons_pressed()
+            if left_down:
                 press = 1
-            elif self._is_right_pressed():
+            elif right_down:
                 press = 2
             else:
                 press = 0

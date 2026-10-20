@@ -25,9 +25,10 @@ class MaskOverlayWidget(QWidget):
     不绘制尺寸标注（由 SelectionItem 负责）。
     """
 
-    def __init__(self, parent: QWidget, selection_model):
+    def __init__(self, parent: QWidget, selection_model, view=None):
         super().__init__(parent)
         self._model = selection_model
+        self._view = view
         # 从主题管理器获取遮罩颜色
         from core.theme import get_theme
         self._mask_color = get_theme().mask_color
@@ -72,15 +73,16 @@ class MaskOverlayWidget(QWidget):
     # 内部
     # ------------------------------------------------------------------
     def _scene_to_local(self, sel: QRectF) -> QRect:
-        """场景坐标 → widget 本地坐标（整数像素）"""
-        parent = self.parentWidget()
-        if parent:
-            return QRect(
-                int(sel.x() - parent.x()),
-                int(sel.y() - parent.y()),
-                int(sel.width()),
-                int(sel.height()),
-            )
+        """场景坐标（物理像素）→ widget 本地坐标（point，整数）。
+
+        经 view.mapFromScene 转换，自动包含 macOS Retina 的 1/dpr 缩放。
+        view 几何从 (0,0) 开始，故 view 本地坐标即窗口本地坐标。
+        """
+        view = getattr(self, "_view", None)
+        if view is not None:
+            # viewportTransform 把场景（物理像素）映射到视口（point），
+            # 轴对齐矩形经缩放/平移仍轴对齐，mapRect 即可。
+            return view.viewportTransform().mapRect(sel).toAlignedRect()
         return sel.toAlignedRect()
 
     def _on_rect_changed(self, rect: QRectF):

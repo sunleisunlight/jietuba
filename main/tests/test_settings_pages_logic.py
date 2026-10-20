@@ -326,11 +326,12 @@ class TestShortcutConflictDetection:
         edits = {"inapp_undo": _Edit("ctrl+z"), "inapp_redo": _Edit("ctrl+z")}
         dialog = _hotkey_dialog(edits, {"inapp_undo": "shot", "inapp_redo": "shot"})
         page_hotkey._on_shortcut_changed(dialog, "inapp_redo", "ctrl+z", "")
+        from core.shortcut_manager import inapp_shortcut_display_text
         assert captured["title"] == "Shortcut Conflict"
         # 占位符必须被真正替换掉，而不是把 %1/%2 显示给用户
         assert "%1" not in captured["message"]
         assert "%2" not in captured["message"]
-        assert "CTRL+Z" in captured["message"]
+        assert inapp_shortcut_display_text("ctrl+z") in captured["message"]
         assert "Undo" in captured["message"]
 
 

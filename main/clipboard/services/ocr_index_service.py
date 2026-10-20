@@ -38,6 +38,7 @@ class _OcrWorker(QThread):
         self._manager = manager
         self._queue: List[str] = []
         self._queued: Set[str] = set()
+        self._queue_lock = threading.Lock()
         self._wakeup = threading.Event()
         self._stop_flag = False
         self._engine_ready = False
@@ -45,10 +46,11 @@ class _OcrWorker(QThread):
     def enqueue(self, image_id: str):
         if not image_id:
             return
-        if image_id in self._queued:
-            return
-        self._queued.add(image_id)
-        self._queue.append(image_id)
+        with self._queue_lock:
+            if image_id in self._queued:
+                return
+            self._queued.add(image_id)
+            self._queue.append(image_id)
         self._wakeup.set()
 
     def stop(self):
@@ -79,11 +81,12 @@ class _OcrWorker(QThread):
             self._interruptible_wait(_BACKFILL_IDLE_SECONDS)
 
     def _pop_queue(self) -> Optional[str]:
-        if not self._queue:
-            return None
-        image_id = self._queue.pop(0)
-        self._queued.discard(image_id)
-        return image_id
+        with self._queue_lock:
+            if not self._queue:
+                return None
+            image_id = self._queue.pop(0)
+            self._queued.discard(image_id)
+            return image_id
 
     def _interruptible_wait(self, seconds: float):
         """可被新图入队/停止打断的等待。"""
@@ -131,14 +134,16 @@ class _OcrWorker(QThread):
 
             from ocr.ocr_manager import recognize_text
 
-            # return_format="list"：成功为 [text1, text2, ...] 纯字符串列表，
-            # 无文字/失败均返回 []，便于区分。
-            result = recognize_text(image, return_format="list")
+            # dict distinguishes successful empty recognition from inference failure.
+            result = recognize_text(image, return_format="dict")
+            if not isinstance(result, dict) or result.get("code") != 100:
+                log_debug(T("OCR 索引识别失败，保留待重试状态"), "Clipboard")
+                return
             lines = []
-            if isinstance(result, list):
-                for item in result:
-                    if isinstance(item, str) and item.strip():
-                        lines.append(item.strip())
+            for item in result.get("data", []):
+                text = item.get("text", "")
+                if text.strip():
+                    lines.append(text.strip())
             ocr_text = "\n".join(lines).strip()
 
             affected = self._manager.update_ocr_text(image_id, ocr_text)
@@ -175,13 +180,11 @@ class OcrIndexService(QObject):
         """启动后台索引（幂等）。"""
         if self._started:
             return
-        self._started = True
         if not self._manager.is_available:
             return
         try:
+            self._started = True
             self._worker = _OcrWorker(self._manager)
-            # 工作线程随主进程退出，不阻塞窗口关闭
-            self._worker.setTerminationEnabled(False)
             self._worker.start()
             log_info(T("剪贴板图片 OCR 索引服务已启动"), "Clipboard")
         except Exception as e:
@@ -198,7 +201,10 @@ class OcrIndexService(QObject):
         if self._worker is not None:
             self._worker.stop()
             # 单张截图 OCR 可能耗时数秒，给足时间让线程退出
-            self._worker.wait(10000)
+            if not self._worker.wait(10000):
+                # Retain a running QThread; destroying it aborts the process.
+                log_info(T("OCR 索引仍在结束当前识别，请稍后重试退出"), "Clipboard")
+                return
             self._worker = None
         self._started = False
 

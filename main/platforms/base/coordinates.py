@@ -26,6 +26,13 @@ class CoordinateMapper:
         """Qt logical point → 截图物理像素的换算系数。Windows=1.0。"""
         return 1.0
 
+    def reference_factor(self) -> float:
+        """全局像素网格的统一比例（Windows=1.0；Retina=主屏 dpr）。
+
+        静态截图与录制都以主屏像素网格为基准，导出侧的尺寸换算用它。
+        """
+        return 1.0
+
     # ── 点 ────────────────────────────────────────────────
 
     def qt_point_to_capture(self, x: int, y: int) -> Tuple[int, int]:

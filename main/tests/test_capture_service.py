@@ -6,6 +6,7 @@ CaptureService 单元测试
 mss 依赖真实的操作系统屏幕会话，在无桌面的 CI runner 上不可用，
 因此用 unittest.mock 模拟 mss.mss() 上下文管理器和其返回的截图对象。
 """
+import sys
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -43,6 +44,13 @@ def _make_fake_screenshot(width, height):
 
 
 class TestCaptureAllScreens:
+    # 本组测试覆盖 Windows 的 mss 虚拟桌面捕获路径。
+    # macOS 上 CaptureService 直接走 CGWindowList 平台后端，不经过 mss，
+    # 因此这些 mock 在 darwin 上不生效，仅在 Windows 运行。
+    pytestmark = pytest.mark.skipif(
+        sys.platform != "win32", reason="mss 虚拟桌面捕获为 Windows 路径；macOS 走 CGWindowList 平台后端"
+    )
+
     def test_returns_qimage_and_qrectf(self, qapp):
         """capture_all_screens 应返回 (QImage, QRectF) 二元组"""
         service = CaptureService()

@@ -262,7 +262,6 @@ class _CardActions(QWidget):
     def __init__(self, card: _HistoryCard, parent=None):
         super().__init__(parent)
         self._card = card
-        tokens = ui_tokens(self)
         self.setStyleSheet(
             f"background: rgba(0, 0, 0, 120); border-radius: {dialog_scaled(7)}px;"
         )

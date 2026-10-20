@@ -19,10 +19,11 @@ class SelectionOverlayWidget(QWidget):
     # 抗锯齿和描边会溢出 visual_bounds() 一点点
     EDGE_ALLOWANCE = 3
 
-    def __init__(self, parent: QWidget, selection_item, selection_model):
+    def __init__(self, parent: QWidget, selection_item, selection_model, view=None):
         super().__init__(parent)
         self._item = selection_item
         self._model = selection_model
+        self._view = view
         # 上一次画过的区域（本地坐标），下次失效时要连它一起擦
         self._painted = QRect()
 
@@ -75,13 +76,20 @@ class SelectionOverlayWidget(QWidget):
     def _on_changed(self, *_):
         self.refresh()
 
-    def _origin(self):
-        """场景坐标 → 本地坐标的平移量。
+    def _scene_transform(self):
+        """场景坐标 → 本层 viewport 坐标的变换（含 Retina 1/dpr 缩放）。
 
-        场景用屏幕物理坐标，本层铺满窗口，所以差值就是窗口在桌面上的位置。
+        优先用 view.viewportTransform（与场景实际渲染一致）；view 缺失时
+        退回到窗口几何平移（point 场景下的旧行为）。
         """
+        view = getattr(self, "_view", None)
+        if view is not None and shiboken6.isValid(view):
+            return view.viewportTransform()
         parent = self.parentWidget()
-        return (-parent.x(), -parent.y()) if parent else (0, 0)
+        from PySide6.QtGui import QTransform
+        if parent:
+            return QTransform.fromTranslate(-parent.x(), -parent.y())
+        return QTransform()
 
     def _live_item(self):
         """场景已销毁但浮层还没删时，item 的 C++ 对象会先没。
@@ -101,9 +109,9 @@ class SelectionOverlayWidget(QWidget):
         bounds = item.visual_bounds()
         if bounds.isNull() or bounds.isEmpty():
             return QRect()
-        dx, dy = self._origin()
+        transform = self._scene_transform()
         pad = self.EDGE_ALLOWANCE
-        rect = bounds.translated(dx, dy).toAlignedRect()
+        rect = transform.mapRect(bounds).toAlignedRect()
         return rect.adjusted(-pad, -pad, pad, pad).intersected(self.rect())
 
     def _still_on_screen(self, repainted: QRegion, drawn: QRect) -> QRect:
@@ -133,7 +141,7 @@ class SelectionOverlayWidget(QWidget):
         painter = QPainter(self)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.translate(*self._origin())
+            painter.setWorldTransform(self._scene_transform())
             item.render(painter)
         finally:
             painter.end()

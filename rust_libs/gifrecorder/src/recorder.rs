@@ -44,9 +44,10 @@ impl RecordSession {
     /// 启动录制会话
     ///
     /// * `store`  — 帧存储（共享 Arc）
-    /// * `left`, `top` — 屏幕截取起点
-    /// * `width`, `height` — 截取区域大小
+    /// * `left`, `top` — 屏幕截取起点（Windows 物理像素；macOS CG 逻辑点）
+    /// * `width`, `height` — 截取区域大小（同上坐标系）
     /// * `fps` — 目标帧率
+    /// * `out_width`, `out_height` — 输出帧像素尺寸（0 表示与区域相同）
     pub fn start(
         store: Arc<FrameStore>,
         left: i32,
@@ -54,6 +55,8 @@ impl RecordSession {
         width: i32,
         height: i32,
         fps: u32,
+        out_width: i32,
+        out_height: i32,
     ) -> Result<Self, String> {
         let control = Arc::new(SessionControl {
             state: AtomicU8::new(SESSION_RECORDING),
@@ -65,7 +68,8 @@ impl RecordSession {
         let store_clone = store.clone();
 
         let handle = thread::spawn(move || {
-            capture_loop(store_clone, ctrl, left, top, width, height, fps);
+            capture_loop(store_clone, ctrl, left, top, width, height, fps,
+                         out_width, out_height);
         });
 
         Ok(Self {
@@ -131,6 +135,7 @@ impl Drop for RecordSession {
 }
 
 /// 截屏循环（在独立线程运行）
+#[allow(clippy::too_many_arguments)]
 fn capture_loop(
     store: Arc<FrameStore>,
     ctrl: Arc<SessionControl>,
@@ -139,9 +144,11 @@ fn capture_loop(
     width: i32,
     height: i32,
     fps: u32,
+    out_width: i32,
+    out_height: i32,
 ) {
-    // 创建 GDI 截屏上下文
-    let mut capturer = match ScreenCapture::new(left, top, width, height) {
+    // 创建截屏上下文
+    let mut capturer = match ScreenCapture::new(left, top, width, height, out_width, out_height) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("[gifrecorder] ScreenCapture 创建失败: {e}");
@@ -224,7 +231,7 @@ mod tests {
         }));
 
         let mut session = RecordSession::start(
-            store.clone(), 0, 0, 64, 48, 10,
+            store.clone(), 0, 0, 64, 48, 10, 0, 0,
         ).unwrap();
 
         assert!(session.is_recording());
@@ -249,7 +256,7 @@ mod tests {
         }));
 
         let mut session = RecordSession::start(
-            store.clone(), 0, 0, 64, 48, 10,
+            store.clone(), 0, 0, 64, 48, 10, 0, 0,
         ).unwrap();
 
         // 录制 200ms

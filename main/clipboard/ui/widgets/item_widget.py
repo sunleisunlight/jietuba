@@ -217,4 +217,3 @@ class ClipboardItemWidget(QFrame):
 
 
 __all__ = ["ClipboardItemWidget"]
- 

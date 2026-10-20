@@ -519,12 +519,16 @@ impl PyRecordSession {
     ///
     /// Args:
     ///     store: FrameStore 实例
-    ///     left: 截取区域左上角 X (屏幕坐标)
-    ///     top: 截取区域左上角 Y (屏幕坐标)
-    ///     width: 截取区域宽度
+    ///     left: 截取区域左上角 X (屏幕坐标；macOS 为 CG 逻辑点)
+    ///     top: 截取区域左上角 Y
+    ///     width: 截取区域宽度 (同上坐标系)
     ///     height: 截取区域高度
     ///     fps: 目标帧率
+    ///     out_width: 输出帧像素宽度 (0 = 与 width 相同；Retina 上传物理像素)
+    ///     out_height: 输出帧像素高度 (0 = 与 height 相同)
     #[new]
+    #[pyo3(signature = (store, left, top, width, height, fps,
+                        out_width=0, out_height=0))]
     fn new(
         store: &PyFrameStore,
         left: i32,
@@ -532,10 +536,12 @@ impl PyRecordSession {
         width: i32,
         height: i32,
         fps: u32,
+        out_width: i32,
+        out_height: i32,
     ) -> PyResult<Self> {
         let session = RecordSession::start(
             store.inner.clone(),
-            left, top, width, height, fps,
+            left, top, width, height, fps, out_width, out_height,
         )
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 

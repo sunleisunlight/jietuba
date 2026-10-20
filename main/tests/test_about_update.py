@@ -207,7 +207,8 @@ class TestSidebarUpdateEntry:
             assert not hasattr(dialog, "about_page"), "软件信息页不该再被创建"
             # 9 个内容页（0~8）：快捷键、截图、剪贴板、外观、翻译、日志、其他、
             # 隐藏的开发者页、账号页
-            assert dialog.content_stack.count() == 9
+            expected_pages = 10 if dialog._permissions_stack_index >= 0 else 9
+            assert dialog.content_stack.count() == expected_pages
             # 底部「检查更新」不对应任何一个内容页
             assert all(
                 stack_index is not None
@@ -258,7 +259,7 @@ class TestSidebarCheckBusyState:
 
         monkeypatch.setattr(update_flow.updater, "check_for_update", _slow_check)
         monkeypatch.setattr(update_flow, "show_info_dialog", lambda *a: None)
-        controller = _reset_controller(monkeypatch)
+        _reset_controller(monkeypatch)
 
         from ui.settings_ui.dialog import SettingsDialog
 
@@ -295,6 +296,11 @@ class TestInstallAndRestart:
 
     def test_replaces_exe_and_keeps_backup(self, monkeypatch, tmp_path, qapp):
         from core import updater
+        from platforms import factory
+
+        # 这是 Windows onefile 替换契约，Mac .app 后端由独立用例覆盖。
+        monkeypatch.setattr(factory, "get_native_updater", lambda: None)
+        monkeypatch.setattr(updater.sys, "platform", "win32")
 
         exe, new = self._fake_exe(tmp_path)
         started = []

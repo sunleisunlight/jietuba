@@ -25,15 +25,28 @@
 """
 import pytest
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import QColor, QFont, QImage, QRegion
+from PySide6.QtGui import QColor, QFont, QImage
 from PySide6.QtWidgets import QApplication
 
 from canvas.handle_editor import LayerEditor
 from canvas.items import NoteItem, composite_owner, is_composite_child
 
-FAR_TEXT_DELTA = QPointF(320, -760)
+FAR_TEXT_DELTA = QPointF(760, -320)
 CN = ("团队设置这一块一直有一个比较大的问题，它是通过导出和导入配置的，这样很麻烦。"
       "已知我们最新代码已经有一键代发，包括备份数据库到云端。")
+
+
+def _chinese_font(size=14):
+    """选择当前平台可用的中文字体，避免 Microsoft YaHei 在 macOS 上被替换导致
+    文字度量变化、箭头锚点落到会移动的底边上。"""
+    from PySide6.QtGui import QFontDatabase
+    candidates = ["Microsoft YaHei", "PingFang SC", "Heiti SC",
+                  "STHeiti", "Arial Unicode MS", "Songti SC"]
+    available = set(QFontDatabase.families())
+    for name in candidates:
+        if name in available:
+            return QFont(name, size)
+    return QFont(size)
 
 
 @pytest.fixture(scope="module")
@@ -69,7 +82,7 @@ def _make_note(scene, text=CN, far_text=True):
     """造一条备注：文字框长、目标框小，两者之间隔着大半屏（箭头拉得很长）。"""
     note = NoteItem(
         target_rect=QRectF(1400, 900, 230, 90),
-        font=QFont("Microsoft YaHei", 14),
+        font=_chinese_font(14),
         color=QColor("red"),
         text=text,
         fit_bounds=QRectF(0, 0, 2560, 1440),

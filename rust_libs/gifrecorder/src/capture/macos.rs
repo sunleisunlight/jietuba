@@ -3,8 +3,8 @@
 //! shim（native/sck_capture.m）只负责 SCK → 紧凑 BGRA 帧回调；
 //! 所有 GIF 编码 / 帧存储 / 时间轴逻辑仍在 Rust / Python 侧。
 //!
-//! 注意：帧坐标使用 CG 全局显示坐标（物理像素）；区域必须落在单个
-//! 显示器内（跨屏区域会被 clamp 到所在显示器）。
+//! 注意：区域使用 CG 全局逻辑点；输出固定为 width*height BGRA 像素。
+//! 区域必须落在单个显示器内，跨屏拒绝，不能静默返回长度不匹配的帧。
 
 use std::ffi::c_void;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError};
@@ -16,15 +16,18 @@ extern "C" {
         y: i32,
         w: i32,
         h: i32,
+        out_w: i32,
+        out_h: i32,
         fps: f64,
         cb: extern "C" fn(*mut c_void, *const u8, usize),
         ctx: *mut c_void,
+        release_ctx: extern "C" fn(*mut c_void),
     ) -> *mut c_void;
     fn JTKStopCapture(handle: *mut c_void);
 }
 
 /// 帧回调（在 shim 的 dispatch queue 线程执行）。
-/// ctx = Box::into_raw(Box::new(SyncSender<Vec<u8>>))（泄漏，会话级）。
+/// ctx 由原生 delegate 持有，到最后一个异步回调结束后释放。
 extern "C" fn on_frame(ctx: *mut c_void, data: *const u8, len: usize) {
     let sender: &SyncSender<Vec<u8>> = unsafe { &*(ctx as *const SyncSender<Vec<u8>>) };
     if len == 0 || data.is_null() {
@@ -39,6 +42,12 @@ extern "C" fn on_frame(ctx: *mut c_void, data: *const u8, len: usize) {
     let _ = sender.try_send(frame);
 }
 
+extern "C" fn release_context(ctx: *mut c_void) {
+    if !ctx.is_null() {
+        unsafe { drop(Box::from_raw(ctx as *mut SyncSender<Vec<u8>>)); }
+    }
+}
+
 pub(crate) struct ScreenCapture {
     handle: *mut c_void,
     rx: Receiver<Vec<u8>>,
@@ -50,32 +59,44 @@ pub(crate) struct ScreenCapture {
 unsafe impl Send for ScreenCapture {}
 
 impl ScreenCapture {
-    /// 创建截屏上下文（区域为 CG 全局显示坐标）。
-    pub fn new(left: i32, top: i32, width: i32, height: i32) -> Result<Self, String> {
-        if width <= 0 || height <= 0 {
-            return Err(format!("invalid capture size: {width}x{height}"));
+    /// 创建截屏上下文。
+    ///
+    /// * `left/top/width/height`：录制区域，CG 全局**逻辑点**（与 SCK sourceRect 同系）
+    /// * `out_width/out_height`：输出帧**物理像素**尺寸（Retina 上 = 点 × dpr；0 表示与区域 1:1）
+    pub fn new(
+        left: i32,
+        top: i32,
+        width: i32,
+        height: i32,
+        out_width: i32,
+        out_height: i32,
+    ) -> Result<Self, String> {
+        let out_width = if out_width == 0 { width } else { out_width };
+        let out_height = if out_height == 0 { height } else { out_height };
+        if width <= 0 || height <= 0 || out_width <= 0 || out_height <= 0 {
+            return Err(format!(
+                "invalid capture size: region {width}x{height} (points), output {out_width}x{out_height} (pixels)"
+            ));
         }
         let (tx, rx) = sync_channel::<Vec<u8>>(1);
         let ctx = Box::into_raw(Box::new(tx));
         let handle = unsafe {
             JTKStartCapture(
-                left, top, width, height, 15.0, on_frame, ctx as *mut c_void,
+                left, top, width, height, out_width, out_height, 15.0, on_frame,
+                ctx as *mut c_void, release_context,
             )
         };
         if handle.is_null() {
-            unsafe {
-                drop(Box::from_raw(ctx));
-            }
             return Err(
-                "ScreenCaptureKit start failed (screen recording permission not granted?)".into(),
+                "ScreenCaptureKit start failed: check screen recording permission and keep the region within one display".into(),
             );
         }
         Ok(Self {
             handle,
             rx,
             last: None,
-            width,
-            height,
+            width: out_width,
+            height: out_height,
         })
     }
 
@@ -139,6 +160,15 @@ impl Drop for ScreenCapture {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_region_or_output_size_is_rejected() {
+        // 区域非法
+        assert!(ScreenCapture::new(0, 0, 0, 10, 10, 10).is_err());
+        assert!(ScreenCapture::new(0, 0, 10, 10, -1, -1).is_err());
+        // 点与像素尺寸分别校验：区域合法但输出为非正数时也必须拒绝
+        assert!(ScreenCapture::new(0, 0, 10, 10, 0, -5).is_err());
+    }
 
     #[test]
     fn grab_keeps_newest_queued_frame_and_reuses_it_when_idle() {

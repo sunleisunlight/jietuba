@@ -21,8 +21,8 @@ jietuba_scroll.py - 滚动截图窗口模块
 依赖模块:
 - PySide6: GUI框架
 - PIL: 图像处理
-- ctypes: Windows API调用
 - pynput: 鼠标事件监听
+- platforms: 平台后端（鼠标穿透、横向滚动、屏幕捕获）
 
 使用方法:
     window = ScrollCaptureWindow(capture_rect, parent)
@@ -31,10 +31,9 @@ jietuba_scroll.py - 滚动截图窗口模块
 """
 
 import time
-import ctypes
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QApplication
 from PySide6.QtCore import Qt, QRect, QTimer, Signal, QPoint, QSettings
-from PySide6.QtGui import QPainter, QPen, QColor, QPixmap, QGuiApplication, QImage
+from PySide6.QtGui import QPainter, QPen, QColor, QPixmap, QImage
 from typing import Optional
 from PIL import Image
 
@@ -106,11 +105,6 @@ long_stitch_configure(
     ignore_top_pixels=_long_stitch_config['ignore_top_pixels'],
 )
 
-# Windows API 常量
-GWL_EXSTYLE = -20
-WS_EX_TRANSPARENT = 0x00000020
-WS_EX_LAYERED = 0x00080000
-
 
 class PreviewPanel(QWidget):
     """实时预览面板，仅以透明背景展示拼接缩略图"""
@@ -130,19 +124,10 @@ class PreviewPanel(QWidget):
         self._setup_mouse_transparent()
     
     def _setup_mouse_transparent(self):
-        """设置窗口鼠标穿透，不拦截滚轮事件"""
-        import sys
-        if sys.platform == "darwin":
-            self.setAttribute(
-                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-            )
-            self._capture_excluded = False
-            return
+        """设置窗口鼠标穿透，不拦截滚轮事件（平台后端统一实现）"""
         try:
-            hwnd = int(self.winId())
-            user32 = ctypes.windll.user32
-            ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-            user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+            from platforms import get_platform_backend
+            get_platform_backend().windows.set_window_click_through(self, True)
             _log_stitch(T("[OK] PreviewPanel 已设置为鼠标穿透模式"))
         except Exception as e:
             _log_stitch(T("[WARN] 设置 PreviewPanel 鼠标穿透失败: {e}", e=e))
@@ -200,8 +185,8 @@ class PreviewPanel(QWidget):
         if exclude == self._capture_excluded:
             return
         try:
-            from core.platform_utils import set_window_exclude_from_capture
-            set_window_exclude_from_capture(int(self.winId()), exclude)
+            from platforms import get_platform_backend
+            get_platform_backend().windows.set_window_exclude_from_capture(self, exclude)
             self._capture_excluded = exclude
         except Exception:
             pass
@@ -308,15 +293,24 @@ class ScrollCaptureWindow(QWidget):
     
     def __init__(self, capture_rect, parent=None, config_manager=None):
         """初始化滚动截图窗口
-        
+
         Args:
-            capture_rect: QRect，截图区域（屏幕坐标）
+            capture_rect: QRect，截图区域（**场景物理像素**，与截图选区一致）
             parent: 父窗口
             config_manager: 配置管理器（用于钉图功能）
+
+        坐标系：所有窗口/工具栏/预览面板几何用 **Qt 逻辑点**（``self.capture_rect``），
+        抓屏裁剪用 **物理像素**（``self.capture_rect_px``）。Windows 上 dpr=1
+        两者相同，行为与既有实现一致；macOS Retina 上按主屏 dpr 换算。
         """
         super().__init__(parent)
-        
-        self.capture_rect = capture_rect
+
+        from PySide6.QtCore import QRectF
+        from platforms import get_platform_backend
+
+        self._mapper = get_platform_backend().coordinates
+        self.capture_rect_px = QRect(capture_rect)
+        self.capture_rect = self._mapper.capture_rect_to_qt(QRectF(capture_rect))
         self.config_manager = config_manager  # 保存配置管理器
         self.screenshots = []  # 存储截图的列表
         self.scroll_distances = []  # 存储每次滚动的距离（像素）
@@ -695,25 +689,16 @@ class ScrollCaptureWindow(QWidget):
         self._show_preview_warning(message)
         
     def _setup_mouse_hook(self):
-        """设置鼠标钩子以监听全局滚轮事件（Windows: WS_EX_TRANSPARENT；macOS: Qt 属性 + pynput）"""
-        import sys
-        if sys.platform == "darwin":
-            self.transparent_area.setAttribute(
-                Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-            )
-            _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式 (Qt)"))
-        else:
-            try:
-                # 使用Windows API设置窗口透明鼠标事件（需在主线程执行）
-                hwnd = int(self.transparent_area.winId())
-                user32 = ctypes.windll.user32
-                ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_TRANSPARENT | WS_EX_LAYERED)
-                _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式"))
-            except Exception as e:
-                _log_stitch(T("[ERROR] 设置窗口鼠标穿透时出错: {e}", e=e), force=True)
-                import traceback
-                traceback.print_exc()
+        """设置鼠标钩子以监听全局滚轮事件（穿透由平台后端实现）"""
+        # 窗口鼠标穿透（Windows WS_EX_TRANSPARENT / macOS 原生 ignoresMouseEvents）
+        try:
+            from platforms import get_platform_backend
+            get_platform_backend().windows.set_window_click_through(self.transparent_area, True)
+            _log_stitch(T("[OK] 窗口已设置为鼠标穿透模式"))
+        except Exception as e:
+            _log_stitch(T("[ERROR] 设置窗口鼠标穿透时出错: {e}", e=e), force=True)
+            import traceback
+            traceback.print_exc()
 
         # 将可能较慢的模块导入与监听器启动放到后台线程，避免首次阻塞UI
         import threading
@@ -813,34 +798,14 @@ class ScrollCaptureWindow(QWidget):
             self._stop_keyboard_listener()
     
     def _send_horizontal_scroll(self):
-        """发送横向滚动指令（向右滚动）"""
-        import sys
+        """发送横向滚动指令（向右滚动，平台后端统一实现）"""
         try:
             amount = 1  # 向右滚动
-            if sys.platform == "darwin":
-                # macOS: Quartz 横向滚轮事件（deltaY=0, deltaX>0 向右）
-                import Quartz
-                ev = Quartz.CGEventCreateScrollWheelEvent(
-                    None,
-                    Quartz.kCGScrollEventUnitLine,
-                    1,
-                    0,
-                    amount * 3,
-                )
-                Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev)
-            else:
-                import win32api
-                import win32con
-
-                # 使用Windows API发送横向滚动事件
-                # MOUSEEVENTF_HWHEEL: 横向滚动事件
-                # amount * 120: WHEEL_DELTA标准值
-                win32api.mouse_event(
-                    win32con.MOUSEEVENTF_HWHEEL,
-                    0, 0,
-                    amount * 120,  # WHEEL_DELTA
-                    0
-                )
+            from platforms import get_platform_backend
+            backend = get_platform_backend()
+            if not backend.input.send_scroll(dx_lines=amount * 3):
+                _log_stitch(T("[ERROR] 发送横向滚动失败"), force=True)
+                return
             _log_stitch(T("[OK] 发送横向滚动指令: 向右滚动 {amount} 格", amount=amount))
 
         except Exception as e:
@@ -1168,14 +1133,21 @@ class ScrollCaptureWindow(QWidget):
         return similarity >= self.duplicate_threshold
 
     def _exclude_overlapping_ui(self, exclude: bool):
-        """检测 UI 窗口是否与截图区域重叠，按需排除/恢复截图捕获"""
-        from core.platform_utils import set_window_exclude_from_capture
+        """检测 UI 窗口是否与截图区域重叠，按需排除/恢复截图捕获
+
+        Windows 用 SetWindowDisplayAffinity；macOS 无等价 API（平台后端
+        为显式 no-op），浮层本身位于截图区域之外，因此不污染画面。
+        几何统一为 Qt 逻辑点，与窗口实际位置一致。
+        """
+        from platforms import get_platform_backend
+
+        backend = get_platform_backend()
         for widget in (getattr(self, 'toolbar', None), getattr(self, 'preview_panel', None)):
             if widget is None or not widget.isVisible():
                 continue
             widget_rect = QRect(widget.x(), widget.y(), widget.width(), widget.height())
             if widget_rect.intersects(self.capture_rect):
-                set_window_exclude_from_capture(int(widget.winId()), exclude)
+                backend.windows.set_window_exclude_from_capture(widget, exclude)
     
     def _do_capture(self):
         """执行截图并实时拼接"""
@@ -1183,45 +1155,48 @@ class ScrollCaptureWindow(QWidget):
         # 截图前：排除与截图区域重叠的 UI 窗口
         self._exclude_overlapping_ui(True)
         try:
-            # 获取包含截图区域的屏幕
-            app = QGuiApplication.instance()
-            capture_center_x = self.capture_rect.x() + self.capture_rect.width() // 2
-            capture_center_y = self.capture_rect.y() + self.capture_rect.height() // 2
-            center_point = QPoint(capture_center_x, capture_center_y)
-            
-            screen = app.screenAt(center_point)
-            if screen is None:
-                _log_stitch(T("[WARN] 截图区域不在任何显示器范围内，使用主显示器"), force=True)
-                screen = app.primaryScreen()
-            
-            screen_geometry = screen.geometry()
-            
-            # 将虚拟桌面坐标转换为相对于目标屏幕的坐标
-            relative_x = self.capture_rect.x() - screen_geometry.x()
-            relative_y = self.capture_rect.y() - screen_geometry.y()
-            
-            # 使用屏幕相对坐标截图
-            pixmap = screen.grabWindow(
-                0,
-                relative_x,
-                relative_y,
-                self.capture_rect.width(),
-                self.capture_rect.height()
-            )
-            
-            if pixmap.isNull():
+            # 平台静态捕获：整块虚拟桌面（物理像素），按选区裁剪。
+            # 不再用 QScreen.grabWindow：那会得到 1x 逻辑分辨率（Retina 上比
+            # 选区像素少一半），且各平台返回格式不一致，导致长截图比同一次
+            # 会话里的普通截图模糊。CaptureService 与普通截图走同一条链路。
+            from capture.capture_service import CaptureService, ScreenCapturePermissionError
+
+            try:
+                image, bbox = CaptureService().capture_all_screens()
+            except ScreenCapturePermissionError:
+                _log_stitch(T("[ERROR] 缺少屏幕录制权限，无法继续长截图"), force=True)
+                self._show_preview_warning(T("需要屏幕录制权限：请在系统设置中授权后重试"))
+                return
+
+            if image is None or image.isNull():
                 _log_stitch(T("[ERROR] 截图失败"), force=True)
                 return
-            
-            # PySide6: bits() 返回 memoryview，直接转 bytes
-            qimage = pixmap.toImage()
-            buffer = bytes(qimage.bits())
+
+            px = self.capture_rect_px
+            offset_x = int(round(px.x() - bbox.x()))
+            offset_y = int(round(px.y() - bbox.y()))
+            w = int(px.width())
+            h = int(px.height())
+            if (offset_x < 0 or offset_y < 0
+                    or offset_x + w > image.width() or offset_y + h > image.height()):
+                _log_stitch(T("[ERROR] 截图区域超出捕获范围: 区域={px} 捕获={bbox}",
+                              px=px, bbox=bbox), force=True)
+                return
+
+            qimage = image.copy(offset_x, offset_y, w, h)
+            if qimage.isNull():
+                _log_stitch(T("[ERROR] 截图裁剪失败"), force=True)
+                return
+
+            # 统一成 RGBA8888 再按 BGRA 读取，避免不同平台格式差异
+            qimage = qimage.convertToFormat(QImage.Format.Format_RGBA8888)
+            buffer = bytes(qimage.constBits())
             pil_image = Image.frombytes(
                 'RGBA',
                 (qimage.width(), qimage.height()),
                 buffer,
                 'raw',
-                'BGRA'
+                'RGBA'
             ).convert('RGB')
             
             # 横向模式：从第2张图片开始旋转90度（顺时针）以便使用竖向拼接算法
