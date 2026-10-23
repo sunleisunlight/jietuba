@@ -1472,6 +1472,10 @@ class ClipboardWindow(QWidget, FramelessMixin):
         # closeEvent 后通常还会收到 hideEvent，但这里必须先禁用，覆盖关闭
         # 过程中保存设置等操作异常、导致后续语句未执行的情况。
         PreviewPopup.instance().set_display_enabled(False)
+        PreviewPopup.instance().force_cleanup()
+        # 窗口是复用的，但缩略图缓存没有长期保留价值；关闭时释放，
+        # 避免后台常驻内存随历史条数增长。
+        ClipboardItemDelegate.clear_thumb_cache()
         if hasattr(self, "_shortcut_handler") and self._shortcut_handler:
             ShortcutManager.instance().unregister(self._shortcut_handler)
         self._save_window_geometry()

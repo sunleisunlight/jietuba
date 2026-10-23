@@ -64,6 +64,8 @@ class ClipboardItemDelegate(QStyledItemDelegate):
     """
 
     # 缩略图缓存 (data_url -> QPixmap)
+    # 历史上限默认 1000 条，缓存必须封顶，否则后台常驻会随使用时间增长。
+    _THUMB_CACHE_LIMIT = 200
     _thumb_cache: Dict[str, Optional[QPixmap]] = {}
 
     def __init__(
@@ -148,6 +150,14 @@ class ClipboardItemDelegate(QStyledItemDelegate):
     @classmethod
     def clear_thumb_cache(cls):
         cls._thumb_cache.clear()
+
+    @classmethod
+    def _remember_thumbnail(cls, data_url: str, pixmap: Optional[QPixmap]):
+        """写入缩略图缓存，并按插入顺序淘汰最旧条目。"""
+        cls._thumb_cache[data_url] = pixmap
+        while len(cls._thumb_cache) > cls._THUMB_CACHE_LIMIT:
+            oldest = next(iter(cls._thumb_cache))
+            cls._thumb_cache.pop(oldest, None)
 
     def _rebuild_font_cache(self):
         """预创建 paint 中需要的所有 QFont 和 QFontMetrics"""
@@ -325,12 +335,12 @@ class ClipboardItemDelegate(QStyledItemDelegate):
                 image_data = base64.b64decode(data)
                 pixmap = QPixmap()
                 pixmap.loadFromData(image_data)
-                self._thumb_cache[data_url] = pixmap
+                self._remember_thumbnail(data_url, pixmap)
                 return pixmap
         except Exception as e:
             log_error(T("加载缩略图失败: {e}", e=e), "Clipboard")
 
-        self._thumb_cache[data_url] = None
+        self._remember_thumbnail(data_url, None)
         return None
 
 

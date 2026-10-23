@@ -15,7 +15,6 @@ mss==10.1.0
 pynput==1.8.1
 darkdetect==0.8.0
 emoji==2.15.0
-av==17.0.0
 colorama==0.4.6
 zxing-cpp==3.1.1
 
@@ -24,6 +23,8 @@ pywin32==311 ; sys_platform == "win32"
 comtypes==1.4.16 ; sys_platform == "win32"
 
 # ===== macOS 专属依赖（PyObjC 系统框架绑定）=====
+# PySideSix-Frameless-Window 的 macOS 后端会传递安装 pyobjc 元包。这里显式固定
+# 10.3.2，避免 pip 解析到 12.x 后与其余 10.3.2 framework 混用。
 pyobjc==10.3.2 ; sys_platform == "darwin"
 pyobjc-framework-Cocoa==10.3.2 ; sys_platform == "darwin"
 pyobjc-framework-Quartz==10.3.2 ; sys_platform == "darwin"

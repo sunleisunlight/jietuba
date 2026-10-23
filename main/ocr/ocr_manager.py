@@ -111,6 +111,10 @@ def _ppocr_rust_model_paths():
         if getattr(sys, "frozen", False):
             exe_dir = os.path.dirname(sys.executable)
             candidates.append(os.path.join(exe_dir, "models"))
+            # macOS .app：sys.executable 位于 Contents/MacOS，模型统一放在
+            # Contents/Resources/models，避免同一份 29.5MB 模型打包两次。
+            app_contents = os.path.dirname(exe_dir)
+            candidates.append(os.path.join(app_contents, "Resources", "models"))
             meipass = getattr(sys, "_MEIPASS", None)
             if meipass:
                 candidates.append(os.path.join(meipass, "models"))
@@ -162,7 +166,11 @@ class OCRManager:
     ENGINE_WINDOS_OCR = "windos_ocr"  # Windows  OCR (高性能)
     ENGINE_WINDOWS_OCR = "windows_media_ocr"  # Windows Media OCR (轻量级)
     ENGINE_PP_RUST = "ppocr_rust"  # Rust + ort 的 PP-OCR (原生线程无 GIL，体积小，推荐)
-    
+
+    # 空闲多久后释放 ppocr_rust 引擎。两个 ONNX Session 常驻约 70MB，
+    # 低频使用 OCR 时没有必要一直占着；下次识别会自动重新加载。
+    IDLE_RELEASE_SECONDS = 600
+
     # 语言映射：应用语言 -> windows_media_ocr 语言代码
     LANGUAGE_MAP = {
         "日本語": "ja",
@@ -190,6 +198,10 @@ class OCRManager:
             self._windows_ocr_language = None  # windows_media_ocr 语言设置
             self._pp_engine = None  # ppocr_rust.Engine 实例，None 即未初始化
             self._init_lock = threading.Lock()  # 线程锁，防止重复初始化
+            # 识别与释放互斥：Rust Engine::recognize 期间不能 drop 同一个实例
+            self._engine_lock = threading.RLock()
+            self._last_used = 0.0
+            self._idle_timer = None
     
     @property
     def is_available(self) -> bool:
@@ -310,7 +322,7 @@ class OCRManager:
             return False
         if self._pp_engine is not None:
             return True
-        with self._init_lock:
+        with self._init_lock, self._engine_lock:
             if self._pp_engine is not None:
                 return True
             try:
@@ -380,6 +392,8 @@ class OCRManager:
         Returns:
             识别结果(格式取决于 return_format)
         """
+        self._touch()
+
         # 确保引擎已初始化
         if not self._current_engine:
             if not self.initialize():
@@ -394,7 +408,33 @@ class OCRManager:
             return self._recognize_with_windows_ocr(pixmap, return_format)
         else:
             return self._format_error(return_format, f"不支持的引擎: {self._current_engine}")
-    
+
+    def _touch(self):
+        """记录一次 OCR 使用，并重置空闲释放计时器。"""
+        self._last_used = time.monotonic()
+        if self.IDLE_RELEASE_SECONDS <= 0:
+            return
+        timer = self._idle_timer
+        if timer is not None:
+            timer.cancel()
+        self._idle_timer = threading.Timer(
+            self.IDLE_RELEASE_SECONDS, self.release_if_idle
+        )
+        self._idle_timer.daemon = True
+        self._idle_timer.start()
+
+    def release_if_idle(self, max_idle_seconds: Optional[float] = None) -> bool:
+        """空闲超过阈值时释放 ppocr_rust 引擎；下次识别会自动重建。"""
+        limit = self.IDLE_RELEASE_SECONDS if max_idle_seconds is None else max_idle_seconds
+        with self._engine_lock:
+            if self._pp_engine is None:
+                return False
+            if time.monotonic() - self._last_used < limit:
+                return False
+            _ocr_log(T("OCR 引擎空闲，释放常驻内存"), "DEBUG")
+            self.release_engine()
+            return True
+
     def _qimage_to_rgb_bytes(self, pixmap: QPixmap):
         """将 QPixmap/QImage 转为 (rgb_bytes, w, h, stride)，RGB888 格式，供 ppocr_rust 使用。"""
         if isinstance(pixmap, QImage):
@@ -423,9 +463,6 @@ class OCRManager:
         """
         if not PP_RUST_AVAILABLE:
             return self._format_error(return_format, "ppocr_rust 不可用")
-        if self._pp_engine is None:
-            if not self._initialize_ppocr_rust():
-                return self._format_error(return_format)
         try:
             start_time = time.time()
             conv = self._qimage_to_rgb_bytes(pixmap)
@@ -433,11 +470,20 @@ class OCRManager:
                 return self._format_empty_result(return_format)
             raw, w, h, stride = conv
 
-            # 取到局部变量：release() 可能在别的线程把 self._pp_engine 置空
-            engine = self._pp_engine
-            if engine is None:
-                return self._format_error(return_format, "ppocr_rust 引擎已释放")
-            lines = engine.recognize(raw, w, h, stride)
+            # 初始化要放在引擎锁之外：_initialize_ppocr_rust 自己会按
+            # init_lock -> engine_lock 的顺序拿锁，这里若先拿 engine_lock
+            # 再调初始化，会和另一个初始化线程形成锁反转。
+            if self._pp_engine is None:
+                if not self._initialize_ppocr_rust():
+                    return self._format_error(return_format)
+
+            # 识别期间持有引擎锁：空闲释放线程不能在这个窗口里 close 掉
+            # 正在被 Rust 使用的 Session。
+            with self._engine_lock:
+                engine = self._pp_engine
+                if engine is None:
+                    return self._format_error(return_format, "ppocr_rust 引擎已释放")
+                lines = engine.recognize(raw, w, h, stride)
             elapse = time.time() - start_time
 
             if not lines:
@@ -719,20 +765,24 @@ class OCRManager:
         生命周期与进程相同，不支持运行时释放。
         此方法仅重置 Python 侧状态。
         """
-        try:
+        with self._engine_lock:
+            timer = self._idle_timer
+            if timer is not None:
+                timer.cancel()
+                self._idle_timer = None
+            try:
+                # 此处仅做 Python 侧状态清理
+                self._windows_ocr_language = None
+                # 引擎实例持有 det/rec 两个 ONNX 模型（约 30 MB），close() 后立即
+                # 释放，不必再等进程退出
+                if self._pp_engine is not None:
+                    self._pp_engine.close()
+                    self._pp_engine = None
+                self._current_engine = None
 
-            # 此处仅做 Python 侧状态清理
-            self._windows_ocr_language = None
-            # 引擎实例持有 det/rec 两个 ONNX 模型（约 30 MB），close() 后立即
-            # 释放，不必再等进程退出
-            if self._pp_engine is not None:
-                self._pp_engine.close()
-                self._pp_engine = None
-            self._current_engine = None
-            
-            _ocr_log(T("OCR 管理器状态已重置"))
-        except Exception as e:
-            _ocr_log(T("释放 OCR 资源时出错: {e}", e=e), "WARN")
+                _ocr_log(T("OCR 管理器状态已重置"))
+            except Exception as e:
+                _ocr_log(T("释放 OCR 资源时出错: {e}", e=e), "WARN")
     
     def is_engine_loaded(self) -> bool:
         """检查 OCR 引擎是否已初始化"""

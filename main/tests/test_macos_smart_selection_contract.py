@@ -4,6 +4,18 @@ from types import SimpleNamespace
 from platforms.macos import accessibility as ax
 
 
+def test_capture_package_exports_mac_finder():
+    """macOS 上 `capture.WindowFinder` 必须是 CGWindowList 实现。
+
+    共享代码曾经直接 `from capture.window_finder import WindowFinder`，在
+    macOS 上会命中 Windows 实现并报 win32gui 缺失，导致智能选区被静默关闭。
+    """
+    import capture
+    from platforms.macos.window_finder import MacWindowFinder
+
+    assert capture.WindowFinder is MacWindowFinder
+
+
 def test_scan_targets_only_requested_window(monkeypatch):
     monkeypatch.setitem(sys.modules, "ApplicationServices", SimpleNamespace(
         AXUIElementCreateApplication=lambda pid: "app", kAXWindowsAttribute="windows"))

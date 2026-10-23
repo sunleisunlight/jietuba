@@ -136,9 +136,9 @@ def sign_app():
 def ensure_resources():
     """OCR 模型：正式 Mac 构建必需（与 Windows 功能对齐），缺失直接失败。
 
-    双位置拷贝（Contents/Resources + Contents/MacOS）：应用运行时按
-    ``sys.executable`` 同级的 ``models/`` 查找（即 Contents/MacOS/models），
-    Resources/models 作为惯例位置一并保留。
+    只保留一个权威位置 ``Contents/Resources/models``。运行时的查找顺序
+    已在 ocr_manager._ppocr_rust_model_paths 中覆盖该路径；不再同时复制到
+    Contents/MacOS/models，避免 29.5MB 模型在包里出现两份。
     """
     src_dir = REPO / "models"
     missing = [name for name in MODELS if not (src_dir / name).is_file()]
@@ -147,12 +147,105 @@ def ensure_resources():
         print("   仓库 models/ 必须包含: %s" % ", ".join(MODELS))
         print("   Mac 正式构建要求 OCR 与 Windows 对齐，模型不是可选项。")
         sys.exit(1)
-    for rel in ("Contents/Resources/models", "Contents/MacOS/models"):
-        dst = APP / rel
-        dst.mkdir(parents=True, exist_ok=True)
-        for name in MODELS:
-            shutil.copy2(src_dir / name, dst / name)
+    dst = APP / "Contents/Resources/models"
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in MODELS:
+        shutil.copy2(src_dir / name, dst / name)
+    # 清掉历史遗留的第二份模型（旧构建脚本会写到这里）
+    stale = APP / "Contents/MacOS/models"
+    if stale.exists():
+        shutil.rmtree(stale)
     print("models copied:", ", ".join(MODELS))
+
+
+def thin_to_arm64():
+    """把 universal2 Mach-O 瘦成 arm64。
+
+    PySide6 的 macOS wheel 是 x86_64 + arm64 的 fat binary，而本项目 mac 目标
+    只有 Apple Silicon。不瘦身等于把另一份架构白白装进 DMG。
+    """
+    import os as _os
+
+    thinned = 0
+    for path in APP.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        info = subprocess.run(
+            ["lipo", "-info", str(path)], capture_output=True, text=True
+        )
+        if info.returncode != 0:
+            continue
+        if "x86_64" not in info.stdout or "arm64" not in info.stdout:
+            continue
+        tmp = path.with_name(path.name + ".arm64tmp")
+        subprocess.run(
+            ["lipo", "-thin", "arm64", str(path), "-output", str(tmp)],
+            check=True, capture_output=True,
+        )
+        _os.replace(tmp, path)
+        thinned += 1
+    print("lipo thinned:", thinned, "Mach-O files")
+
+
+def prune_qt_assets():
+    """删除 .app 里用不到的 Qt 插件与翻译，减少安装包体积。
+
+    PyInstaller 的 PySide6 收集器会带进整包插件；应用实际只用到 cocoa 平台、
+    SVG/图片格式、mac 样式和 TLS。qml/designer/sqldrivers 等一律删掉。
+    """
+    keep_plugins = {
+        "platforms/libqcocoa.dylib",
+        "iconengines/libqsvgicon.dylib",
+        "imageformats/libqgif.dylib",
+        "imageformats/libqico.dylib",
+        "imageformats/libqicns.dylib",
+        "imageformats/libqjpeg.dylib",
+        "imageformats/libqsvg.dylib",
+        "imageformats/libqwebp.dylib",
+        "styles/libqmacstyle.dylib",
+        "tls/libqsecuretransportbackend.dylib",
+        "networkinformation/libqscnetworkreachability.dylib",
+    }
+    keep_translations = {
+        "qt_en.qm", "qt_ja.qm", "qt_ko.qm", "qt_zh_CN.qm", "qt_zh_TW.qm",
+    }
+    for plugins in APP.rglob("Qt/plugins"):
+        for item in sorted(plugins.rglob("*"), reverse=True):
+            if item.is_file():
+                rel = item.relative_to(plugins).as_posix()
+                if rel not in keep_plugins:
+                    item.unlink()
+            elif item.is_dir():
+                try:
+                    item.rmdir()
+                except OSError:
+                    pass
+    for translations in APP.rglob("Qt/translations"):
+        for item in translations.glob("*.qm"):
+            if item.name not in keep_translations:
+                item.unlink()
+
+    # PyInstaller 的 PySide6 hook 会把 Qt/lib 下所有 framework 一起收进来。
+    # 只保留业务真正依赖的模块；QtGui 依赖 QtDBus，因此 QtDBus 不能删。
+    keep_frameworks = {
+        "QtCore", "QtGui", "QtWidgets", "QtSvg", "QtSvgWidgets",
+        "QtXml", "QtNetwork", "QtDBus",
+    }
+    for lib_dir in APP.rglob("Qt/lib"):
+        for framework in lib_dir.glob("*.framework"):
+            if framework.stem not in keep_frameworks:
+                shutil.rmtree(framework)
+    for pyside in APP.rglob("PySide6"):
+        for binding in pyside.glob("*.abi3.so"):
+            if binding.name.split(".", 1)[0] not in keep_frameworks:
+                binding.unlink()
+    # PyInstaller 会在 Contents/Frameworks 和 Contents/Resources 下为每个
+    # framework 建同名符号链接。删掉 framework 后必须把这些链接一并删掉，
+    # 否则 codesign --deep 会因为悬空链接直接失败（No such file or directory）。
+    for p in APP.rglob("*"):
+        if p.is_symlink() and not p.exists():
+            p.unlink()
+    print("Qt assets pruned")
 
 
 def _app_contains(filename):
@@ -208,8 +301,6 @@ def verify_app():
         ("qm", APP / "Contents/Resources/translations/app_zh.qm"),
         ("det model (Resources)", APP / "Contents/Resources/models/PP-OCRv6_det_small.onnx"),
         ("rec model (Resources)", APP / "Contents/Resources/models/PP-OCRv6_rec_small.onnx"),
-        ("det model (MacOS)", APP / "Contents/MacOS/models/PP-OCRv6_det_small.onnx"),
-        ("rec model (MacOS)", APP / "Contents/MacOS/models/PP-OCRv6_rec_small.onnx"),
     ]
     for name, p in checks:
         exists = p.exists()
@@ -257,6 +348,8 @@ def main():
     # PyInstaller 必须用带依赖的解释器运行
     run([PYTHON, "-m", "PyInstaller", "--noconfirm", str(SPEC)],
         cwd=REPO)
+    prune_qt_assets()
+    thin_to_arm64()
     ensure_resources()
     sign_app()
     good = verify_app()

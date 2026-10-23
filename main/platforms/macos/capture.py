@@ -28,8 +28,26 @@ class ScreenCapturePermissionError(RuntimeError):
         super().__init__("macOS 屏幕录制权限未授予")
 
 
+class _OwnedQImage(QImage):
+    """QImage 视图 + 持有底层 Python bytes，避免再做一次全屏 copy。
+
+    QImage(raw, ...) 在 PySide6 中是零拷贝视图；如果只返回 QImage，raw 离开
+    作用域后底层缓冲就会失效。把 raw 挂在这个子类实例上，生命周期跟着截图
+    会话走即可。背景图只读，不会触发 Qt 的写时复制。
+    """
+
+    def __init__(self, raw: bytes, width: int, height: int, bytes_per_row: int):
+        super().__init__(raw, width, height, bytes_per_row, QImage.Format.Format_RGB32)
+        self._raw = raw
+
+
 def _cg_image_to_qimage(cg_image) -> QImage:
-    """把 CGImage（32bpp 小端 BGRA）转成 QImage（Format_RGB32），并持有字节。"""
+    """把 CGImage（32bpp 小端 BGRA）转成 QImage（Format_RGB32）。
+
+    只做一次 bytes 拷贝，并让 QImage 直接引用这块内存；不再调用
+    ``QImage.copy()``。Retina/多屏全屏图单份约 24–78MB，少一份拷贝就是
+    实打实的内存峰值下降。
+    """
     import Quartz
 
     width = Quartz.CGImageGetWidth(cg_image)
@@ -40,9 +58,10 @@ def _cg_image_to_qimage(cg_image) -> QImage:
     cf_data = Quartz.CGDataProviderCopyData(provider)
     # 拷贝出独立字节，避免依赖 CFData/CGImage 的生命周期
     raw = bytes(cf_data)
+    if not raw:
+        return QImage()
 
-    qimage = QImage(raw, width, height, bytes_per_row, QImage.Format.Format_RGB32)
-    return qimage.copy()
+    return _OwnedQImage(raw, width, height, bytes_per_row)
 
 
 class MacOSCaptureBackend(CaptureBackend):

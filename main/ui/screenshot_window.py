@@ -982,8 +982,10 @@ class ScreenshotWindow(QWidget):
 
         image = getattr(self, 'original_image', None)
         if image is not None and not image.isNull():
-            from PySide6.QtGui import QImage
-            return QImage(image)
+            # 返回原对象而不是 QImage(image)：macOS 截图是“视图 + bytes owner”
+            # 子类，切片成基类会丢掉底层缓冲的所有者。后续缩略图环节会在需要
+            # 脱离会话时自行 copy。
+            return image
         return None
 
     def _restore_history_state(self, state):

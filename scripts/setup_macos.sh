@@ -47,6 +47,19 @@ fi
 rustc --version
 cargo --version
 
+# macOS 27 SDK 的 .tbd 里包含当前 CLT 链接器不认识的 arm64e.x1-macos，
+# Rust 链接会报 “unknown architecture / malformed file”。系统同时装了
+# 15.4 SDK 时自动回退，避免用户手工设置 SDKROOT。
+if [ -z "${SDKROOT:-}" ]; then
+  SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null || true)"
+  SDK15="$(xcode-select -p)/SDKs/MacOSX15.4.sdk"
+  if [ "${SDK_VERSION}" = "27.0" ] && [ -d "${SDK15}" ]; then
+    export SDKROOT="${SDK15}"
+    echo "==> macOS 27 SDK 与当前链接器不兼容，回退到 ${SDKROOT}"
+  fi
+fi
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+
 if [ ! -d .venv ]; then
   echo "==> 创建 .venv (Python ${REQUIRED_PY})"
   "$PY_BIN" -m venv .venv

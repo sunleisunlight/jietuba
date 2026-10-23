@@ -231,23 +231,25 @@ class PreloadManager:
                     from ui.screenshot_window import ScreenshotWindow  # noqa: F401
                     log_debug(T("canvas/tools/UI 组件已加载"), "Preload")
 
-                    # 4. 预加载智能选区依赖（win32gui）
-                    try:
-                        # 预加载：这些导入的目的就是把模块提前装进 import 缓存，
-                        # 让首次截图时不必等待，因此"未使用"是预期的。
-                        import win32gui  # noqa: F401
-                        import win32con  # noqa: F401
-                        from capture.window_finder import WindowFinder  # noqa: F401
-                        log_debug(T("win32gui 模块已加载"), "Preload")
-                    except ImportError:
-                        log_debug(T("win32gui 未安装，跳过"), "Preload")
+                    # 4. 预加载智能选区依赖（仅 Windows；macOS 的窗口/元素
+                    # 查找走 platforms.macos，不存在 win32gui 这条 import 链）
+                    if sys.platform == "win32":
+                        try:
+                            # 预加载：这些导入的目的就是把模块提前装进 import 缓存，
+                            # 让首次截图时不必等待，因此"未使用"是预期的。
+                            import win32gui  # noqa: F401
+                            import win32con  # noqa: F401
+                            from capture.window_finder import WindowFinder  # noqa: F401
+                            log_debug(T("win32gui 模块已加载"), "Preload")
+                        except ImportError:
+                            log_debug(T("win32gui 未安装，跳过"), "Preload")
 
-                    # 4.5 预加载 win32clipboard
-                    try:
-                        import win32clipboard  # noqa: F401  预加载，见上
-                        log_debug(T("win32clipboard 模块已加载"), "Preload")
-                    except ImportError:
-                        log_debug(T("win32clipboard 未安装，跳过"), "Preload")
+                        # 4.5 预加载 win32clipboard
+                        try:
+                            import win32clipboard  # noqa: F401  预加载，见上
+                            log_debug(T("win32clipboard 模块已加载"), "Preload")
+                        except ImportError:
+                            log_debug(T("win32clipboard 未安装，跳过"), "Preload")
 
                     # 4.6 预热 PNG 编码器
                     try:
@@ -369,7 +371,8 @@ class PreloadManager:
             ):
                 self.app.open_settings()
             else:
-                self._preload_clipboard_window()
+                if self.config.get_app_setting("preload_clipboard_window", True):
+                    self._preload_clipboard_window()
             completed = True
         except Exception as e:
             log_exception(e, T("启动时显示主界面"))
@@ -433,6 +436,7 @@ def run():
         # 重试一次，把英文崩溃弹窗换成无感重启；只有重试也失败才提示用户。
         _handle_startup_import_failure(exc)
         return
+
     main.run()
 
 

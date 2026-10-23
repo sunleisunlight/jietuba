@@ -510,6 +510,8 @@ class PreviewPopup(QWidget):
         self._pending_prefer_side = "auto"
         self._pending_avoid_rect = None
         self._current_item_id = None
+        if hasattr(self, "image_label"):
+            self.image_label.clear()
         self.hide()
     
     def force_cleanup(self):
@@ -520,6 +522,8 @@ class PreviewPopup(QWidget):
         self._pending_prefer_side = "auto"
         self._pending_avoid_rect = None
         self._current_item_id = None
+        if hasattr(self, "image_label"):
+            self.image_label.clear()
         if self.isVisible():
             self.hide()
 

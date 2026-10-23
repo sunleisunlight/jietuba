@@ -2,6 +2,7 @@
 画布视图 - 处理用户交互
 """
 
+import sys
 from typing import Optional
 
 from PySide6.QtWidgets import QApplication, QGraphicsView, QGraphicsTextItem
@@ -428,22 +429,39 @@ class CanvasView(QGraphicsView):
             self.element_finder = None
 
         if self.smart_selection_enabled:
-            # 检查窗口检测依赖
-            from capture.window_finder import is_smart_selection_available
+            # 平台分派：Windows 用 Win32/UIA，macOS 用 CGWindowList/AX。
+            # 业务层只认接口，不再共享代码里直接 import win32gui。
+            if sys.platform == "darwin":
+                from platforms.macos.window_finder import (
+                    MacWindowFinder as WindowFinder,
+                    is_smart_selection_available,
+                )
+                from platforms.macos.accessibility import (
+                    MacAccessibilityElementFinder as ElementFinder,
+                    is_macos_accessibility_available as is_element_available,
+                )
+                element_unavailable_msg = T("辅助功能未授权，已回退为窗口检测")
+            else:
+                from capture.window_finder import WindowFinder, is_smart_selection_available
+                from capture.uia_element_finder import (
+                    UIAElementFinder as ElementFinder,
+                    is_uia_available as is_element_available,
+                )
+                element_unavailable_msg = T("comtypes 未安装，已回退为窗口检测")
+
             if not is_smart_selection_available():
-                log_warning(T("win32gui 未安装，智能选区功能不可用"), "SmartSelect")
+                log_warning(T("窗口检测依赖不可用，智能选区功能不可用"), "SmartSelect")
                 self.smart_selection_enabled = False
                 self.smart_selection_drills_to_elements = False
                 return
 
             # 创建 WindowFinder 实例
             if not self.window_finder:
-                from capture.window_finder import WindowFinder
                 # CanvasScene 使用物理屏幕坐标，因此不需要坐标偏移。
                 self.window_finder = WindowFinder(0, 0)
 
-            # 截图浮层显示前先缓存底层 HWND；UIA 后续以该句柄为根，避免
-            # ElementFromPoint 命中全屏截图浮层自身。
+            # 截图浮层显示前先缓存底层窗口句柄；控件级扫描后续以该句柄为根，
+            # 避免命中全屏截图浮层自身。
             self.window_finder.find_windows()
             log_debug(
                 T("已启用，找到 {window_count} 个窗口", window_count=len(self.window_finder.windows)),
@@ -451,10 +469,8 @@ class CanvasView(QGraphicsView):
             )
 
             if self.smart_selection_drills_to_elements:
-                from capture.uia_element_finder import UIAElementFinder, is_uia_available
-
-                if is_uia_available():
-                    self.element_finder = UIAElementFinder(self)
+                if is_element_available():
+                    self.element_finder = ElementFinder(self)
                     self.element_finder.cache_updated.connect(self._on_uia_cache_updated)
                     from platforms import get_platform_backend
                     cursor_pos = QPoint(*get_platform_backend().coordinates.cursor_pos_capture())
@@ -470,9 +486,9 @@ class CanvasView(QGraphicsView):
                         self.window_finder.windows_by_exposed_area()
                     )
                 else:
-                    # 缺少可选依赖时只是少了下钻这一级，不该让截图失败。
+                    # 缺少可选能力时只是少了下钻这一级，不该让截图失败。
                     self.smart_selection_drills_to_elements = False
-                    log_warning(T("comtypes 未安装，已回退为窗口检测"), "SmartSelect")
+                    log_warning(element_unavailable_msg, "SmartSelect")
         else:
             log_debug(T("已禁用"), "SmartSelect")
             self._smart_selection_anim.stop()

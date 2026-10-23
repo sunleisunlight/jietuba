@@ -103,10 +103,11 @@ class HistoryManager(QObject):
 
             self._worker.submit(lambda: self.repository.insert(record))
 
-            # QImage 是隐式共享的引用计数对象：这里持有的是同一份像素的另一份
-            # 引用，后台任务没跑完之前底层缓冲不会被释放，因此截图会话 teardown
-            # 之后写盘依然安全，也不必先复制一份 8MB 出来。
-            image_ref = QImage(image)
+            # 直接持有传入的 QImage 对象本身。macOS 的截图后端返回的是
+            # “QImage 视图 + Python bytes owner”的子类，若这里用 QImage(image)
+            # 切片成基类，底层 bytes 的所有者会随截图会话一起消失，后台写盘
+            # 就可能读到已释放内存。持有原对象即可保持整条引用链。
+            image_ref = image
             source_path = record.source_path
 
             def _save_source():
@@ -380,7 +381,8 @@ def _scaled_preview(image: QImage) -> Optional[QImage]:
     """把选区合成图缩到缩略图尺寸（最大边 PREVIEW_MAX_EDGE）。"""
     try:
         if image.width() <= PREVIEW_MAX_EDGE and image.height() <= PREVIEW_MAX_EDGE:
-            return QImage(image)
+            # 预览会脱离截图会话使用，必须持有独立像素，不能返回共享视图。
+            return image.copy()
         return image.scaled(
             PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE,
             Qt.AspectRatioMode.KeepAspectRatio,

@@ -129,6 +129,9 @@ _QUICK_SHORTCUT_MIGRATION = (
 
 # 数字快速操作预设的迁移版本号。跑过一次就不再跑，保证幂等。
 QUICK_SHORTCUT_SCHEMA_VERSION = 1
+# macOS 默认不预加载 OCR/设置/剪贴板窗口；老配置里存的是 true，需要一次性
+# 迁移到“首次使用时再创建”，否则升级后仍然按旧策略常驻。
+MACOS_PRELOAD_SLIM_SCHEMA_VERSION = 1
 
 # 「继续标注」键位拆分（H→继续上一张、G→打开历史窗口）的一次性迁移版本
 CONTINUE_ANNOTATE_HOTKEY_SCHEMA_VERSION = 1
@@ -469,6 +472,9 @@ class ToolSettingsManager(QObject):
         "preload_ocr": True,
         "preload_settings": True,
         "preload_clipboard": True,
+        # 剪贴板窗口是否在后台启动时预创建。监听本身由 preload_clipboard 控制，
+        # 这个开关只决定是否提前构造窗口/首屏列表，避免后台常驻多占几十 MB。
+        "preload_clipboard_window": True,
 
         # 截图信息面板
         "screenshot_info_hide_on_drag": False,  # 拖拽选区时隐藏信息面板
@@ -476,7 +482,17 @@ class ToolSettingsManager(QObject):
         # ==================== 9. 关于 ====================
         # “关于”页当前没有可持久化配置。
     }
-    
+
+    # macOS 的后台常驻内存对用户更敏感：OCR 两个 ONNX Session 约 70MB，
+    # 设置窗口一次会建 10 个页面，剪贴板窗口会加载首屏历史。默认改为首次
+    # 使用时再创建；Windows 保持原有预加载策略不变。
+    if sys.platform == "darwin":
+        APP_DEFAULT_SETTINGS.update({
+            "preload_ocr": False,
+            "preload_settings": False,
+            "preload_clipboard_window": False,
+        })
+
     def __init__(self, qsettings: Optional[QSettings] = None):
         super().__init__()
         self.qsettings = qsettings if qsettings is not None else QSettings("JileiScreenshot", "ToolSettings")
@@ -486,6 +502,8 @@ class ToolSettingsManager(QObject):
         self.migrate_quick_inapp_shortcuts()
         # 「继续标注」键位语义拆分：H 改为「继续标注上一张」，开历史窗口改用 G
         self.migrate_continue_annotate_hotkeys()
+        # macOS：老版本的三个预加载开关默认都是 true，升级后一次性收掉
+        self.migrate_macos_preload_policy()
 
     @property
     def settings(self):
@@ -917,6 +935,34 @@ class ToolSettingsManager(QObject):
     def set_inapp_shortcut(self, key: str, value: str):
         """设置应用内快捷键"""
         self.qsettings.setValue(f"inapp/{key}", value)
+
+    def migrate_macos_preload_policy(self) -> bool:
+        """macOS 一次性关闭 OCR/设置/剪贴板窗口的启动预加载。
+
+        旧配置里 `preload_ocr`、`preload_settings` 明确存了 true；只改默认值
+        对老用户不生效。这里用 schema 版本做一次性迁移，之后用户仍可在设置页
+        自行打开。Windows 不受影响。
+        """
+        if sys.platform != "darwin":
+            return False
+        version_key = "app/macos_preload_slim_schema_version"
+        try:
+            if int(self.qsettings.value(version_key, 0)) >= MACOS_PRELOAD_SLIM_SCHEMA_VERSION:
+                return False
+        except (TypeError, ValueError):
+            pass
+
+        changed = False
+        for key in ("preload_ocr", "preload_settings", "preload_clipboard_window"):
+            if self.qsettings.value(f"app/{key}", True, type=bool):
+                self.qsettings.setValue(f"app/{key}", False)
+                changed = True
+        self.qsettings.setValue(version_key, MACOS_PRELOAD_SLIM_SCHEMA_VERSION)
+        self.qsettings.sync()
+        if changed:
+            from core.logger import log_info, T
+            log_info(T("macOS 已关闭启动预加载（OCR/设置/剪贴板窗口），首次使用时再创建"), "Settings")
+        return changed
 
     def migrate_quick_inapp_shortcuts(self) -> bool:
         """把停留在旧默认字母的应用内快捷键一次性迁移到新的 1~9 数字预设。

@@ -13,6 +13,7 @@ ppocr_rust 引擎在 OCRManager 里的生命周期
 - 识别取到局部变量后引擎才被别的线程释放时，走错误分支而不是抛 AttributeError
 """
 import sys
+import time
 
 import pytest
 from PySide6.QtGui import QImage
@@ -183,6 +184,21 @@ class TestReleaseAndStatus:
     def test_release_without_engine_is_harmless(self, manager, fake_ppocr):
         manager.release_engine()
         assert manager._pp_engine is None
+
+    def test_release_if_idle_closes_after_timeout(self, manager, fake_ppocr):
+        manager._initialize_ppocr_rust()
+        engine = fake_ppocr.instances[0]
+        manager._last_used = time.monotonic() - 1
+        assert manager.release_if_idle(0) is True
+        assert engine.closed is True
+        assert manager._pp_engine is None
+
+    def test_release_if_idle_keeps_recent_engine(self, manager, fake_ppocr):
+        manager._initialize_ppocr_rust()
+        engine = fake_ppocr.instances[0]
+        manager._last_used = time.monotonic()
+        assert manager.release_if_idle(600) is False
+        assert engine.closed is False
 
     def test_is_engine_loaded_tracks_the_object(self, manager, fake_ppocr):
         manager._current_engine = om.OCRManager.ENGINE_PP_RUST

@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.0"
+APP_VERSION = "2.13.1"
 
 
 def create_fallback_app_icon():
@@ -963,13 +963,18 @@ class MainApp(QObject):
             started = manager.is_monitoring()
             if started:
                 log_info(T("剪贴板监听已按设置启动"), "Clipboard")
-                # 启动图片 OCR 索引后台服务（幂等）：新图优先、历史图分批补录
-                try:
-                    from clipboard.services.ocr_index_service import OcrIndexService
+                # 启动图片 OCR 索引后台服务（幂等）：新图优先、历史图分批补录。
+                # macOS 上延迟到剪贴板窗口首次打开再启动，否则后台补录会立刻
+                # 加载两个 ONNX 模型，抵消 preload_ocr=False 的内存收益。
+                if sys.platform != "darwin":
+                    try:
+                        from clipboard.services.ocr_index_service import OcrIndexService
 
-                    OcrIndexService.instance(manager).start()
-                except Exception as e:
-                    log_debug(T("启动剪贴板 OCR 索引服务失败: {e}", e=e), "Clipboard")
+                        OcrIndexService.instance(manager).start()
+                    except Exception as e:
+                        log_debug(T("启动剪贴板 OCR 索引服务失败: {e}", e=e), "Clipboard")
+                else:
+                    log_debug(T("macOS：OCR 索引延迟到剪贴板窗口打开"), "Clipboard")
             else:
                 log_warning(T("剪贴板监听启动失败"), "Clipboard")
             return started
@@ -1009,6 +1014,14 @@ class MainApp(QObject):
             self.clipboard_window.raise_()
             self.clipboard_window.activateWindow()
             log_debug(T("剪切板窗口已打开"), "Clipboard")
+
+            # 搜索剪贴板图片需要 OCR 索引；在用户真正打开窗口时再启动，
+            # 不占后台常驻内存（Windows 启动时已经启动过，这里是幂等的）。
+            try:
+                from clipboard.services.ocr_index_service import OcrIndexService
+                OcrIndexService.instance(self.clipboard_manager).start()
+            except Exception as e:
+                log_debug(T("启动剪贴板 OCR 索引服务失败: {e}", e=e), "Clipboard")
 
         except Exception as e:
             log_exception(e, T("打开剪切板窗口失败"))

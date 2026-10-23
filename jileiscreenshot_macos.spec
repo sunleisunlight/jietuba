@@ -63,8 +63,23 @@ for _dylib in _ort_dylibs:
     binaries.append((_dylib, "."))
 print("onnxruntime dylibs:", _ort_dylibs or "(静态链接/无外部 dylib)")
 
-# PySide6 插件：cocoa 平台、SVG 与图片格式
-datas += collect_data_files("PySide6", includes=["plugins/**"])
+# PySide6 插件：只收集实际用到的 cocoa 平台、SVG/图片格式、样式与 TLS。
+# 其余 qml/designer/sqldrivers 等由 build_macos.prune_qt_assets 再兜底清理。
+_PYSIDE6_PLUGIN_FILES = [
+    "plugins/platforms/libqcocoa.dylib",
+    "plugins/iconengines/libqsvgicon.dylib",
+    "plugins/imageformats/libqgif.dylib",
+    "plugins/imageformats/libqico.dylib",
+    "plugins/imageformats/libqicns.dylib",
+    "plugins/imageformats/libqjpeg.dylib",
+    "plugins/imageformats/libqsvg.dylib",
+    "plugins/imageformats/libqwebp.dylib",
+    "plugins/styles/libqmacstyle.dylib",
+    "plugins/tls/libqsecuretransportbackend.dylib",
+    "plugins/networkinformation/libqscnetworkreachability.dylib",
+]
+for _plugin in _PYSIDE6_PLUGIN_FILES:
+    datas += collect_data_files("PySide6", includes=[_plugin])
 
 # ── OCR 模型：Mac 正式构建必需（与 Windows 功能对齐），缺失即构建失败 ──
 OCR_MODELS = ("PP-OCRv6_det_small.onnx", "PP-OCRv6_rec_small.onnx")
