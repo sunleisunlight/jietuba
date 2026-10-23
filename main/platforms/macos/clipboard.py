@@ -118,8 +118,13 @@ def _foreground_is_own_process() -> bool:
 
 def _send_paste():
     release_modifiers()
+    if not _ax_is_trusted():
+        # 没有辅助功能权限时 CGEventPost 根本不会生效，这时再报"目标窗口已关闭"
+        # 只会误导用户；必须直接指出缺的是哪个系统权限。
+        _notify_paste_failure("permission")
+        return
     if not send_cmd_v():
-        _notify_paste_failure()
+        _notify_paste_failure("permission")
 
 
 def _send_paste_to_foreground():
@@ -150,15 +155,42 @@ def _activate_then_paste(pid: int, attempt: int):
     QTimer.singleShot(_ACTIVATE_RETRY_MS, lambda: _activate_then_paste(pid, attempt + 1))
 
 
-def _notify_paste_failure():
+def _notify_paste_failure(reason: str = "target"):
+    """提示自动粘贴失败。reason="permission" 表示缺辅助功能权限。"""
     from core.logger import log_warning
     from PySide6.QtWidgets import QApplication, QMessageBox
-    message = "目标窗口已关闭或无法恢复焦点，已停止自动粘贴。内容仍在剪贴板中，请切到目标窗口手动粘贴。"
-    log_warning(message, "Clipboard")
+
+    # 没授权时，卡住自动粘贴的可能是"拿不到目标窗口"或"按键被系统吞掉"，
+    # 但真正的原因是辅助功能权限；这时报"目标窗口已关闭"只会让用户白找一圈。
+    if reason != "permission" and not _ax_is_trusted():
+        reason = "permission"
+
+    if reason == "permission":
+        message = (
+            "自动粘贴需要「辅助功能」权限。\n\n"
+            "请在 系统设置 → 隐私与安全性 → 辅助功能 中允许“积磊截图”，"
+            "然后重启应用。\n\n内容仍在剪贴板中，可以先手动粘贴（Command+V）。"
+        )
+        log_warning("自动粘贴缺少辅助功能权限", "Clipboard")
+    else:
+        message = "目标窗口已关闭或无法恢复焦点，已停止自动粘贴。内容仍在剪贴板中，请切到目标窗口手动粘贴。"
+        log_warning(message, "Clipboard")
+
     if QApplication.instance() is not None:
         # Non-modal and retained by QApplication: never block an input callback.
         app = QApplication.instance()
         box = QMessageBox(QMessageBox.Icon.Warning, "积磊截图", message)
         box.setAttribute(Qt.WA_DeleteOnClose)
+        if reason == "permission":
+            open_btn = box.addButton("打开系统设置", QMessageBox.ButtonRole.ActionRole)
+            open_btn.clicked.connect(_open_accessibility_settings)
         app._paste_failure_dialog = box
         box.open()
+
+
+def _open_accessibility_settings():
+    try:
+        from platforms import get_platform_backend
+        get_platform_backend().permissions.open_system_settings("accessibility")
+    except Exception:
+        pass

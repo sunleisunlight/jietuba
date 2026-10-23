@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.5"
+APP_VERSION = "2.13.6"
 
 
 def create_fallback_app_icon():
@@ -748,6 +748,7 @@ class MainApp(QObject):
                 # macOS 用系统原生的授权弹窗排版（图标 + 允许… + 去授权/重启/已完成），
                 # 而不是 Windows 风格的 QMessageBox 警告框。
                 from platforms import get_platform_backend
+                from platforms.factory import get_lifecycle_backend
                 from ui.permission_dialog import show_screen_capture_dialog
 
                 backend = get_platform_backend()
@@ -755,7 +756,7 @@ class MainApp(QObject):
                 show_screen_capture_dialog(
                     parent_window,
                     on_open=self._open_screen_recording_settings,
-                    on_restart=lambda: backend.lifecycle.restart_app(),
+                    on_restart=lambda: get_lifecycle_backend().restart_app(),
                 )
                 # TCC 授权有时已经生效（比如用户在别处授予后重启过本应用）：
                 # 复检一次，真正拿到权限就直接继续这次截图，不必再按一次热键。

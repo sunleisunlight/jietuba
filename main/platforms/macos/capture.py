@@ -28,6 +28,14 @@ class ScreenCapturePermissionError(RuntimeError):
         super().__init__("macOS 屏幕录制权限未授予")
 
 
+class ScreenCaptureError(RuntimeError):
+    """抓屏本身失败，但不是权限问题。
+
+    ``CGWindowListCreateImage`` 在系统内存紧张 / 窗口服务器繁忙时会返回空图；
+    这跟"没授权"是两回事，不能再把用户拉去系统设置里反复授权。
+    """
+
+
 class _OwnedQImage(QImage):
     """QImage 视图 + 持有底层 Python bytes，避免再做一次全屏 copy。
 
@@ -56,8 +64,13 @@ def _cg_image_to_qimage(cg_image) -> QImage:
 
     provider = Quartz.CGImageGetDataProvider(cg_image)
     cf_data = Quartz.CGDataProviderCopyData(provider)
-    # 拷贝出独立字节，避免依赖 CFData/CGImage 的生命周期
-    raw = bytes(cf_data)
+    # 拷贝出独立字节，避免依赖 CFData/CGImage 的生命周期。
+    #
+    # 必须用 memoryview().tobytes()，不能用 bytes(cf_data)：PyObjC 的
+    # bytes(CFData) 会额外长期保留一份底层缓冲，实测每抓一次屏就漏掉一整张
+    # 全屏位图（2880×1800 约 20MB）。连截十几次后内存翻倍，macOS 开始压缩
+    # 换页，于是「截完一张就卡、再截就截不动」。
+    raw = memoryview(cf_data).tobytes()
     if not raw:
         return QImage()
 
@@ -86,7 +99,9 @@ class MacOSCaptureBackend(CaptureBackend):
             Quartz.kCGWindowImageDefault,
         )
         if cg_image is None:
-            # 拿不到图像通常意味着权限被拒（返回空桌面而非黑屏）
+            # 预检已通过却拿到空图：不是权限问题，别再把用户拉去授权。
+            if _cg_preflight():
+                raise ScreenCaptureError("系统暂时无法完成屏幕采集，请稍后重试")
             raise ScreenCapturePermissionError()
 
         image = _cg_image_to_qimage(cg_image)

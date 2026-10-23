@@ -33,6 +33,25 @@ def test_macos_denied_permission_never_captures(monkeypatch):
         mock_mss.assert_not_called()
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="仅 macOS 走 CGWindowList")
+def test_empty_image_with_permission_is_not_a_permission_error(monkeypatch):
+    """预检已通过却拿到空图时，不能再报"需要屏幕录制权限"。
+
+    回归：内存紧张时 CGWindowListCreateImage 会返回空图，旧实现一律当成
+    权限未授予，用户明明已经授权，却每次截图都被拉去系统设置重新授权。
+    """
+    import Quartz
+
+    from capture.capture_service import ScreenCapturePermissionError
+    from platforms.macos.capture import ScreenCaptureError
+
+    monkeypatch.setattr(Quartz, "CGWindowListCreateImage", lambda *a, **k: None)
+    with pytest.raises(ScreenCaptureError) as excinfo:
+        CaptureService().capture_all_screens()
+    assert not isinstance(excinfo.value, ScreenCapturePermissionError)
+    assert "权限" not in str(excinfo.value)
+
+
 def _make_fake_screenshot(width, height):
     """构造一个符合 mss ScreenShot 接口的假对象（.bgra / .width / .height）"""
     shot = MagicMock()

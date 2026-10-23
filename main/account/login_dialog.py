@@ -331,6 +331,10 @@ class LoginDialog(QDialog):
                 self.submit_btn.setText(self.tr("Please wait…"))
                 self.submit_btn.setEnabled(False)
                 return
+            # 短信区展开后按钮必须回到"登录/注册"，不能一直停在"请稍候…"
+            self.submit_btn.setText(
+                self.tr("Create Account") if register_mode else self.tr("Sign In")
+            )
             valid = (
                 _PHONE_RE.match(self.phone_edit.text()) is not None
                 and _PIN_RE.match(self.pin_edit.text()) is not None

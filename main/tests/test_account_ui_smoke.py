@@ -174,6 +174,8 @@ class TestLoginDialog:
 
         assert _wait_until(qapp, lambda: dialog.sms_edit.isVisible())
         assert "138****0000" in dialog.sms_hint.text()
+        # 按钮必须回到"登录"，不能一直停在"请稍候…"
+        assert dialog.submit_btn.text() == "Sign In"
         # 手机号与安全码被锁定，避免更换后挑战失效
         assert dialog.phone_edit.isEnabled() is False
         # 未填验证码时不能提交
