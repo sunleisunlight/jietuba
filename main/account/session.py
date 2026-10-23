@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from dataclasses import dataclass
 from typing import Optional
 
 from PySide6.QtCore import QObject, QSettings, Signal
@@ -26,6 +27,23 @@ from core.logger import log_warning, T
 
 from . import api, constants as C
 from . import token_store
+
+
+@dataclass(frozen=True)
+class AuthResult:
+    """登录 / 注册结果。
+
+    ``sms`` 非空表示控制中心要求短信验证码：本次已经发出短信（或命中发送
+    冷却），调用方必须把验证码输入框显示出来，再用 ``sms_code`` +
+    ``challenge_id`` 重新提交。
+    """
+
+    ok: bool
+    message: str = ""
+    sms: Optional[dict] = None
+    # 短信发送冷却中（sms_too_frequent / sms_send_failed）时的剩余秒数；
+    # 界面据此倒计时，到点自动重新发码，而不是让用户自己反复点。
+    retry_after: int = 0
 
 
 class AccountManager(QObject):
@@ -135,22 +153,36 @@ class AccountManager(QObject):
 
     # ------------------------------------------------------------ 登录 / 退出
 
-    def login(self, phone: str, pin: str) -> tuple[bool, str]:
-        data, err = api.login(phone, pin)
+    def login(self, phone: str, pin: str, sms_code: str = "",
+              challenge_id: str = "") -> "AuthResult":
+        data, err = api.login(phone, pin, sms_code=sms_code, challenge_id=challenge_id)
         if err is None:
-            return self._consume_auth(data, phone)
+            sms = _sms_challenge(data)
+            if sms is not None:
+                return AuthResult(False, sms.get("warning", ""), sms)
+            ok, message = self._consume_auth(data, phone)
+            return AuthResult(ok, message)
         if err.code == "product_registration_required":
             # 积磊账号是通用的：这个手机号在控制中心有账号，只是还没开通过本产品。
             # 用同一手机号 + 同一安全码幂等补开（服务端只会补开产品、不会重复发权益），
-            # 用户不需要再走一遍注册。
-            return self.register(phone, pin, "")
-        return False, _human_error(err)
+            # 用户不需要再走一遍注册。短信验证码要一起带过去，否则会被要求再发一次。
+            return self.register(phone, pin, "", sms_code=sms_code,
+                                 challenge_id=challenge_id)
+        return AuthResult(False, _human_error(err),
+                          retry_after=_sms_retry_after(err))
 
-    def register(self, phone: str, pin: str, name: str = "") -> tuple[bool, str]:
-        data, err = api.register(phone, pin, name)
+    def register(self, phone: str, pin: str, name: str = "", sms_code: str = "",
+                 challenge_id: str = "") -> "AuthResult":
+        data, err = api.register(phone, pin, name, sms_code=sms_code,
+                                 challenge_id=challenge_id)
         if err is not None:
-            return False, _human_error(err)
-        return self._consume_auth(data, phone)
+            return AuthResult(False, _human_error(err),
+                              retry_after=_sms_retry_after(err))
+        sms = _sms_challenge(data)
+        if sms is not None:
+            return AuthResult(False, sms.get("warning", ""), sms)
+        ok, message = self._consume_auth(data, phone)
+        return AuthResult(ok, message)
 
     def _consume_auth(self, data: dict, phone: str) -> tuple[bool, str]:
         token = str(data.get("device_access_token") or "")
@@ -272,6 +304,41 @@ def _settle_login(err_start, data_start, token, phone, eid):
     # 其它网络错误：保持乐观，不打扰
 
 
+def _sms_retry_after(err) -> int:
+    """只在短信发送类错误上返回冷却秒数；其它错误不触发界面的自动重发。"""
+    if getattr(err, "code", "") not in ("sms_too_frequent", "sms_send_failed",
+                                       "sms_daily_limit"):
+        return 0
+    if getattr(err, "code", "") == "sms_daily_limit":
+        # 当日额度用完，重发也没用，别让界面空转到明天
+        return 0
+    return max(0, int(getattr(err, "retry_after", 0) or 0))
+
+
+def _sms_challenge(data) -> Optional[dict]:
+    """把控制中心 ``sms_required`` 应答整理成界面要用的字段；不是则返回 None。
+
+    服务端在注册 / 新设备登录需要短信验证时会返回 200 + sms_required，
+    里面带 challenge_id（二次提交要原样带回）、打码手机号、重发冷却与有效期。
+    """
+    if not isinstance(data, dict) or not data.get("sms_required"):
+        return None
+
+    def _int(value, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "challenge_id": str(data.get("challenge_id") or data.get("challengeId") or ""),
+        "masked_phone": str(data.get("masked_phone") or ""),
+        "retry_after": _int(data.get("retry_after")),
+        "expires_in": _int(data.get("expires_in")),
+        "warning": str(data.get("send_warning") or ""),
+    }
+
+
 def _human_error(err) -> str:
     """把控制中心的错误码翻译成用户能照做的下一步。
 
@@ -299,6 +366,16 @@ def _human_error(err) -> str:
         "login_fields_required": "请填写手机号与 6 位安全码",
         "invalid_phone": "手机号格式不正确，请输入 11 位手机号",
         "invalid_name": "账号昵称不合法，请稍后重试",
+        # 短信验证码（与控制中心 sms_service.ERROR_MESSAGES 的错误码一一对应）
+        "sms_too_frequent": "验证码发送太频繁，请稍后再试",
+        "sms_daily_limit": "今日短信验证码次数已达上限，请明天再试或联系客服",
+        "sms_code_required": "请先获取短信验证码",
+        "sms_code_invalid": "验证码不正确，请重新输入",
+        "sms_code_expired": "验证码已过期，请重新获取",
+        "sms_challenge_invalid": "验证码请求已失效，请重新获取",
+        "sms_attempts_exceeded": "验证码错误次数过多，请重新获取",
+        "sms_send_failed": "短信发送失败，请稍后重试",
+        "sms_not_configured": "短信服务尚未配置，请联系客服",
     }
     if err.code in table:
         return table[err.code]

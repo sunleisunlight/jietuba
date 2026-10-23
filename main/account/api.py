@@ -19,11 +19,17 @@ from .device import get_device_id
 
 
 class ApiError(Exception):
-    def __init__(self, code: str, status: int = 0, message: str = ""):
+    def __init__(self, code: str, status: int = 0, message: str = "",
+                 retry_after: int = 0):
         super().__init__(message or code)
         self.code = code
         self.status = status
         self.message = message
+        # 短信类错误的冷却秒数：界面据此倒计时并自动重发，用户不用反复手点
+        try:
+            self.retry_after = max(0, int(retry_after or 0))
+        except (TypeError, ValueError):
+            self.retry_after = 0
 
 
 def _request(method: str, path: str, *, payload: Optional[dict] = None,
@@ -64,6 +70,7 @@ def _request(method: str, path: str, *, payload: Optional[dict] = None,
                 err_body.get("error_code") or err_body.get("error") or f"http_{e.code}",
                 status=e.code,
                 message=err_body.get("message") or "",
+                retry_after=err_body.get("retry_after") or 0,
             )
             # 4xx 是明确业务应答，不换域名重试
             if 400 <= e.code < 500:
@@ -76,9 +83,9 @@ def _request(method: str, path: str, *, payload: Optional[dict] = None,
 
 # ---------------------------------------------------------------- 账号
 
-def _auth_payload(security_pin: str) -> dict:
+def _auth_payload(security_pin: str, sms_code: str = "", challenge_id: str = "") -> dict:
     from main_app import APP_VERSION
-    return {
+    payload = {
         "phone": "",  # 由调用方填
         "name": "",
         "securityPIN": security_pin,
@@ -88,6 +95,13 @@ def _auth_payload(security_pin: str) -> dict:
         "currentLibraryCount": 0,
         "productId": C.PRODUCT_ID,
     }
+    # 控制中心在注册 / 新设备登录要求短信验证时，第二次提交必须原样带回
+    # challengeId + 验证码；不填时保持原样，服务端会按"需要发码"处理。
+    if sms_code:
+        payload["smsCode"] = sms_code
+    if challenge_id:
+        payload["challengeId"] = challenge_id
+    return payload
 
 
 def _default_name(phone: str) -> str:
@@ -95,8 +109,9 @@ def _default_name(phone: str) -> str:
     return f"积磊截图用户{phone[-4:]}" if len(phone) >= 4 else "积磊截图用户"
 
 
-def register(phone: str, security_pin: str, name: str = ""):
-    p = _auth_payload(security_pin)
+def register(phone: str, security_pin: str, name: str = "",
+             sms_code: str = "", challenge_id: str = ""):
+    p = _auth_payload(security_pin, sms_code, challenge_id)
     p["phone"] = phone
     # 用户名由用户在注册页填写；为空（自动开通本产品场景）时用兜底昵称，
     # 服务端对已存在的账号只会补开产品，不会覆盖它原有的用户名。
@@ -104,8 +119,8 @@ def register(phone: str, security_pin: str, name: str = ""):
     return _request("POST", "/api/v3/auth/register", payload=p)
 
 
-def login(phone: str, security_pin: str):
-    p = _auth_payload(security_pin)
+def login(phone: str, security_pin: str, sms_code: str = "", challenge_id: str = ""):
+    p = _auth_payload(security_pin, sms_code, challenge_id)
     p["phone"] = phone
     return _request("POST", "/api/v3/auth/login", payload=p)
 

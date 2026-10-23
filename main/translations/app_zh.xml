@@ -3989,6 +3989,12 @@ Replace it?</source>
     <message><source>Already registered? Sign in</source><translation>已有账号？去登录</translation></message>
     <message><source>Screenshots and annotation are free forever without signing in.</source><translation>截图与标注无需登录即可永久免费使用。</translation></message>
     <message><source>Sign-in failed, please try again</source><translation>登录失败，请稍后重试</translation></message>
+    <message><source>SMS verification code</source><translation>短信验证码</translation></message>
+    <message><source>Enter the code we just texted you</source><translation>请输入刚收到的短信验证码</translation></message>
+    <message><source>Resend code</source><translation>重新发送验证码</translation></message>
+    <message><source>Resend in {seconds}s</source><translation>{seconds} 秒后可重发</translation></message>
+    <message><source>Code sent to {phone}</source><translation>验证码已发送至 {phone}</translation></message>
+    <message><source>Code sent. Please check your messages.</source><translation>验证码已发送，请查看短信</translation></message>
 </context>
 
 <!-- ========== Jilei Account: gate dialogs ========== -->

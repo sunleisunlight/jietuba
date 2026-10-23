@@ -3953,6 +3953,12 @@ Replace it?</source>
     <message><source>Already registered? Sign in</source><translation>이미 가입하셨나요? 로그인</translation></message>
     <message><source>Screenshots and annotation are free forever without signing in.</source><translation>캡처와 주석은 로그인 없이도 영구 무료로 사용할 수 있습니다.</translation></message>
     <message><source>Sign-in failed, please try again</source><translation>로그인에 실패했습니다. 나중에 다시 시도해 주세요</translation></message>
+    <message><source>SMS verification code</source><translation>SMS 인증 코드</translation></message>
+    <message><source>Enter the code we just texted you</source><translation>방금 받은 인증 코드를 입력하세요</translation></message>
+    <message><source>Resend code</source><translation>인증 코드 다시 보내기</translation></message>
+    <message><source>Resend in {seconds}s</source><translation>{seconds}초 후에 다시 보낼 수 있습니다</translation></message>
+    <message><source>Code sent to {phone}</source><translation>{phone}(으)로 인증 코드를 보냈습니다</translation></message>
+    <message><source>Code sent. Please check your messages.</source><translation>인증 코드를 보냈습니다. 문자를 확인해 주세요.</translation></message>
 </context>
 
 <!-- ========== Jilei Account: gate dialogs ========== -->

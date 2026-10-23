@@ -3994,6 +3994,12 @@ Replace it?</source>
     <message><source>Already registered? Sign in</source><translation>登録済みですか？ログイン</translation></message>
     <message><source>Screenshots and annotation are free forever without signing in.</source><translation>キャプチャーと注釈はログインなしで永遠に無料でご利用いただけます。</translation></message>
     <message><source>Sign-in failed, please try again</source><translation>ログインに失敗しました。後でもう一度お試しください</translation></message>
+    <message><source>SMS verification code</source><translation>SMS認証コード</translation></message>
+    <message><source>Enter the code we just texted you</source><translation>今届いたSMS認証コードを入力してください</translation></message>
+    <message><source>Resend code</source><translation>認証コードを再送</translation></message>
+    <message><source>Resend in {seconds}s</source><translation>{seconds}秒後に再送できます</translation></message>
+    <message><source>Code sent to {phone}</source><translation>{phone} に認証コードを送信しました</translation></message>
+    <message><source>Code sent. Please check your messages.</source><translation>認証コードを送信しました。SMSをご確認ください。</translation></message>
 </context>
 
 <!-- ========== Jilei Account: gate dialogs ========== -->

@@ -118,8 +118,13 @@ class TestLoginDialog:
         qapp.processEvents()
 
     def test_failed_login_shows_inline_error(self, qapp, monkeypatch):
+        from account.session import AuthResult
+
         mgr = get_account()
-        monkeypatch.setattr(mgr, "login", lambda phone, pin: (False, "mock-login-error"))
+        monkeypatch.setattr(
+            mgr, "login",
+            lambda phone, pin, **_: AuthResult(False, "mock-login-error"),
+        )
 
         dialog = LoginDialog()
         dialog.show()
@@ -131,6 +136,122 @@ class TestLoginDialog:
         assert ok
         assert dialog.error_label.text() == "mock-login-error"
         assert dialog.submit_btn.isEnabled() is True  # 失败后恢复可点
+
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+    def test_sms_required_reveals_code_input_and_verifies(self, qapp, monkeypatch):
+        """控制中心要短信时，必须就地出现验证码输入框，并用它二次提交。
+
+        回归：以前只把 sms_required 当成「服务器未返回登录凭证」，用户收到了
+        短信验证码却没有任何地方能填。
+        """
+        from account.session import AuthResult
+
+        mgr = get_account()
+        calls = []
+
+        def fake_login(phone, pin, sms_code="", challenge_id=""):
+            calls.append((phone, pin, sms_code, challenge_id))
+            if not sms_code:
+                return AuthResult(False, "", {
+                    "challenge_id": "chal-1",
+                    "masked_phone": "138****0000",
+                    "retry_after": 60,
+                    "expires_in": 300,
+                    "warning": "",
+                })
+            return AuthResult(True, "")
+
+        monkeypatch.setattr(mgr, "login", fake_login)
+
+        dialog = LoginDialog()
+        dialog.show()
+        dialog.phone_edit.setText("13800000000")
+        dialog.pin_edit.setText("123456")
+        dialog.submit_btn.click()
+
+        assert _wait_until(qapp, lambda: dialog.sms_edit.isVisible())
+        assert "138****0000" in dialog.sms_hint.text()
+        # 手机号与安全码被锁定，避免更换后挑战失效
+        assert dialog.phone_edit.isEnabled() is False
+        # 未填验证码时不能提交
+        assert dialog.submit_btn.isEnabled() is False
+
+        dialog.sms_edit.setText("123456")
+        qapp.processEvents()
+        assert dialog.submit_btn.isEnabled() is True
+        dialog.submit_btn.click()
+
+        assert _wait_until(qapp, lambda: len(calls) >= 2)
+        assert calls[-1][2] == "123456"
+        assert calls[-1][3] == "chal-1"
+
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+    def test_sms_cooldown_reveals_input_and_auto_resends(self, qapp, monkeypatch):
+        """冷却期（sms_too_frequent）也要先把短信区露出来，倒计时结束自动重发。
+
+        回归：以前命中发送冷却时只弹一行错误，用户明明收到了验证码，
+        界面上却始终没有输入框。
+        """
+        from account.session import AuthResult
+
+        mgr = get_account()
+        calls = []
+        state = {"cooling": True}
+
+        def fake_login(phone, pin, sms_code="", challenge_id=""):
+            calls.append(sms_code)
+            if state["cooling"]:
+                state["cooling"] = False
+                return AuthResult(
+                    False, "验证码发送太频繁，请稍后再试", None, retry_after=1
+                )
+            return AuthResult(False, "", {
+                "challenge_id": "chal-2", "masked_phone": "138****0000",
+                "retry_after": 0, "expires_in": 300, "warning": "",
+            })
+
+        monkeypatch.setattr(mgr, "login", fake_login)
+
+        dialog = LoginDialog()
+        dialog.show()
+        dialog.phone_edit.setText("13800000000")
+        dialog.pin_edit.setText("123456")
+        dialog.submit_btn.click()
+
+        assert _wait_until(qapp, lambda: dialog.sms_edit.isVisible())
+        assert "太频繁" in dialog.sms_hint.text()
+        assert dialog.sms_edit.isEnabled() is False
+
+        # 冷却结束后自动重发，拿到 challenge 后输入框随之可用
+        assert _wait_until(qapp, lambda: dialog._sms is not None, timeout_ms=5000)
+        assert dialog.sms_edit.isEnabled() is True
+        assert len(calls) >= 2
+        assert calls[1] == ""
+
+        dialog.close()
+        dialog.deleteLater()
+        qapp.processEvents()
+
+    def test_switching_mode_clears_the_sms_challenge(self, qapp):
+        dialog = LoginDialog()
+        dialog.show()
+        dialog._apply_sms({
+            "challenge_id": "chal-1", "masked_phone": "138****0000",
+            "retry_after": 60, "expires_in": 300, "warning": "",
+        })
+        assert dialog.sms_edit.isVisible()
+
+        dialog._switch_mode()
+        qapp.processEvents()
+        assert dialog._sms is None
+        assert dialog.sms_edit.isVisible() is False
+        assert dialog.phone_edit.isEnabled() is True
 
         dialog.close()
         dialog.deleteLater()
@@ -309,19 +430,19 @@ class TestLoginAutoOpensProduct:
 
         monkeypatch.setattr(
             api, "login",
-            lambda phone, pin: (None, ApiError("product_registration_required", 400)),
+            lambda phone, pin, **_: (None, ApiError("product_registration_required", 400)),
         )
         monkeypatch.setattr(
             api, "register",
-            lambda phone, pin, name="": (
+            lambda phone, pin, name="", **_: (
                 opened.append((phone, pin)) or {"device_access_token": "tok"}, None
             ),
         )
 
-        ok, message = mgr.login("13800000000", "123456")
-        assert ok is True
+        result = mgr.login("13800000000", "123456")
+        assert result.ok is True
         assert opened == [("13800000000", "123456")]
-        assert message == "opened:13800000000"
+        assert result.message == "opened:13800000000"
 
     def test_login_still_reports_real_failure(self, monkeypatch, qapp):
         from account import api
@@ -329,16 +450,16 @@ class TestLoginAutoOpensProduct:
 
         monkeypatch.setattr(
             api, "login",
-            lambda phone, pin: (None, ApiError("product_registration_required", 400)),
+            lambda phone, pin, **_: (None, ApiError("product_registration_required", 400)),
         )
         monkeypatch.setattr(
             api, "register",
-            lambda phone, pin, name="": (None, ApiError("account_already_exists", 409)),
+            lambda phone, pin, name="", **_: (None, ApiError("account_already_exists", 409)),
         )
 
-        ok, message = mgr.login("13800000000", "123456")
-        assert ok is False
-        assert "已开通" in message
+        result = mgr.login("13800000000", "123456")
+        assert result.ok is False
+        assert "已开通" in result.message
 
 
 # ============================================================================

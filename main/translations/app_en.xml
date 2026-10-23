@@ -3831,6 +3831,12 @@ Delete it?</translation></message>
     <message><source>Already registered? Sign in</source><translation>Already registered? Sign in</translation></message>
     <message><source>Screenshots and annotation are free forever without signing in.</source><translation>Screenshots and annotation are free forever without signing in.</translation></message>
     <message><source>Sign-in failed, please try again</source><translation>Sign-in failed, please try again</translation></message>
+    <message><source>SMS verification code</source><translation>SMS verification code</translation></message>
+    <message><source>Enter the code we just texted you</source><translation>Enter the code we just texted you</translation></message>
+    <message><source>Resend code</source><translation>Resend code</translation></message>
+    <message><source>Resend in {seconds}s</source><translation>Resend in {seconds}s</translation></message>
+    <message><source>Code sent to {phone}</source><translation>Code sent to {phone}</translation></message>
+    <message><source>Code sent. Please check your messages.</source><translation>Code sent. Please check your messages.</translation></message>
 </context>
 
 <!-- ========== Jilei Account: gate dialogs ========== -->
