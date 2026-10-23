@@ -241,6 +241,9 @@ class WelcomeWizard(FrostedFramelessDialog):
     PAGE_COUNT = 6
     WINDOW_W = 960
     WINDOW_H = 680
+    # 小屏 / 高界面比例下的兜底：窗口最多占可用屏幕的 90%，不允许再出现
+    # 「引导界面铺满整块屏幕」的情况。
+    MAX_SCREEN_RATIO = 0.90
 
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
@@ -258,7 +261,8 @@ class WelcomeWizard(FrostedFramelessDialog):
         # 否则 setWindowFlags 会清除固定大小约束，导致拖动时布局反复重算、高度抖动。
         # MSWindowsFixedSizeDialogHint 在 Windows 上额外锁定窗口不可调整大小。
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.MSWindowsFixedSizeDialogHint)
-        self.setFixedSize(dialog_scaled(self.WINDOW_W), dialog_scaled(self.WINDOW_H))
+        width, height = self._fit_dialog_size()
+        self.setFixedSize(width, height)
         self.setStyleSheet("background: transparent; border: none;")
 
         self._build_ui()
@@ -271,6 +275,22 @@ class WelcomeWizard(FrostedFramelessDialog):
         # ── 第二步：所有页面创建完成后，刷新一遍文字 ──
         # 这样页面显示的就是检测到的语言，而不是硬编码中文
         self.retranslate_ui()
+
+    def _fit_dialog_size(self):
+        """设计尺寸与可用屏幕取较小值，避免小屏或高比例时铺满整块屏幕。"""
+        width = dialog_scaled(self.WINDOW_W)
+        height = dialog_scaled(self.WINDOW_H)
+        try:
+            from PySide6.QtWidgets import QApplication
+
+            screen = QApplication.primaryScreen()
+            available = screen.availableGeometry() if screen is not None else None
+            if available is not None and available.width() > 0 and available.height() > 0:
+                width = min(width, int(available.width() * self.MAX_SCREEN_RATIO))
+                height = min(height, int(available.height() * self.MAX_SCREEN_RATIO))
+        except Exception as e:
+            log_exception(e, T("欢迎向导尺寸自适应"))
+        return width, height
 
     def _setup_titlebar(self):
         title_bar = FluentTitleBar(self)

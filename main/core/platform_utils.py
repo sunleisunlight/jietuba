@@ -98,14 +98,10 @@ def get_system_dpi(default: float = 96.0) -> float:
         fallback = 96.0
 
     if not is_windows():
-        # macOS：返回基于主屏 devicePixelRatio 的等效 DPI（96 * dpr）
-        try:
-            from PySide6.QtGui import QGuiApplication
-            screen = QGuiApplication.primaryScreen()
-            if screen is not None:
-                return 96.0 * float(screen.devicePixelRatio())
-        except Exception:
-            pass
+        # macOS 没有 Windows 那种"显示缩放 %"，界面尺寸本来就是逻辑点（point），
+        # Retina 的 2x 由系统按 devicePixelRatio 渲染，不能再折算成界面缩放。
+        # 早先这里返回 96 * dpr（Retina = 192），首次运行会把界面比例定成 150%，
+        # 欢迎向导在 1440×900 的屏幕上被放成 1440×1020，直接铺满整块屏幕。
         return fallback
 
     try:

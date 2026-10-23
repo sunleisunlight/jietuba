@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Standalone-window scale uses explicit base metrics, never a post-layout sweep."""
 
+import sys
+
 import pytest
 
 from core.ui_scale import dialog_scaled, get_dialog_scale
@@ -76,6 +78,10 @@ def test_translation_dashboard_scales_controls_from_their_base_values(qapp):
         dialog.deleteLater()
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="右上角 ×−□ 连续排列是 Windows 约定；macOS 改用左上角红黄绿交通灯，按钮被隐藏",
+)
 @pytest.mark.parametrize("percent", [80, 100, 125, 150])
 def test_translation_caption_buttons_stay_contiguous_and_flush_right(qapp, percent):
     """Caption controls remain a single stable cluster at every UI scale."""

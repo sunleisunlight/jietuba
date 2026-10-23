@@ -15,6 +15,7 @@ Windows 系统 DPI 为两套界面缩放选择一个最接近的初始档位。
 本模块通过 config_manager.get_app_setting / set_app_setting 读写。
 """
 import math
+import sys
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget
@@ -162,6 +163,60 @@ def apply_first_run_scale_defaults(config_manager, system_dpi=None):
         if settings is None or not settings.contains(setting_key):
             config_manager.set_app_setting(key, recommended)
     return recommended
+
+
+# macOS 比例误判修复的配置版本号：写入 QSettings 后不再重复迁移
+MACOS_SCALE_SCHEMA_VERSION = 1
+
+
+def _mac_legacy_scale_percent() -> int:
+    """旧版 get_system_dpi 在 Mac 上会推荐的档位（96 * devicePixelRatio）。"""
+    try:
+        from PySide6.QtGui import QGuiApplication
+
+        screen = QGuiApplication.primaryScreen()
+        dpr = float(screen.devicePixelRatio()) if screen is not None else 1.0
+    except Exception:
+        dpr = 1.0
+    return 150 if dpr > 1.5 else (125 if dpr > 1.0 else 100)
+
+
+def migrate_macos_scale_defaults(config_manager) -> bool:
+    """把 macOS 上由 Retina DPR 误判出来的界面比例改回 100%。
+
+    旧版 ``get_system_dpi()`` 在 macOS 返回 ``96 * devicePixelRatio``（Retina
+    机器上是 192），首次运行于是把两个比例都写成 150%。可 macOS 的坐标单位
+    是逻辑点，150% 等于整体放大 1.5 倍，欢迎向导会直接铺满整块屏幕。
+
+    只改写"正好等于旧检测结果"的值：Retina（dpr>1.5）上 150、1.5x 屏上 125；
+    用户手动选的其它档位（80/90/100/110）一律保留。迁移只执行一次。
+    """
+    if sys.platform != "darwin":
+        return False
+    settings = getattr(config_manager, "qsettings", None)
+    if settings is None:
+        return False
+    try:
+        if int(settings.value("app/macos_scale_schema_version", 0)) >= MACOS_SCALE_SCHEMA_VERSION:
+            return False
+    except (TypeError, ValueError):
+        pass
+
+    legacy_percent = _mac_legacy_scale_percent()
+
+    changed = False
+    for key in ("ui_scale_percent", "dialog_scale_percent"):
+        raw = settings.value(f"app/{key}")
+        try:
+            current = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if current == legacy_percent and current != UIScaleManager.DEFAULT_PERCENT:
+            config_manager.set_app_setting(key, UIScaleManager.DEFAULT_PERCENT)
+            changed = True
+    settings.setValue("app/macos_scale_schema_version", MACOS_SCALE_SCHEMA_VERSION)
+    settings.sync()
+    return changed
 
 
 def get_ui_scale() -> UIScaleManager:

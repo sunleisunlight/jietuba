@@ -4038,4 +4038,12 @@ Replace it?</source>
     <message><source>Permanent · free updates</source><translation>永久利用・アップデート無料</translation></message>
     <message><source>%1 days</source><translation>%1日間</translation></message>
 </context>
+<context>
+    <name>PermissionDialog</name>
+    <message><source>已完成</source><translation>完了</translation></message>
+    <message><source>去授权</source><translation>設定を開く</translation></message>
+    <message><source>允许“积磊截图”使用您的屏幕录制</source><translation>「積磊スクリーンショット」による画面収録を許可</translation></message>
+    <message><source>积磊截图需要屏幕录制权限，才能截取屏幕内容并完成标注。</source><translation>画面をキャプチャして注釈を付けるには、画面収録の権限が必要です。</translation></message>
+    <message><source>未授权时截图会失败或显示黑屏。授权后回到这里点「已完成」。</source><translation>権限がないとキャプチャに失敗するか黒画面になります。許可したらここに戻って「完了」をクリックしてください。</translation></message>
+</context>
 </TS>

@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.1"
+APP_VERSION = "2.13.2"
 
 
 def create_fallback_app_icon():
@@ -145,6 +145,12 @@ class MainApp(QObject):
                 ),
                 "DPI",
             )
+
+        # macOS：旧版按 Retina DPR 误判成 150% 的比例在这里纠正一次，
+        # 必须早于下面两个 init()，否则管理器已经把错误比例读进内存。
+        from core.ui_scale import migrate_macos_scale_defaults
+        if migrate_macos_scale_defaults(self.config_manager):
+            log_info(T("已把 macOS 界面比例修正为 100%"), "DPI")
         
         # 初始化翻译系统
         from core.i18n import I18nManager
@@ -734,6 +740,19 @@ class MainApp(QObject):
 
         # 权限错误：给出明确引导 + 一键打开系统设置
         if isinstance(message, str) and ("屏幕录制" in message or "ScreenCapture" in message):
+            import sys as _sys
+
+            if _sys.platform == "darwin":
+                # macOS 用系统原生的授权弹窗排版（图标 + 允许… + 去授权/已完成），
+                # 而不是 Windows 风格的 QMessageBox 警告框。
+                from ui.permission_dialog import show_screen_capture_dialog
+
+                parent_window = self.app.activeWindow() if hasattr(self, "app") else None
+                show_screen_capture_dialog(
+                    parent_window, on_open=self._open_screen_recording_settings
+                )
+                return
+
             from PySide6.QtWidgets import QPushButton, QMessageBox
 
             dlg = QMessageBox(self.app.activeWindow() if hasattr(self, 'app') else None)

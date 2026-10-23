@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """操作界面缩放：换算规则、100% 基线、反复切换不漂移。"""
+import sys
+
 import pytest
 
 from core.ui_scale import (
@@ -78,6 +80,57 @@ def test_first_run_scale_defaults_are_written_once(tmp_settings):
 
     config.mark_as_run()
     assert apply_first_run_scale_defaults(config, system_dpi=168) is None
+
+
+def test_macos_scale_migration_undoes_the_retina_misdetection(monkeypatch, tmp_settings):
+    """旧版在 Retina 上推出 150%，迁移必须把它改回 100%（只改一次）。"""
+    from settings.tool_settings import ToolSettingsManager
+    from core import ui_scale as module
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(module, "_mac_legacy_scale_percent", lambda: 150)
+
+    config = ToolSettingsManager(qsettings=tmp_settings)
+    config.set_app_setting("ui_scale_percent", 150)
+    config.set_app_setting("dialog_scale_percent", 150)
+
+    assert module.migrate_macos_scale_defaults(config) is True
+    assert config.get_app_setting("ui_scale_percent") == 100
+    assert config.get_app_setting("dialog_scale_percent") == 100
+
+    # 迁移标记写入后不再重复执行，用户后续手动改的值不会被覆盖
+    config.set_app_setting("dialog_scale_percent", 125)
+    assert module.migrate_macos_scale_defaults(config) is False
+    assert config.get_app_setting("dialog_scale_percent") == 125
+
+
+def test_macos_scale_migration_keeps_a_manual_choice(monkeypatch, tmp_settings):
+    from settings.tool_settings import ToolSettingsManager
+    from core import ui_scale as module
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(module, "_mac_legacy_scale_percent", lambda: 150)
+
+    config = ToolSettingsManager(qsettings=tmp_settings)
+    config.set_app_setting("ui_scale_percent", 110)
+    config.set_app_setting("dialog_scale_percent", 110)
+
+    assert module.migrate_macos_scale_defaults(config) is False
+    assert config.get_app_setting("ui_scale_percent") == 110
+    assert config.get_app_setting("dialog_scale_percent") == 110
+
+
+def test_macos_scale_migration_is_a_noop_off_macos(monkeypatch, tmp_settings):
+    from settings.tool_settings import ToolSettingsManager
+    from core import ui_scale as module
+
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    config = ToolSettingsManager(qsettings=tmp_settings)
+    config.set_app_setting("dialog_scale_percent", 150)
+
+    assert module.migrate_macos_scale_defaults(config) is False
+    assert config.get_app_setting("dialog_scale_percent") == 150
 
 
 def test_zero_stays_zero_and_thin_things_never_vanish():

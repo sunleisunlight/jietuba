@@ -122,8 +122,17 @@ class SettingsDialog(FrostedFramelessDialog):
         self.setTitleBar(title_bar)
         title_bar.iconLabel.hide()
         title_bar.titleLabel.hide()
-        title_bar.setFixedHeight(title_bar.buttonLayout.sizeHint().height())
-        title_bar.hBoxLayout.setContentsMargins(0, 0, 0, 0)
+        import sys as _tb_sys
+
+        if _tb_sys.platform == "darwin":
+            # macOS 的窗口按钮是左上角红黄绿，收起 Windows 那套"贴右边缘"的
+            # 内边距+高度算法，否则标题栏会被压成 14pt、三颗按钮贴着圆角被裁掉。
+            title_bar.hBoxLayout.setContentsMargins(
+                dialog_scaled(12), 0, dialog_scaled(12), 0
+            )
+        else:
+            title_bar.setFixedHeight(title_bar.buttonLayout.sizeHint().height())
+            title_bar.hBoxLayout.setContentsMargins(0, 0, 0, 0)
         title_bar.maxBtn.hide()
         title_bar.setDoubleClickEnabled(False)
 
