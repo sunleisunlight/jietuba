@@ -41,6 +41,41 @@ class MacOSLifecycleBackend(LifecycleBackend):
         from AppKit import NSApplication
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
 
+    def restart_app(self) -> bool:
+        """退出当前进程并重新打开本 .app。
+
+        屏幕录制 / 辅助功能的 TCC 授权只在下次进程启动时生效，用户点完
+        「已完成」如果仍在拒绝，唯一的正经解法就是重启，这里直接代劳。
+        延迟 1 秒再 open，保证旧进程已经释放单实例锁。
+        """
+        import subprocess
+
+        bundle = self._app_bundle()
+        if bundle is None:
+            return False
+        try:
+            subprocess.Popen(
+                ["/bin/sh", "-c", 'sleep 1; exec /usr/bin/open -n "$1"',
+                 "jilei-restart", str(bundle)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+            )
+        except Exception:
+            return False
+        from PySide6.QtWidgets import QApplication
+        QApplication.quit()
+        return True
+
+    def _app_bundle(self):
+        """从可执行文件回溯到 .app 包；开发环境（python 直跑）返回 None。"""
+        if not getattr(sys, "frozen", False):
+            return None
+        exe = Path(sys.executable).resolve()
+        for parent in exe.parents:
+            if parent.suffix == ".app":
+                return parent
+        return None
+
     def autostart_enabled(self):
         if not self.agent_path.exists():
             return False

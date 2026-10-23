@@ -17,6 +17,14 @@ class LifecycleBackend(ABC):
     def apply_window_icon(self, widget, icon):
         widget.setWindowIcon(icon)
 
+    def restart_app(self) -> bool:
+        """重启本应用；不支持返回 False。
+
+        macOS 的屏幕录制 / 辅助功能属 TCC 权限，在系统设置里打开后要等进程
+        重启才生效，所以权限引导里需要这条真正的"重启"路径。
+        """
+        return False
+
     def create_executable_shortcut(self, destination, target, *, arguments="", working_directory=None):
         """Create a native executable launcher; raise if unsupported or failed."""
         raise NotImplementedError("This platform does not use executable shortcuts")

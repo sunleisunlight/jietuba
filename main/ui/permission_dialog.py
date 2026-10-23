@@ -33,10 +33,13 @@ class PermissionDialog(FrostedFramelessDialog):
         detail: str = "",
         open_text: str = "",
         done_text: str = "",
+        restart_text: str = "",
         on_open=None,
+        on_restart=None,
     ):
         super().__init__(parent)
         self._on_open = on_open
+        self._on_restart = on_restart
 
         title_bar = FluentTitleBar(self)
         configure_dialog_control(title_bar)
@@ -123,6 +126,15 @@ class PermissionDialog(FrostedFramelessDialog):
         self.done_btn.clicked.connect(self.accept)
         buttons.addWidget(self.done_btn)
 
+        self.restart_btn = None
+        if on_restart is not None:
+            self.restart_btn = PushButton(restart_text or _tr("重启应用"), self)
+            configure_dialog_control(self.restart_btn)
+            self.restart_btn.setFixedHeight(dialog_scaled(32))
+            self.restart_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.restart_btn.clicked.connect(self._restart)
+            buttons.addWidget(self.restart_btn)
+
         self.open_btn = PrimaryPushButton(open_text or _tr("去授权"), self)
         configure_dialog_control(self.open_btn)
         self.open_btn.setFixedHeight(dialog_scaled(32))
@@ -138,6 +150,16 @@ class PermissionDialog(FrostedFramelessDialog):
         root.activate()
         self.setFixedHeight(max(self.sizeHint().height(), dialog_scaled(190)))
 
+    def _restart(self):
+        if callable(self._on_restart):
+            try:
+                if self._on_restart():
+                    return
+            except Exception as e:
+                log_exception(e, T("重启应用"))
+        # 重启不了（例如开发环境直接跑 python）就退化成关闭弹窗，让用户手动重启
+        self.accept()
+
     def _open_settings(self):
         if callable(self._on_open):
             try:
@@ -148,16 +170,18 @@ class PermissionDialog(FrostedFramelessDialog):
         self.done_btn.setFocus()
 
 
-def show_screen_capture_dialog(parent=None, on_open=None) -> bool:
+def show_screen_capture_dialog(parent=None, on_open=None, on_restart=None) -> bool:
     """截图前缺屏幕录制权限时的引导弹窗；返回用户是否点了「已完成」。"""
     dialog = PermissionDialog(
         parent,
         title=_tr("允许“积磊截图”使用您的屏幕录制"),
         message=_tr("积磊截图需要屏幕录制权限，才能截取屏幕内容并完成标注。"),
-        detail=_tr("未授权时截图会失败或显示黑屏。授权后回到这里点「已完成」。"),
+        detail=_tr("在系统设置里打开开关后，必须重启积磊截图才会生效。"),
         open_text=_tr("去授权"),
         done_text=_tr("已完成"),
+        restart_text=_tr("重启应用"),
         on_open=on_open,
+        on_restart=on_restart,
     )
     return dialog.exec() == PermissionDialog.DialogCode.Accepted
 

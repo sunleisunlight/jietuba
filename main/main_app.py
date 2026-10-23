@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.4"
+APP_VERSION = "2.13.5"
 
 
 def create_fallback_app_icon():
@@ -681,6 +681,8 @@ class MainApp(QObject):
             from platforms.base.permissions import PermissionStatus
             perm = get_platform_backend().permissions
             if perm.screen_capture_status() != PermissionStatus.GRANTED:
+                # 记一条日志：TCC 授权是"下次启动才生效"的，排查时先看这里
+                log_warning(T("屏幕录制权限未授予，弹出授权引导"), "Capture")
                 perm.request_screen_capture()
                 if perm.screen_capture_status() != PermissionStatus.GRANTED:
                     self._on_capture_failed("屏幕录制")
@@ -743,14 +745,28 @@ class MainApp(QObject):
             import sys as _sys
 
             if _sys.platform == "darwin":
-                # macOS 用系统原生的授权弹窗排版（图标 + 允许… + 去授权/已完成），
+                # macOS 用系统原生的授权弹窗排版（图标 + 允许… + 去授权/重启/已完成），
                 # 而不是 Windows 风格的 QMessageBox 警告框。
+                from platforms import get_platform_backend
                 from ui.permission_dialog import show_screen_capture_dialog
 
+                backend = get_platform_backend()
                 parent_window = self.app.activeWindow() if hasattr(self, "app") else None
                 show_screen_capture_dialog(
-                    parent_window, on_open=self._open_screen_recording_settings
+                    parent_window,
+                    on_open=self._open_screen_recording_settings,
+                    on_restart=lambda: backend.lifecycle.restart_app(),
                 )
+                # TCC 授权有时已经生效（比如用户在别处授予后重启过本应用）：
+                # 复检一次，真正拿到权限就直接继续这次截图，不必再按一次热键。
+                try:
+                    from platforms.base.permissions import PermissionStatus
+                    from PySide6.QtCore import QTimer
+
+                    if backend.permissions.screen_capture_status() == PermissionStatus.GRANTED:
+                        QTimer.singleShot(0, self.start_screenshot)
+                except Exception as e:
+                    log_exception(e, T("复检屏幕录制权限"))
                 return
 
             from PySide6.QtWidgets import QPushButton, QMessageBox

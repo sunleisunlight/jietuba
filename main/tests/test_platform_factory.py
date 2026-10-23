@@ -48,3 +48,26 @@ def test_backend_interfaces_exist():
 def test_factory_cached_instance():
     from platforms import get_platform_backend
     assert get_platform_backend() is get_platform_backend()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="重启应用只在 macOS 有意义")
+def test_macos_restart_is_a_no_op_outside_a_bundle():
+    """开发环境（python 直跑）没有 .app 包，restart_app 必须安全返回 False。"""
+    from platforms.macos.lifecycle import MacOSLifecycleBackend
+
+    backend = MacOSLifecycleBackend()
+    assert backend._app_bundle() is None
+    assert backend.restart_app() is False
+
+
+def test_base_lifecycle_restart_defaults_to_unsupported():
+    from platforms.base.lifecycle import LifecycleBackend
+
+    class _Dummy(LifecycleBackend):
+        def autostart_enabled(self):
+            return False
+
+        def set_autostart(self, enabled):
+            return None
+
+    assert _Dummy().restart_app() is False

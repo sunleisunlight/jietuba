@@ -4055,6 +4055,7 @@ Replace it?</source>
     <message><source>去授权</source><translation>去授权</translation></message>
     <message><source>允许“积磊截图”使用您的屏幕录制</source><translation>允许“积磊截图”使用您的屏幕录制</translation></message>
     <message><source>积磊截图需要屏幕录制权限，才能截取屏幕内容并完成标注。</source><translation>积磊截图需要屏幕录制权限，才能截取屏幕内容并完成标注。</translation></message>
-    <message><source>未授权时截图会失败或显示黑屏。授权后回到这里点「已完成」。</source><translation>未授权时截图会失败或显示黑屏。授权后回到这里点「已完成」。</translation></message>
+    <message><source>在系统设置里打开开关后，必须重启积磊截图才会生效。</source><translation>在系统设置里打开开关后，必须重启积磊截图才会生效。</translation></message>
+    <message><source>重启应用</source><translation>重启应用</translation></message>
 </context>
 </TS>

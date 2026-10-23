@@ -3897,6 +3897,7 @@ Delete it?</translation></message>
     <message><source>去授权</source><translation>Open Settings</translation></message>
     <message><source>允许“积磊截图”使用您的屏幕录制</source><translation>Allow "Jilei Screenshot" to record your screen</translation></message>
     <message><source>积磊截图需要屏幕录制权限，才能截取屏幕内容并完成标注。</source><translation>Jilei Screenshot needs Screen Recording access to capture your screen and annotate it.</translation></message>
-    <message><source>未授权时截图会失败或显示黑屏。授权后回到这里点「已完成」。</source><translation>Without permission, captures fail or show a black screen. After granting it, come back and click Done.</translation></message>
+    <message><source>在系统设置里打开开关后，必须重启积磊截图才会生效。</source><translation>After enabling it in System Settings, Jilei Screenshot must be restarted to take effect.</translation></message>
+    <message><source>重启应用</source><translation>Restart app</translation></message>
 </context>
 </TS>
