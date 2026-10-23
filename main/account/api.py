@@ -125,6 +125,29 @@ def login(phone: str, security_pin: str, sms_code: str = "", challenge_id: str =
     return _request("POST", "/api/v3/auth/login", payload=p)
 
 
+# ---------------------------------------------------------------- 设备
+
+def client_devices(token: str, phone: str):
+    """已绑定本产品的设备列表（含当前设备）。
+
+    服务端按产品隔离统计，积磊截图上限固定 2 台；返回体里带 max_devices。
+    """
+    return _request(
+        "GET",
+        f"/client/commerce/devices?product_id={C.PRODUCT_ID}",
+        token=token, phone=phone, timeout=6.0,
+    )
+
+
+def unbind_device(token: str, phone: str, device_id: str):
+    """解绑指定设备。服务端要求请求方自己已绑定，且不能解绑当前设备。"""
+    return _request(
+        "POST", "/client/commerce/devices/unbind",
+        payload={"product_id": C.PRODUCT_ID, "device_id": device_id},
+        token=token, phone=phone, timeout=8.0,
+    )
+
+
 # ---------------------------------------------------------------- 权益
 
 def guest_capabilities():

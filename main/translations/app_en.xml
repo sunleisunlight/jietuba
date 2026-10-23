@@ -825,6 +825,16 @@ Replace it?</translation>
         <source>Note</source>
         <translation>Note</translation>
     </message>
+    <message><source>Device Management</source><translation>Device Management</translation></message>
+    <message><source>Bound %1 of %2 devices</source><translation>Bound %1 of %2 devices</translation></message>
+    <message><source>This device</source><translation>This device</translation></message>
+    <message><source>Unbind</source><translation>Unbind</translation></message>
+    <message><source>Unbind this device?</source><translation>Unbind this device?</translation></message>
+    <message><source>%1 will need to sign in again to use clipboard history.</source><translation>%1 will need to sign in again to use clipboard history.</translation></message>
+    <message><source>Last seen %1</source><translation>Last seen %1</translation></message>
+    <message><source>Unknown device</source><translation>Unknown device</translation></message>
+    <message><source>Loading devices…</source><translation>Loading devices…</translation></message>
+    <message><source>Could not unbind this device.</source><translation>Could not unbind this device.</translation></message>
 </context>
 
 <context>

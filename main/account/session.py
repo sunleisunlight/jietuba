@@ -203,6 +203,32 @@ class AccountManager(QObject):
         self.state_changed.emit()
         threading.Thread(target=self._refresh_guest, daemon=True).start()
 
+    # ------------------------------------------------------------ 设备管理
+
+    def devices(self) -> tuple[list, int, str]:
+        """已绑定本产品的设备列表。返回 (设备, 上限, 错误信息)。"""
+        if not self.token or not self.phone:
+            return [], 0, "请先登录"
+        data, err = api.client_devices(self.token, self.phone)
+        if err is not None:
+            return [], 0, _human_error(err)
+        if not isinstance(data, dict):
+            return [], 0, ""
+        devices = data.get("devices")
+        try:
+            maximum = int(data.get("max_devices") or 0)
+        except (TypeError, ValueError):
+            maximum = 0
+        return (devices if isinstance(devices, list) else []), maximum, ""
+
+    def unbind_device(self, device_id: str) -> tuple[bool, str]:
+        if not self.token or not self.phone:
+            return False, "请先登录"
+        _data, err = api.unbind_device(self.token, self.phone, device_id)
+        if err is not None:
+            return False, _human_error(err)
+        return True, ""
+
     def _do_logout_local(self):
         token_store.clear_token()
         self.token = ""
@@ -376,6 +402,9 @@ def _human_error(err) -> str:
         "sms_attempts_exceeded": "验证码错误次数过多，请重新获取",
         "sms_send_failed": "短信发送失败，请稍后重试",
         "sms_not_configured": "短信服务尚未配置，请联系客服",
+        # 设备管理（/client/commerce/devices）
+        "cannot_unbind_current_device": "不能解绑当前使用的这台设备，请在其它已登录设备上操作",
+        "device_not_bound": "该设备没有绑定本产品，无需解绑",
     }
     if err.code in table:
         return table[err.code]

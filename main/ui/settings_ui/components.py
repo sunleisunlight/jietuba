@@ -111,6 +111,24 @@ class SettingCardGroup(_SettingCardGroupBase):
     def addSettingCard(self, card: QWidget):
         super().addSettingCard(card)
 
+    def clearSettingCards(self, keep: int = 0):
+        """移除全部卡片（或保留前 keep 张），用于"列表型"分组的整体刷新。
+
+        addSettingCard 会追加分隔线，单纯 setParent(None) 不够——必须把
+        _cards/_separators 里的引用一起清掉，否则 refreshHeight() 还会按
+        旧卡片算高度，表现为组下方残留空白。
+        """
+        for card in list(self._cards[keep:]):
+            self.cardLayout.removeWidget(card)
+            card.setParent(None)
+            card.deleteLater()
+        del self._cards[keep:]
+        for separator in list(self._separators):
+            self.cardLayout.removeWidget(separator)
+            separator.setParent(None)
+            separator.deleteLater()
+        self._separators.clear()
+
     def __init__(self, title, parent=None):
         super().__init__(title, parent)
         # 竖直方向不吃富余空间：页面末尾有 addStretch()，本该由它吸收多出来的高度。

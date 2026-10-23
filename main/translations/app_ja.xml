@@ -863,6 +863,16 @@ Replace it?</source>
         <source>Note</source>
         <translation>メモ</translation>
     </message>
+    <message><source>Device Management</source><translation>デバイス管理</translation></message>
+    <message><source>Bound %1 of %2 devices</source><translation>%1 / %2 台のデバイスを登録済み</translation></message>
+    <message><source>This device</source><translation>このデバイス</translation></message>
+    <message><source>Unbind</source><translation>解除</translation></message>
+    <message><source>Unbind this device?</source><translation>このデバイスを解除しますか？</translation></message>
+    <message><source>%1 will need to sign in again to use clipboard history.</source><translation>%1 はクリップボード履歴を使う際に再度ログインが必要になります。</translation></message>
+    <message><source>Last seen %1</source><translation>最終ログイン %1</translation></message>
+    <message><source>Unknown device</source><translation>不明なデバイス</translation></message>
+    <message><source>Loading devices…</source><translation>デバイスを読み込み中…</translation></message>
+    <message><source>Could not unbind this device.</source><translation>解除に失敗しました。しばらくしてから再試行してください。</translation></message>
 </context>
 
 <context>

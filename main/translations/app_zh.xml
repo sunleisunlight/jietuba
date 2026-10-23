@@ -865,6 +865,16 @@ Replace it?</source>
         <source>Note</source>
         <translation>备注</translation>
     </message>
+    <message><source>Device Management</source><translation>设备管理</translation></message>
+    <message><source>Bound %1 of %2 devices</source><translation>已绑定 %1 / %2 台设备</translation></message>
+    <message><source>This device</source><translation>本机</translation></message>
+    <message><source>Unbind</source><translation>解绑</translation></message>
+    <message><source>Unbind this device?</source><translation>解绑这台设备？</translation></message>
+    <message><source>%1 will need to sign in again to use clipboard history.</source><translation>%1 下次使用剪贴板历史时需要重新登录。</translation></message>
+    <message><source>Last seen %1</source><translation>最近登录 %1</translation></message>
+    <message><source>Unknown device</source><translation>未知设备</translation></message>
+    <message><source>Loading devices…</source><translation>正在读取设备…</translation></message>
+    <message><source>Could not unbind this device.</source><translation>解绑失败，请稍后重试。</translation></message>
 </context>
 
 <context>
