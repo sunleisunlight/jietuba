@@ -114,6 +114,15 @@ def sign_app():
          "--options", "runtime",
          "--entitlements", ENTITLEMENTS, str(APP)])
     run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(APP)])
+    # 把固定签名要求打出来：macOS 的 TCC（屏幕录制/辅助功能）就是按它认 App 的。
+    # ad-hoc 的固定要求是 cdhash，每构建一次就变一次，用户会被反复要求重新授权；
+    # 证书签名的固定要求是 certificate leaf，重建后不变，授权才能一直沿用。
+    req = subprocess.run(["codesign", "-d", "-r-", str(APP)], capture_output=True, text=True)
+    requirement = (req.stdout + req.stderr).strip()
+    print("签名要求:", requirement or "(未读取到)")
+    if ident == "-" or "cdhash" in requirement:
+        print("警告：ad-hoc 签名的固定要求是 cdhash，每次重建都会变，"
+              "macOS 会把新构建当成另一个 App，屏幕录制 / 辅助功能授权必须重新授予。")
     # spctl：ad-hoc（无 Developer ID）时必然 rejected——这是预期的"本地可运行、
     # 未正式分发签名"状态，不视为失败；有 Developer ID 且完成公证后才应通过。
     sp = subprocess.run(
