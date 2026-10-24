@@ -33,6 +33,14 @@ class GlobalHotkeyBackend(ABC):
     def check_available(self, hotkey_str: str) -> bool:
         """探测快捷键是否可用（临时注册再注销）。"""
 
+    def ensure_registered(self) -> int:
+        """自检并补注册已被系统丢掉的全局热键，返回本次恢复的数量。
+
+        只有会丢注册的平台才需要实现（macOS 的 Carbon 注册偶发失效）；
+        其它平台返回 0，调用方可以无条件定期调用。
+        """
+        return 0
+
     def install_native_filter(self, app) -> Optional[object]:
         """安装平台原生事件过滤器（如 Windows WM_HOTKEY 过滤器）。
 

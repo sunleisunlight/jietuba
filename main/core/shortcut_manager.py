@@ -825,6 +825,18 @@ class ShortcutManager(QObject):
         self._mouse_callbacks.clear()
         self._sync_mouse_listener()
 
+    def ensure_hotkeys_alive(self) -> int:
+        """自检并补注册被系统丢掉的全局热键，返回本次恢复的数量。
+
+        macOS 的 Carbon 注册会偶发失效（按键不再派发），丢失时重建即可，
+        不需要用户重启应用。不丢注册的平台返回 0。
+        """
+        try:
+            return int(self._hotkey_backend.ensure_registered() or 0)
+        except Exception as e:
+            log_exception(e, T("全局热键自检"))
+            return 0
+
     # ==================================================================
     # 热键字符串解析
     # ==================================================================
@@ -924,6 +936,10 @@ class HotkeySystem:
 
     def has_registered_hotkeys(self) -> bool:
         return self._mgr.has_registered_hotkeys()
+
+    def ensure_hotkeys_alive(self) -> int:
+        """自检并补注册被系统丢掉的热键，返回恢复数量。"""
+        return self._mgr.ensure_hotkeys_alive()
 
 
 # ======================================================================

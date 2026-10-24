@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.9"
+APP_VERSION = "2.13.10"
 
 
 def create_fallback_app_icon():
@@ -454,6 +454,41 @@ class MainApp(QObject):
         # 如果有注册失败的热键且需要显示提示
         if show_error and failed_hotkeys:
             self._show_hotkey_error(failed_hotkeys)
+
+        self._ensure_hotkey_watchdog()
+
+    def _ensure_hotkey_watchdog(self):
+        """启动全局热键自检定时器（只启动一次）。"""
+        if getattr(self, "_hotkey_watchdog", None) is not None:
+            return
+        from PySide6.QtCore import QTimer
+
+        self._hotkey_watchdog = QTimer(self)
+        self._hotkey_watchdog.setInterval(5000)
+        self._hotkey_watchdog.timeout.connect(self._check_hotkeys_alive)
+        self._hotkey_watchdog.start()
+
+    def _check_hotkeys_alive(self):
+        """每 5 秒自检一次：系统把热键注册丢了就补回来。
+
+        macOS 的 Carbon 注册会在运行一段时间后偶发失效，按键再也不派发，
+        用户表现为"截了几张之后热键突然没反应"，以前只能重启应用。
+        截图会话进行中或模态窗口打开时跳过，避免打断用户正在做的事。
+        """
+        try:
+            if self.screenshot_window and getattr(self.screenshot_window, "_session_active", False):
+                return
+            from PySide6.QtWidgets import QApplication
+            if QApplication.activeModalWidget() is not None:
+                return
+            fixed = self.hotkey_system.ensure_hotkeys_alive()
+            if fixed:
+                log_warning(
+                    T("检测到 {count} 个全局热键注册丢失，已自动恢复", count=fixed),
+                    "Hotkey",
+                )
+        except Exception as e:
+            log_exception(e, T("全局热键自检"))
 
     def set_global_hotkeys_disabled(self, disabled: bool):
         """禁用/启用所有全局热键，并立即应用。"""

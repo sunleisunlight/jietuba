@@ -86,6 +86,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
         self._id_to_callback: Dict[int, Callable] = {}
         self._id_to_ref: Dict[int, c_void_p] = {}
         self._id_to_binding = {}
+        self._id_to_str: Dict[int, str] = {}
         self._handler_ref = None
         self._installed = False
         self._framework = None
@@ -249,6 +250,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
             self._id_to_callback[hotkey_id] = callback
             self._id_to_ref[hotkey_id] = ref
             self._id_to_binding[hotkey_id] = parsed
+            self._id_to_str[hotkey_id] = hotkey_str
             return True
         except Exception:
             return False
@@ -257,6 +259,7 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
         ref = self._id_to_ref.pop(hotkey_id, None)
         self._id_to_callback.pop(hotkey_id, None)
         self._id_to_binding.pop(hotkey_id, None)
+        self._id_to_str.pop(hotkey_id, None)
         if ref is not None and self._framework is not None:
             try:
                 self._framework.UnregisterEventHotKey.argtypes = [c_void_p]
@@ -264,6 +267,62 @@ class MacOSHotkeyBackend(GlobalHotkeyBackend):
                 self._framework.UnregisterEventHotKey(ref)
             except Exception:
                 pass
+
+    def ensure_registered(self) -> int:
+        """自检并补注册被系统丢掉的 Carbon 热键，返回恢复数量。
+
+        macOS 上 RegisterEventHotKey 的注册会在运行一段时间后偶发失效：
+        注册表里看起来还在，但按键再也不派发（用户表现为"截了几张之后
+        热键突然没反应"，只能重启应用）。这里用保留 id 试注册一次同一组合：
+        Carbon 的占用判断是进程内的，返回 -9878 说明我们自己还占着；
+        返回 noErr 说明注册真的丢了，立刻按原字符串重建。
+        """
+        if not self._installed or not self._id_to_binding:
+            return 0
+        fixed = 0
+        for hotkey_id, parsed in list(self._id_to_binding.items()):
+            keycode, mods = parsed
+            if self._probe_registered(keycode, mods):
+                continue
+            callback = self._id_to_callback.get(hotkey_id)
+            hotkey_str = self._id_to_str.get(hotkey_id)
+            # 清掉三个登记表，让 register() 认为这个 id 是全新的
+            self._id_to_ref.pop(hotkey_id, None)
+            self._id_to_binding.pop(hotkey_id, None)
+            self._id_to_callback.pop(hotkey_id, None)
+            self._id_to_str.pop(hotkey_id, None)
+            if callback is not None and hotkey_str is not None:
+                if self.register(hotkey_id, hotkey_str, callback):
+                    fixed += 1
+        return fixed
+
+    def _probe_registered(self, keycode: int, mods: int) -> bool:
+        """本进程是否仍占着这个组合（用保留 id 试注册一下）。"""
+        fw = self._framework
+        if fw is None:
+            return True
+        probe = _EventHotKeyID(0x6A696554, 0x7FFFFFFE)
+        ref = c_void_p()
+        try:
+            fw.RegisterEventHotKey.argtypes = [
+                c_uint32, c_uint32, _EventHotKeyID, c_void_p, c_uint32,
+                ctypes.POINTER(c_void_p),
+            ]
+            fw.RegisterEventHotKey.restype = c_int32
+            result = fw.RegisterEventHotKey(
+                keycode, mods, probe, self._app_target or c_void_p(), 0, byref(ref),
+            )
+            if result == eventHotKeyExistsErr:
+                return True
+            if result == noErr:
+                fw.UnregisterEventHotKey.argtypes = [c_void_p]
+                fw.UnregisterEventHotKey.restype = c_int32
+                fw.UnregisterEventHotKey(ref)
+                return False
+            # 其它错误（比如 target 异常）先当作还在，下一轮再判断
+            return True
+        except Exception:
+            return True
 
     def unregister_all(self) -> None:
         for hid in list(self._id_to_ref.keys()):
