@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.8"
+APP_VERSION = "2.13.9"
 
 
 def create_fallback_app_icon():
@@ -655,18 +655,33 @@ class MainApp(QObject):
         """启动截图 - 管理截图窗口生命周期"""
         # 已有截图窗口且会话活跃 → 忽略重复触发，并把焦点还给截图窗口
         if self.screenshot_window and getattr(self.screenshot_window, '_session_active', False):
-            log_debug(T("截图窗口已存在，忽略重复触发"), "MainApp")
-            self.screenshot_window.activateWindow()
-            self.screenshot_window.raise_()
-            # 如果有颜色选择器正在显示，重新提到截图窗口上方，防止被全屏窗口遮挡
-            from PySide6.QtWidgets import QApplication, QColorDialog
-            for w in QApplication.topLevelWidgets():
-                if isinstance(w, QColorDialog) and w.isVisible():
-                    w.raise_()
-                    w.activateWindow()
-                    return
-            self.screenshot_window.setFocus()
-            return
+            if not self.screenshot_window.isVisible():
+                # 会话标记还开着、浮层却已经不在屏幕上：说明上一次收尾中途失败
+                # （例如隐藏窗口后复制/保存抛错）。这时绝不能再走"忽略重复触发"，
+                # 否则每次热键都会被吞掉，用户只能重启应用。强制释放后继续截图。
+                log_warning(T("截图会话残留但浮层不可见，强制释放后重新截图"), "MainApp")
+                try:
+                    self.screenshot_window.cleanup_and_close()
+                except Exception as e:
+                    log_exception(e, T("释放残留截图会话"))
+                    try:
+                        self.screenshot_window.full_destroy()
+                    except Exception as e2:
+                        log_exception(e2, T("销毁残留截图窗口"))
+                    self.screenshot_window = None
+            else:
+                log_debug(T("截图窗口已存在，忽略重复触发"), "MainApp")
+                self.screenshot_window.activateWindow()
+                self.screenshot_window.raise_()
+                # 如果有颜色选择器正在显示，重新提到截图窗口上方，防止被全屏窗口遮挡
+                from PySide6.QtWidgets import QApplication, QColorDialog
+                for w in QApplication.topLevelWidgets():
+                    if isinstance(w, QColorDialog) and w.isVisible():
+                        w.raise_()
+                        w.activateWindow()
+                        return
+                self.screenshot_window.setFocus()
+                return
 
         # QDialog.exec() 的嵌套事件循环仍会处理托盘信号，但应用模态会屏蔽
         # 新截图窗口的输入。此时不创建截图层，转而把现有模态窗口提到前面。

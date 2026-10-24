@@ -1368,48 +1368,32 @@ class ScreenshotWindow(QWidget):
 
     @safe_event
     def showEvent(self, event):
-        """
-        窗口显示事件 - 在窗口首次显示时初始化智能选区和放大镜
-        """
+        """窗口显示事件 - 初始化放大镜。"""
         super().showEvent(event)
 
         if self._is_closing:
             return
-        
-        # 智能选区：根据当前鼠标位置立即显示选区预览
-        if self.smart_selection_enabled:
-            self._init_smart_selection_at_cursor()
-        
-        # 放大镜：在当前鼠标位置初始化
+
+        # 刻意不在这里预选鼠标下方的窗口：智能选区会立刻把整个前台窗口设成选区，
+        # 选区几乎等于整屏时遮罩没有可暗化的区域、工具栏又要等确认才出现，
+        # 用户看到的就是"截图好像没打开，点哪儿都没反应"。
+        # 让浮层以空选区 + 整屏遮罩开场，鼠标一移动再由悬停逻辑接管。
         self._init_magnifier_at_cursor()
 
-    def _init_smart_selection_at_cursor(self):
-        """根据当前鼠标位置初始化智能选区预览，在窗口显示后立即调用"""
-        from PySide6.QtGui import QCursor
-        from PySide6.QtCore import QPointF
-        
-        cursor_pos = QCursor.pos()
-        scene_pos = QPointF(cursor_pos.x(), cursor_pos.y())
-        
-        if hasattr(self.view, '_get_smart_selection_rect'):
-            smart_rect = self.view._get_smart_selection_rect(scene_pos)
-            if not smart_rect.isEmpty():
-                self.scene.selection_model.activate()
-                # 首次出现没有起点可补间，直接到位
-                self.view._apply_smart_selection_rect(smart_rect, animate=False)
-                log_debug(T("智能选区初始化: 鼠标位置({x}, {y}) -> 选区{rect}",
-                             x=cursor_pos.x(), y=cursor_pos.y(), rect=smart_rect), "ScreenshotWindow")
-
     def _init_magnifier_at_cursor(self):
-        """在当前鼠标位置初始化放大镜，在窗口显示后立即调用"""
-        from PySide6.QtGui import QCursor
+        """在当前鼠标位置初始化放大镜，在窗口显示后立即调用。
+
+        QCursor.pos() 是 point 坐标，放大镜与场景都按物理像素（capture 坐标）
+        取样，必须走坐标后端换算，否则 Retina 上取到的是屏幕一半位置的颜色。
+        """
         from PySide6.QtCore import QPointF
-        
+
         if not (hasattr(self, 'magnifier_overlay') and self.magnifier_overlay):
             return
-        cursor_pos = QCursor.pos()
-        self.magnifier_overlay.update_cursor(QPointF(cursor_pos.x(), cursor_pos.y()))
-        log_debug(T("放大镜初始化: 位置({x}, {y})", x=cursor_pos.x(), y=cursor_pos.y()), "ScreenshotWindow")
+        from platforms import get_platform_backend
+        x, y = get_platform_backend().coordinates.cursor_pos_capture()
+        self.magnifier_overlay.update_cursor(QPointF(x, y))
+        log_debug(T("放大镜初始化: 位置({x}, {y})", x=x, y=y), "ScreenshotWindow")
 
     @safe_event
     def resizeEvent(self, event):
