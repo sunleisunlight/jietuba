@@ -154,6 +154,10 @@ class PermissionDialog(FrostedFramelessDialog):
         if callable(self._on_restart):
             try:
                 if self._on_restart():
+                    # 重启已经接管（内部会 QApplication.quit()）。必须先关掉自己，
+                    # 否则 exec() 的嵌套事件循环不会退出，旧进程会带着一个已经看
+                    # 不见的模态窗残留下来——用户再点设置窗口就是"怎么都点不动"。
+                    self.accept()
                     return
             except Exception as e:
                 log_exception(e, T("重启应用"))
@@ -170,8 +174,27 @@ class PermissionDialog(FrostedFramelessDialog):
         self.done_btn.setFocus()
 
 
-def show_screen_capture_dialog(parent=None, on_open=None, on_restart=None) -> bool:
-    """截图前缺屏幕录制权限时的引导弹窗；返回用户是否点了「已完成」。"""
+_open_dialog = None
+
+
+def show_screen_capture_dialog(parent=None, on_open=None, on_restart=None, on_done=None) -> None:
+    """截图前缺屏幕录制权限时的引导弹窗（非模态，同一时间只保留一个）。
+
+    刻意不用 exec()：这个弹窗是从全局热键回调里弹出来的，模态嵌套事件循环
+    一旦被别的东西压住（系统授权框、切到别的 Space、弹窗被设置窗口盖住），
+    整个应用都会失去响应，用户看到的就是"设置窗口怎么点都没反应"。
+    非模态只作提示，主窗口始终可点；授权完成后由 on_done 复检并继续截图。
+    """
+    global _open_dialog
+    if _open_dialog is not None:
+        try:
+            if _open_dialog.isVisible():
+                _open_dialog.raise_()
+                _open_dialog.activateWindow()
+                return
+        except RuntimeError:
+            _open_dialog = None
+
     dialog = PermissionDialog(
         parent,
         title=_tr("允许“积磊截图”使用您的屏幕录制"),
@@ -183,7 +206,13 @@ def show_screen_capture_dialog(parent=None, on_open=None, on_restart=None) -> bo
         on_open=on_open,
         on_restart=on_restart,
     )
-    return dialog.exec() == PermissionDialog.DialogCode.Accepted
+    if callable(on_done):
+        dialog.finished.connect(lambda _result: on_done())
+    dialog.setWindowModality(Qt.WindowModality.NonModal)
+    _open_dialog = dialog
+    dialog.show()
+    dialog.raise_()
+    dialog.activateWindow()
 
 
 __all__ = ["PermissionDialog", "show_screen_capture_dialog"]

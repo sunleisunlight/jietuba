@@ -77,113 +77,6 @@ class _FluentCaptionButton(TitleBarButton):
             painter.drawRect(QRectF(left + offset, top, restore_side, restore_side))
 
 
-class _MacTrafficLights(QWidget):
-    """macOS 原生风格的红黄绿窗口按钮，固定在标题栏左上角。
-
-    窗口是自绘无边框的，拿不到 AppKit 的真按钮，所以按 macOS 的度量自绘：
-    直径 12pt、间距 8pt。行为与原生一致：红=关闭，黄=最小化，绿=缩放。
-    """
-
-    CLOSE_COLOR = "#FF5F57"
-    MINIMIZE_COLOR = "#FEBC2E"
-    ZOOM_COLOR = "#28C840"
-    DIAMETER = 12
-    GAP = 8
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._hovered = False
-        self.setMouseTracking(True)
-        self.setCursor(Qt.CursorShape.ArrowCursor)
-        self._resize_to_metrics()
-
-    def _resize_to_metrics(self):
-        d = _px(self, self.DIAMETER)
-        gap = _px(self, self.GAP)
-        self.setFixedSize(d * 3 + gap * 2, max(d, _px(self, 14)))
-
-    def _circle_rect(self, index: int) -> QRectF:
-        d = float(_px(self, self.DIAMETER))
-        gap = float(_px(self, self.GAP))
-        x = index * (d + gap)
-        return QRectF(x, (self.height() - d) / 2.0, d, d)
-
-    def _index_at(self, x: float) -> int:
-        d = float(_px(self, self.DIAMETER))
-        gap = float(_px(self, self.GAP))
-        if x < 0:
-            return -1
-        for i in range(3):
-            left = i * (d + gap)
-            if left <= x <= left + d:
-                return i
-        return -1
-
-    def paintEvent(self, event):
-        del event
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-        colors = (self.CLOSE_COLOR, self.MINIMIZE_COLOR, self.ZOOM_COLOR)
-        for i, color in enumerate(colors):
-            rect = self._circle_rect(i)
-            painter.setBrush(QColor(color))
-            painter.drawEllipse(rect)
-            if self._hovered:
-                self._paint_glyph(painter, i, rect)
-
-    def _paint_glyph(self, painter: QPainter, index: int, rect: QRectF):
-        """悬停时画出原生按钮里的 × / − / ⤢ 符号。"""
-        d = rect.width()
-        inset = d * 0.3
-        pen = QPen(QColor(60, 40, 20, 150), max(1.0, d * 0.12))
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        inner = rect.adjusted(inset, inset, -inset, -inset)
-        if index == 0:
-            painter.drawLine(inner.topLeft(), inner.bottomRight())
-            painter.drawLine(inner.topRight(), inner.bottomLeft())
-        elif index == 1:
-            y = rect.center().y()
-            painter.drawLine(QPointF(inner.left(), y), QPointF(inner.right(), y))
-        else:
-            # 缩放按钮用两个对角小三角示意，避免依赖字体符号
-            half = inner.width() / 2.0
-            left = QPointF(inner.left(), inner.bottom())
-            top = QPointF(inner.left(), inner.top())
-            corner = QPointF(inner.left() + half, inner.top() + half)
-            painter.setBrush(QColor(60, 40, 20, 120))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawPolygon([left, top, corner])
-            right = QPointF(inner.right(), inner.top())
-            bottom = QPointF(inner.right(), inner.bottom())
-            corner2 = QPointF(inner.right() - half, inner.bottom() - half)
-            painter.drawPolygon([right, bottom, corner2])
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self.update()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self.update()
-        super().leaveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            index = self._index_at(event.position().x())
-            window = self.window()
-            if index == 0:
-                window.close()
-            elif index == 1:
-                window.showMinimized()
-            elif index == 2:
-                toggleMaxState(window)
-        super().mouseReleaseEvent(event)
-
-
 class FluentTitleBar(TitleBar):
     def __init__(self, parent):
         super().__init__(parent)
@@ -208,7 +101,12 @@ class FluentTitleBar(TitleBar):
         if self._is_mac:
             for button in (self.minBtn, self.maxBtn, self.closeBtn):
                 button.hide()
-            self.trafficLights = _MacTrafficLights(self)
+            # 红黄绿交给 AppKit 的原生窗口按钮。qframelesswindow 只在初始化时
+            # 隐藏它们，窗口 show 之后 AppKit 会把它们放回来；我们再自绘一组
+            # 就会和原生按钮叠成"两套红绿灯"（用户截图里的红黄绿重叠）。
+            # 这里只留出与原生按钮等宽的空位，标题文字不会压到按钮上。
+            self.trafficSpacer = QWidget(self)
+            self.trafficSpacer.setFixedWidth(_px(self, 52))
         else:
             self.hBoxLayout.addWidget(self.minBtn)
             self.hBoxLayout.addWidget(self.maxBtn)
@@ -224,9 +122,9 @@ class FluentTitleBar(TitleBar):
         get_ui_theme().theme_changed.connect(self._apply_theme)
         if self._is_mac:
             self.hBoxLayout.insertWidget(
-                0, self.trafficLights, 0, Qt.AlignmentFlag.AlignVCenter
+                0, self.trafficSpacer, 0, Qt.AlignmentFlag.AlignVCenter
             )
-            # 红黄绿占住左上角，标题文字必须让出这段距离，否则会压在一起
+            # 原生按钮占住左上角，标题文字必须让出这段距离，否则会压在一起
             self.hBoxLayout.insertWidget(1, self.iconLabel)
             self.hBoxLayout.insertWidget(2, self.titleLabel)
             self.hBoxLayout.setContentsMargins(_px(self, 12), 0, _px(self, 12), 0)
@@ -253,9 +151,9 @@ class FluentTitleBar(TitleBar):
             f"color: {tokens.text}; font: {_px(self, 12)}px {FONT_FAMILY}; "
             "background: transparent;"
         )
-        traffic = getattr(self, "trafficLights", None)
-        if traffic is not None:
-            traffic._resize_to_metrics()
+        spacer = getattr(self, "trafficSpacer", None)
+        if spacer is not None:
+            spacer.setFixedWidth(_px(self, 52))
         self._apply_caption_colors()
 
     def _apply_caption_colors(self):

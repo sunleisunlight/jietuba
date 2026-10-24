@@ -21,7 +21,7 @@ from core.logger import (
 )
 
 # ── 全局版本号 ────────────────────────────────────────────
-APP_VERSION = "2.13.7"
+APP_VERSION = "2.13.8"
 
 
 def create_fallback_app_icon():
@@ -753,21 +753,28 @@ class MainApp(QObject):
 
                 backend = get_platform_backend()
                 parent_window = self.app.activeWindow() if hasattr(self, "app") else None
+
+                def _resume_if_granted():
+                    """用户关掉引导后复检一次：权限已生效就直接继续这次截图。
+
+                    TCC 授权有时已经生效（比如用户在别处授予后重启过本应用），
+                    不必再让用户按一次热键。
+                    """
+                    try:
+                        from platforms.base.permissions import PermissionStatus
+                        from PySide6.QtCore import QTimer
+
+                        if backend.permissions.screen_capture_status() == PermissionStatus.GRANTED:
+                            QTimer.singleShot(0, self.start_screenshot)
+                    except Exception as e:
+                        log_exception(e, T("复检屏幕录制权限"))
+
                 show_screen_capture_dialog(
                     parent_window,
                     on_open=self._open_screen_recording_settings,
                     on_restart=lambda: get_lifecycle_backend().restart_app(),
+                    on_done=_resume_if_granted,
                 )
-                # TCC 授权有时已经生效（比如用户在别处授予后重启过本应用）：
-                # 复检一次，真正拿到权限就直接继续这次截图，不必再按一次热键。
-                try:
-                    from platforms.base.permissions import PermissionStatus
-                    from PySide6.QtCore import QTimer
-
-                    if backend.permissions.screen_capture_status() == PermissionStatus.GRANTED:
-                        QTimer.singleShot(0, self.start_screenshot)
-                except Exception as e:
-                    log_exception(e, T("复检屏幕录制权限"))
                 return
 
             from PySide6.QtWidgets import QPushButton, QMessageBox
