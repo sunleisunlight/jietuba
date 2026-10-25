@@ -1048,20 +1048,15 @@ class CanvasView(QGraphicsView):
            a. 优先检查智能编辑（选中已有图元 + 控制点拖拽）
            b. 如果未处理，再执行绘图工具逻辑
         """
-        # 右键直接退出截图（复用 ESC 的清理逻辑）
-        # 只在截图窗口中生效，钉图窗口不响应
+        # 右键不再"按下即退出截图"。
+        # 触控板双指拖拽、Control+点击都会被系统当成右键，按下就退出的写法
+        # 会让用户的框选动作在按下瞬间直接结束（表现为"一拖截图就没了"）。
+        # 现在只有"右键单击且没有拖动"才退出；右键拖拽和左键一样用来框选。
+        self._right_click_pos = None
         if event.button() == Qt.MouseButton.RightButton:
-            # 检查父窗口类型，只对 ScreenshotWindow 生效
             parent_window = self.window()
             if parent_window and parent_window.__class__.__name__ == 'ScreenshotWindow':
-                log_info(T("右键退出截图"), "CanvasView")
-                event.accept()  # 立即接受事件
-                # 复用 cleanup_and_close 方法，与 ESC 保持一致
-                if hasattr(parent_window, 'cleanup_and_close'):
-                    parent_window.cleanup_and_close()
-                else:
-                    parent_window.close()
-                return
+                self._right_click_pos = event.position()
             # 钉图窗口：不处理右键，让事件继续传递（显示右键菜单）
         
         scene_pos = self.mapToScene(event.pos())
@@ -1691,6 +1686,23 @@ class CanvasView(QGraphicsView):
         4. 其他情况 → 智能编辑 + 传递给 Scene
         """
         scene_pos = self.mapToScene(event.pos())
+
+        # 右键单击（按下后没有拖动）= 退出截图；右键拖拽走正常框选/编辑流程。
+        right_click_pos = getattr(self, "_right_click_pos", None)
+        if (event.button() == Qt.MouseButton.RightButton
+                and right_click_pos is not None
+                and (event.position() - right_click_pos).manhattanLength() < 8):
+            self._right_click_pos = None
+            parent_window = self.window()
+            if parent_window and parent_window.__class__.__name__ == 'ScreenshotWindow':
+                log_info(T("右键单击退出截图"), "CanvasView")
+                event.accept()
+                if hasattr(parent_window, 'cleanup_and_close'):
+                    parent_window.cleanup_and_close()
+                else:
+                    parent_window.close()
+                return
+        self._right_click_pos = None
 
         if self.pending_annotation_select.settle(event, scene_pos):
             event.accept()
