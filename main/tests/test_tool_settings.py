@@ -427,3 +427,47 @@ class TestContinueAnnotateHotkeyMigration:
         first.set_continue_annotate_hotkey("ctrl+shift+h")
         second = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
         assert second.get_continue_annotate_hotkey() == "ctrl+shift+h"
+
+
+class TestNoteStyleScaleMigration:
+    """2.13.14/2.13.15 把备注线宽/字号按 dpr 复合放大写坏过，升级时要修回来。"""
+
+    def _manager(self, tmp_path, name, values):
+        ini_path = str(tmp_path / name)
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        for key, value in values.items():
+            qs.setValue(key, value)
+        qs.sync()
+        return ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+
+    def test_polluted_values_fall_back_to_defaults(self, qapp, tmp_path):
+        manager = self._manager(tmp_path, "polluted.ini", {
+            "tools/note/stroke_width": 99,
+            "tools/note/font_size": 40,
+        })
+
+        assert manager.get_setting("note", "stroke_width") == 3
+        assert manager.get_setting("note", "font_size") == 14
+
+    def test_reasonable_values_are_kept(self, qapp, tmp_path):
+        manager = self._manager(tmp_path, "sane.ini", {
+            "tools/note/stroke_width": 5,
+            "tools/note/font_size": 20,
+        })
+
+        assert manager.get_setting("note", "stroke_width") == 5
+        assert manager.get_setting("note", "font_size") == 20
+
+    def test_migration_runs_only_once(self, qapp, tmp_path):
+        ini_path = str(tmp_path / "once_note.ini")
+        qs = QSettings(ini_path, QSettings.Format.IniFormat)
+        qs.setValue("tools/note/stroke_width", 99)
+        qs.sync()
+
+        first = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert first.get_setting("note", "stroke_width") == 3
+
+        # 迁移后用户自己调大，再次启动不能被覆盖
+        first.update_settings("note", stroke_width=30)
+        second = ToolSettingsManager(qsettings=QSettings(ini_path, QSettings.Format.IniFormat))
+        assert second.get_setting("note", "stroke_width") == 30

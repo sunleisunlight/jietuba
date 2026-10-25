@@ -326,6 +326,9 @@ class ScreenshotWindow(QWidget):
         # 关闭标记，防止已销毁窗口继续响应回调
         self._is_closing = False
         self._session_active = False
+        # 最近一条被选中/新建的备注：备注面板改样式时不要求它此刻仍处于选中态
+        # （点工具栏会让正在编辑的备注失焦，编辑结束会清掉画布选择）
+        self._active_note_item = None
 
         # ── 历史（继续标注）相关的持久状态 ──
         # 窗口是复用的，这些字段跟着窗口活；每次会话开始时重新绑定 history_id。
@@ -496,7 +499,7 @@ class ScreenshotWindow(QWidget):
 
     def _create_canvas_view(self, scene):
         """创建使用当前截图交互设置的画布视图。"""
-        return CanvasView(
+        view = CanvasView(
             scene,
             self,
             confirm_on_double_click=(
@@ -504,6 +507,23 @@ class ScreenshotWindow(QWidget):
             ),
             cross_tool_select=self.config_manager.get_cross_tool_selection_enabled(),
         )
+        controller = getattr(view, "smart_edit_controller", None)
+        if controller is not None:
+            controller.selection_changed.connect(self._remember_active_note)
+        return view
+
+    def _remember_active_note(self, item):
+        """记住被选中的备注，供备注面板在没有选中项时继续改它。
+
+        选到别的图元就清掉：那说明用户已经不在编辑这条备注了，面板上的改动
+        不该再悄悄落到旧备注上。
+        """
+        from canvas.items import NoteItem
+
+        if isinstance(item, NoteItem):
+            self._active_note_item = item
+        elif item is not None:
+            self._active_note_item = None
 
     def _get_configured_smart_selection_mode(self) -> str:
         """读取检测方式；没有这项设置的旧配置对象退回窗口级，和默认值一致。"""
@@ -570,6 +590,8 @@ class ScreenshotWindow(QWidget):
         """
         self._is_closing = False
         self.is_history_session = False
+        # 新会话的新场景里还没有备注，别把上一条会话的图元当成当前目标
+        self._active_note_item = None
 
         self.original_image = image
         self.virtual_x = rect.x()
@@ -1645,7 +1667,22 @@ class ScreenshotWindow(QWidget):
             if isinstance(focus_item, NoteItem):
                 item = focus_item
         if not isinstance(item, NoteItem):
+            # 点工具栏会让正在编辑的备注失焦，编辑收尾时画布选择也被清掉；
+            # 这时面板改的仍然是"刚才那条备注"，用最近一次记住的它兜底。
+            candidate = getattr(self, '_active_note_item', None)
+            try:
+                if (
+                    isinstance(candidate, NoteItem)
+                    and getattr(self, 'scene', None) is not None
+                    and candidate.scene() is self.scene
+                ):
+                    item = candidate
+            except RuntimeError:
+                # 图元已随上一轮会话销毁
+                self._active_note_item = None
+        if not isinstance(item, NoteItem):
             return
+        self._active_note_item = item
 
         editor = getattr(controller, 'layer_editor', None)
         direction = NoteItem.normalize_position(
@@ -1673,18 +1710,26 @@ class ScreenshotWindow(QWidget):
 
     @staticmethod
     def _apply_note_style(item, state: dict):
-        """把面板状态落到一条备注上；state 里缺的字段保持原样。"""
+        """把面板状态落到一条备注上；state 里缺的字段保持原样。
+
+        面板传进来的是 1x 数值，备注图元按屏幕物理像素绘制，写回前统一乘 dpr。
+        """
+        try:
+            dpr = float(item.display_dpr())
+        except Exception:
+            dpr = 1.0
+
         color = state.get("color")
         if isinstance(color, QColor) and color.isValid():
             item.set_note_color(color)
 
         width = state.get("stroke_width")
         if width is not None:
-            item.set_note_stroke_width(float(width))
+            item.set_note_stroke_width(max(1.0, float(width) * dpr))
 
         font_size = state.get("font_size")
         if font_size is not None:
-            item.set_note_font_size(int(font_size))
+            item.set_note_font_size(float(font_size) * dpr)
 
         opacity = state.get("opacity")
         if opacity is not None:

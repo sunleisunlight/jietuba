@@ -491,10 +491,17 @@ class NoteSettingsPanel(QWidget):
         self.blockSignals(True)
         try:
             state = self.default_state()
+            # 图元上是屏幕物理像素，面板/设置里是 1x 数值：读回时先除掉 dpr。
+            # 漏掉这一步，选一下备注就把放大的值写回设置，下次创建再乘一次。
+            try:
+                dpr = float(item.display_dpr())
+            except Exception:
+                dpr = 1.0
             font = item.font()
             point_size = font.pointSize()
             if point_size <= 0:
                 point_size = int(round(font.pointSizeF())) if font.pointSizeF() > 0 else state["font_size"]
+            point_size = int(round(float(point_size) / dpr)) if dpr > 0 else int(point_size)
             state["font_size"] = max(FONT_SIZE_RANGE[0], min(FONT_SIZE_RANGE[1], int(point_size)))
 
             color = item.defaultTextColor()
@@ -503,7 +510,10 @@ class NoteSettingsPanel(QWidget):
 
             stroke_width = item.get_stroke_width()
             if stroke_width is not None:
-                state["stroke_width"] = int(round(float(stroke_width)))
+                width = float(stroke_width) / dpr if dpr > 0 else float(stroke_width)
+                state["stroke_width"] = max(
+                    Tool.MIN_WIDTH, min(Tool.MAX_WIDTH, int(round(width)))
+                )
 
             opacity = item.get_visual_opacity()
             if opacity is not None:
@@ -611,20 +621,14 @@ class NoteSettingsPanel(QWidget):
         self._emit()
 
     def _on_size_preset_clicked(self, stroke: float, font_size: float):
-        """细 / 中 / 粗：一次把线宽和字号都调到位。"""
-        dpr = self._capture_dpr()
-        self.set_size(int(round(float(stroke) * dpr)))
-        self.set_font_size(int(round(float(font_size) * dpr)))
-        self._emit()
+        """细 / 中 / 粗：一次把线宽和字号都调到位。
 
-    def _capture_dpr(self) -> float:
-        """截图场景用物理像素，视图按 1/dpr 显示；预设尺寸要乘回 dpr。"""
-        try:
-            view = getattr(self.window(), "view", None)
-            scale = float(view.display_scale()) if view is not None else 1.0
-        except Exception:
-            scale = 1.0
-        return 1.0 / scale if 0.05 < scale <= 1.0 else 1.0
+        面板和设置里一律是 1x 数值，屏幕 dpr 的换算由图元边界统一负责，
+        这里再乘一次就会变成"每截一张图线宽翻倍"。
+        """
+        self.set_size(int(round(float(stroke))))
+        self.set_font_size(int(round(float(font_size))))
+        self._emit()
 
     def _on_direction_clicked(self, direction: str):
         direction = NoteItem.normalize_position(direction)

@@ -504,6 +504,51 @@ class ToolSettingsManager(QObject):
         self.migrate_continue_annotate_hotkeys()
         # macOS：老版本的三个预加载开关默认都是 true，升级后一次性收掉
         self.migrate_macos_preload_policy()
+        # 2.13.14/2.13.15 的 dpr 复合放大把备注线宽/字号写坏过，一次性修回来
+        self.migrate_note_style_scale()
+
+    # 备注 dpr 复合放大修复的配置版本号：写入 QSettings 后不再重复迁移
+    NOTE_STYLE_SCALE_SCHEMA_VERSION = 1
+    # 备注线宽超过这个值只可能是被 dpr 复合放大过（默认 3，"粗"档 5）
+    NOTE_STYLE_MAX_STROKE_WIDTH = 20
+
+    def migrate_note_style_scale(self) -> bool:
+        """修复被 2.13.14/2.13.15 复合放大写坏的备注线宽与字号。
+
+        那两个版本创建备注时把线宽/字号乘了屏幕 dpr（Retina 上翻倍），选中备注
+        后又把这个物理像素值经 update_style 写回设置，于是每截一张图放大一倍，
+        线宽一路涨到 99 封顶。只修代码的话老设置里仍是 99 这类值，用户第一张
+        截图依旧巨大，所以这里按"备注线宽不可能超过 20"回落到默认值，只做一次。
+        """
+        try:
+            if int(self.qsettings.value("app/note_style_scale_schema_version", 0)) >= (
+                self.NOTE_STYLE_SCALE_SCHEMA_VERSION
+            ):
+                return False
+        except (TypeError, ValueError):
+            pass
+
+        changed = False
+        try:
+            stroke_width = float(self.get_setting("note", "stroke_width", 3))
+        except (TypeError, ValueError):
+            stroke_width = 3.0
+        if stroke_width > self.NOTE_STYLE_MAX_STROKE_WIDTH:
+            defaults = self.DEFAULT_SETTINGS["note"]
+            self.update_settings(
+                "note",
+                stroke_width=defaults["stroke_width"],
+                font_size=defaults["font_size"],
+            )
+            changed = True
+
+        self.qsettings.setValue(
+            "app/note_style_scale_schema_version", self.NOTE_STYLE_SCALE_SCHEMA_VERSION
+        )
+        if changed:
+            from core.logger import log_info, T
+            log_info(T("已修复被放大的备注线宽/字号"), "Settings")
+        return changed
 
     @property
     def settings(self):

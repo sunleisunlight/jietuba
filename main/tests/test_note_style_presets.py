@@ -39,3 +39,27 @@ def test_apply_note_style_updates_item(qapp):
     ScreenshotWindow._apply_note_style(note, {"stroke_width": 9, "font_size": 40})
     assert int(round(float(note.get_stroke_width()))) == 9
     assert note.font().pointSize() == 40
+
+
+def test_note_style_round_trip_keeps_one_x_settings(qapp):
+    """2x 屏上面板 ↔ 备注往返必须回到原值，不能每往返一次就放大一倍。"""
+    from ui.note_settings_panel import NoteSettingsPanel
+    from ui.screenshot_window import ScreenshotWindow
+
+    note = _make_note("文字")
+    note.display_dpr = lambda: 2.0
+
+    ScreenshotWindow._apply_note_style(note, {"stroke_width": 3, "font_size": 14})
+    # 图元按物理像素绘制：1x 的 3 / 14 在 2x 屏上变成 6 / 28
+    assert float(note.get_stroke_width()) == 6.0
+    assert note.font().pointSize() == 28
+
+    panel = NoteSettingsPanel()
+    try:
+        panel.set_state_from_item(note)
+        state = panel.current_state()
+        assert state["stroke_width"] == 3, "读回面板的线宽必须是 1x，否则会被写回设置再放大"
+        assert state["font_size"] == 14
+    finally:
+        panel.deleteLater()
+

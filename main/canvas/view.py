@@ -815,6 +815,15 @@ class CanvasView(QGraphicsView):
         width_value = None if is_text_item else self._extract_selection_width(item)
         opacity_value = self._extract_selection_opacity(item)
 
+        if isinstance(item, NoteItem) and width_value is not None:
+            # 备注图元存的是屏幕物理像素，工具栏和设置用 1x 数值。不换回去的话，
+            # 每次选中都会把放大后的线宽写回设置，创建时又乘一次 dpr —— 线宽
+            # 就会每截一张图翻一倍，直到 99 封顶。
+            try:
+                width_value = float(width_value) / float(item.display_dpr())
+            except Exception:
+                pass
+
         style_kwargs = {}
         if width_value is not None:
             style_kwargs["width"] = max(1.0, float(width_value))

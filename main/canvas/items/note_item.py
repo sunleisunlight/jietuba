@@ -1078,6 +1078,22 @@ class NoteItem(TextItem):
     def get_stroke_width(self) -> float | None:
         return self.note_stroke_width()
 
+    def display_dpr(self) -> float:
+        """场景物理像素 → 1x 标注数值的换算系数（Retina 上为 2）。
+
+        面板、工具栏和设置里的线宽/字号都是 1x 设计值，备注图元本身按屏幕物理
+        像素绘制，两者之间只在读取处做这一次换算。设置里永远只存 1x：存物理值
+        再乘一次，就是"每截一张图线宽翻一倍"的根因。
+        """
+        try:
+            scene = self.scene()
+            views = scene.views() if scene is not None else []
+            view = views[0] if views else None
+            scale = float(view.display_scale()) if view is not None else 1.0
+        except Exception:
+            scale = 1.0
+        return 1.0 / scale if 0.05 < scale <= 1.0 else 1.0
+
     def set_visual_opacity(self, opacity: float) -> bool:
         opacity = max(0.0, min(1.0, float(opacity)))
         self.setOpacity(opacity)
