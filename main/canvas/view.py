@@ -521,12 +521,23 @@ class CanvasView(QGraphicsView):
         if not rect:
             return QRectF()
 
-        return QRectF(
+        result = QRectF(
             float(rect[0]),
             float(rect[1]),
             float(rect[2] - rect[0]),
             float(rect[3] - rect[1]),
         ).intersected(scene_rect)
+
+        # 大面积候选（桌面/全屏窗口/全屏播放器）不作为智能选区：
+        # 选区几乎等于整屏时遮罩没有可暗化的区域、工具栏又要确认才出现，
+        # 用户看到的就是"截图打开了但什么都没变，也框不出东西"。
+        # 想截整屏本来就可以直接拖一个全屏框，不需要悬停帮忙。
+        # 阈值按宽高分别判断：桌面一直占满宽度、只差菜单栏和 Dock 的高度。
+        if (scene_rect.width() > 0 and scene_rect.height() > 0
+                and result.width() >= scene_rect.width() * 0.95
+                and result.height() >= scene_rect.height() * 0.80):
+            return QRectF()
+        return result
 
     def _smart_selection_chain(self, x: int, y: int, capture_rect):
         """鼠标下方由细到粗的嵌套矩形链：控件 → 窗口 → 鼠标所在那块屏幕。
@@ -1620,7 +1631,12 @@ class CanvasView(QGraphicsView):
     def _handle_hover_preview(self, scene_pos: QPointF):
         """处理智能选区悬停预览（状态5）"""
         self._update_magnifier_overlay(scene_pos)
-        
+
+        # 左键按着的时候不要再做悬停预览：用户正在框选，悬停每次都把选区
+        # 重新套成"鼠标下方的窗口"，看起来就像怎么拖都没反应。
+        if QApplication.mouseButtons() & Qt.MouseButton.LeftButton:
+            return
+
         if self.smart_selection_enabled:
             smart_rect = self._get_smart_selection_rect(scene_pos)
             if not smart_rect.isEmpty():
