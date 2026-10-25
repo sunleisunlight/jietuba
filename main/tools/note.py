@@ -145,8 +145,14 @@ class NoteTool(Tool):
         from settings import get_tool_settings_manager
 
         manager = get_tool_settings_manager()
-        font = self._load_font(manager)
+        # 场景坐标是物理像素，视图按 1/dpr 缩到屏幕（Retina 上 0.5）。
+        # 备注的字号、线宽、间距必须反向放大 dpr，才能和屏幕分辨率成正比，
+        # 否则在 2x 屏上只有 Windows 上一半大，"太细太小"。
+        dpr = self._capture_dpr(ctx)
+        font = self._load_font(manager, dpr)
         bounds = self._selection_bounds(ctx)
+        paragraph_width = self._optional_size(manager.get_setting("note", "text_width", 0))
+        gap = self._optional_size(manager.get_setting("note", "gap", 0))
 
         item = NoteItem(
             target_rect=target_rect,
@@ -154,11 +160,11 @@ class NoteTool(Tool):
             color=QColor(ctx.color),
             direction=manager.get_setting("note", "label_position", NoteItem.DEFAULT_POSITION),
             text="",
-            paragraph_width=self._optional_size(manager.get_setting("note", "text_width", 0)),
-            stroke_width=max(1.0, float(ctx.stroke_width)),
+            paragraph_width=(paragraph_width or NoteItem.base_text_width()) * dpr,
+            stroke_width=max(1.0, float(ctx.stroke_width) * dpr),
             arrow_style=manager.get_setting("note", "arrow_style", ArrowItem.STYLE_SINGLE),
             arrow_at=manager.get_setting("note", "arrow_head_at", NoteItem.ARROW_AT_TARGET),
-            gap=self._optional_size(manager.get_setting("note", "gap", 0)),
+            gap=(gap or NoteItem.base_gap()) * dpr,
             fit_bounds=bounds,
             always_on_top=self._always_on_top(manager),
             # 和文字图元同一套语义：这一刻内容还是空的，点一下不打字就当什么都没
@@ -192,11 +198,31 @@ class NoteTool(Tool):
         return number if number > 0 else None
 
     @staticmethod
-    def _load_font(manager) -> QFont:
+    def _load_font(manager, dpr: float = 1.0) -> QFont:
         from core.constants import normalize_text_font_family
 
         family = normalize_text_font_family(manager.get_setting("note", "font_family", ""))
-        return QFont(family, manager.get_setting("note", "font_size", 14))
+        size = manager.get_setting("note", "font_size", 14)
+        try:
+            size = float(size)
+        except (TypeError, ValueError):
+            size = 14.0
+        return QFont(family, max(1, int(round(size * dpr))))
+
+    @staticmethod
+    def _capture_dpr(ctx: ToolContext) -> float:
+        """场景单位对应的屏幕点数倒数：Retina=2，普通屏=1。
+
+        截图场景用物理像素，视图按 display_scale（=1/dpr）缩小显示。备注的字号、
+        线宽、间距按这个比例放大，才能和屏幕分辨率成正比。
+        """
+        try:
+            views = ctx.scene.views()
+            view = views[0] if views else None
+            scale = float(view.display_scale()) if view is not None else 1.0
+        except Exception:
+            scale = 1.0
+        return 1.0 / scale if 0.05 < scale <= 1.0 else 1.0
 
     @staticmethod
     def _always_on_top(manager) -> bool:
