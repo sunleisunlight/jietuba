@@ -37,11 +37,22 @@ _tr = make_tr("ArrowSettingsPanel")
 # 预设色：与箭头/形状面板完全一致，六个色块在哪个面板里都在同一个位置
 PRESET_COLORS = (
     "#FF0000",  # 红
+    "#FF9800",  # 橙
     "#FFFF00",  # 黄
     "#00FF00",  # 绿
+    "#00BCD4",  # 青
     "#0000FF",  # 蓝
+    "#9C27B0",  # 紫
     "#000000",  # 黑
     "#FFFFFF",  # 白
+)
+
+# 三档尺寸预设：一次同时改线宽和字号，对应参考面板上的三个圆点。
+# 数值是 1x（Windows 设计基准）下的值，真正取值时要乘上当前屏幕的 dpr。
+SIZE_PRESETS = (
+    ("Thin", 1.5, 10.0),
+    ("Medium", 3.0, 14.0),
+    ("Thick", 5.0, 20.0),
 )
 
 # 方向按钮的排列顺序：左右上下。图标上的"框"和"字"谁在左谁在右一眼可辨，
@@ -191,7 +202,25 @@ class NoteSettingsPanel(QWidget):
     def _init_ui(self):
         layout = QHBoxLayout(self)
 
-        # === 1. 颜色：自定义 + 六个预设 ===
+        # === 0. 尺寸预设：细 / 中 / 粗 ===
+        # 参考面板上就是三个由小到大的圆点，点一下同时改线宽和字号，
+        # 不用再分别去调两个数值——用户调标注基本都是"整体粗一点/细一点"。
+        self._size_buttons = []
+        for key, preset_stroke, preset_font in SIZE_PRESETS:
+            btn = QPushButton("●")
+            btn.setObjectName("noteSizePreset")
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.setToolTip(self._tr(key))
+            btn.clicked.connect(
+                lambda checked=False, s=preset_stroke, f=preset_font:
+                self._on_size_preset_clicked(s, f)
+            )
+            layout.addWidget(btn)
+            self._size_buttons.append(btn)
+
+        layout.addWidget(self._separator())
+
+        # === 1. 颜色：自定义 + 预设色块 ===
         self.color_btn = ColorPickerButton(
             self.current_color, size=scaled(self.BASE_COLOR_BTN), show_alpha=False
         )
@@ -282,6 +311,23 @@ class NoteSettingsPanel(QWidget):
 
         color_btn = scaled(self.BASE_COLOR_BTN)
         self.color_btn.setFixedSize(color_btn, color_btn)
+
+        preset_side = scaled(self.BASE_PRESET_BTN)
+        for index, btn in enumerate(self._size_buttons):
+            dot = scaled(9 + 3 * index)
+            btn.setFixedSize(preset_side, preset_side)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    border: none;
+                    background: transparent;
+                    color: #444444;
+                    font-size: {dot}px;
+                }}
+                QPushButton:hover {{
+                    background: rgba(0, 0, 0, 22);
+                    border-radius: {preset_side // 2}px;
+                }}
+            """)
 
         preset = scaled(self.BASE_PRESET_BTN)
         radius = scaled(self.BASE_PRESET_RADIUS)
@@ -521,6 +567,8 @@ class NoteSettingsPanel(QWidget):
 
     def retranslate(self):
         """语言切换后刷新提示文本。面板常驻，不刷新就得重启才跟着换语言。"""
+        for (key, _stroke, _font), btn in zip(SIZE_PRESETS, self._size_buttons):
+            btn.setToolTip(self._tr(key))
         self.color_btn.setToolTip(self._tr("Custom Color"))
         self.stroke_spin.setToolTip(self._tr("Line Width"))
         self.opacity_spin.setToolTip(self._tr("Opacity (%)"))
@@ -561,6 +609,22 @@ class NoteSettingsPanel(QWidget):
     def _on_font_size_changed(self, value: int):
         self.current_font_size = int(value)
         self._emit()
+
+    def _on_size_preset_clicked(self, stroke: float, font_size: float):
+        """细 / 中 / 粗：一次把线宽和字号都调到位。"""
+        dpr = self._capture_dpr()
+        self.set_size(int(round(float(stroke) * dpr)))
+        self.set_font_size(int(round(float(font_size) * dpr)))
+        self._emit()
+
+    def _capture_dpr(self) -> float:
+        """截图场景用物理像素，视图按 1/dpr 显示；预设尺寸要乘回 dpr。"""
+        try:
+            view = getattr(self.window(), "view", None)
+            scale = float(view.display_scale()) if view is not None else 1.0
+        except Exception:
+            scale = 1.0
+        return 1.0 / scale if 0.05 < scale <= 1.0 else 1.0
 
     def _on_direction_clicked(self, direction: str):
         direction = NoteItem.normalize_position(direction)

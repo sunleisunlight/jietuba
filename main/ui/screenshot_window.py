@@ -1638,6 +1638,13 @@ class ScreenshotWindow(QWidget):
         controller = getattr(getattr(self, 'view', None), 'smart_edit_controller', None)
         item = getattr(controller, 'selected_item', None)
         if not isinstance(item, NoteItem):
+            # 新建备注后还在往文字里打字时，画布上没有"选中项"，但面板上的
+            # 线宽/字号/颜色必须落到这条正在编辑的备注上，否则用户会觉得
+            # 根本调不动。焦点项就是那条备注（备注本身是 QGraphicsTextItem）。
+            focus_item = self.scene.focusItem() if getattr(self, 'scene', None) else None
+            if isinstance(focus_item, NoteItem):
+                item = focus_item
+        if not isinstance(item, NoteItem):
             return
 
         editor = getattr(controller, 'layer_editor', None)
