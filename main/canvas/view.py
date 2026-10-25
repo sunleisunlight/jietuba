@@ -1054,7 +1054,7 @@ class CanvasView(QGraphicsView):
             # 检查父窗口类型，只对 ScreenshotWindow 生效
             parent_window = self.window()
             if parent_window and parent_window.__class__.__name__ == 'ScreenshotWindow':
-                log_debug(T("右键退出截图"), "CanvasView")
+                log_info(T("右键退出截图"), "CanvasView")
                 event.accept()  # 立即接受事件
                 # 复用 cleanup_and_close 方法，与 ESC 保持一致
                 if hasattr(parent_window, 'cleanup_and_close'):

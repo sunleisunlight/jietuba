@@ -246,6 +246,21 @@ class MacOSWindowBackend(WindowBackend):
 
     # ── Qt 窗口属性（macOS 用 Qt 原生能力）──
 
+    def present_window(self, widget) -> None:
+        """激活应用并把窗口设为 key window。
+
+        从全局热键弹出浮层时应用通常还在后台。macOS 会把"激活应用"的
+        第一次点击吃掉（视图不接受 first mouse），用户拖框就完全没反应。
+        """
+        try:
+            from AppKit import NSApplication
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+            window = _native_window(widget)
+            if window is not None:
+                window.makeKeyAndOrderFront_(None)
+        except Exception:
+            _log.exception("激活截图窗口失败")
+
     def set_window_click_through(self, widget, enable: bool) -> None:
         try:
             widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, enable)

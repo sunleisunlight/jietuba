@@ -31,6 +31,7 @@ class ActionTools:
     def _copy_save_and_close(self):
         """核心操作：导出选区 → 复制到剪贴板 → 自动保存 → 关闭窗口"""
         from core.clipboard_utils import deliver_image_async
+        log_info(T("确认截图：导出选区并复制/保存"), "Action")
         self._temporarily_exit_editing()
 
         selection_rect = self.export_service.scene.selection_model.rect()

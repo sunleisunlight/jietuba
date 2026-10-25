@@ -62,3 +62,12 @@ class WindowBackend(ABC):
     @abstractmethod
     def set_window_exclude_from_capture(self, widget, exclude: bool) -> None:
         """设置窗口对屏幕截图 API 不可见（截图浮层自排除）。"""
+
+    def present_window(self, widget) -> None:
+        """把本应用的某个窗口切到最前并取得键盘焦点。
+
+        默认什么都不做。macOS 需要显式激活应用：从后台（例如按全局热键）
+        弹出的浮层如果应用没被激活，用户第一次点击只会用来激活应用，
+        画布收不到按下事件，表现为"能打开截图但框选没反应"。
+        """
+        return None

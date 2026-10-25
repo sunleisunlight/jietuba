@@ -144,6 +144,7 @@ class ScreenshotShortcutHandler(ShortcutHandler):
 
         # ESC — 固定不可自定义
         if key == Qt.Key.Key_Escape:
+            log_info(T("ESC 结束截图"), "ScreenshotWindow")
             w.cleanup_and_close()
             return True
 
@@ -472,6 +473,7 @@ class ScreenshotWindow(QWidget):
         
         self._session_active = True
         self.show()
+        self._present_session_window()
         self.activateWindow()
         self.raise_()
         self.setFocus()
@@ -649,10 +651,19 @@ class ScreenshotWindow(QWidget):
         
         self._session_active = True
         self.show()
+        self._present_session_window()
         self.activateWindow()
         self.raise_()
         self.setFocus()
         QTimer.singleShot(50, self._safe_activate_and_focus)
+
+    def _present_session_window(self):
+        """把截图浮层切到最前并拿键盘焦点（macOS 需要显式激活应用）。"""
+        try:
+            from platforms import get_platform_backend
+            get_platform_backend().windows.present_window(self)
+        except Exception as e:
+            log_exception(e, T("激活截图浮层"))
 
     # ------------------------------------------------------------------
     # 会话结束：释放重数据，保留 UI 壳
